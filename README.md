@@ -12,11 +12,12 @@ The app now bootstraps from repository-backed data instead of calling
 - `lib/repositories/*` own catalog refresh, learner bootstrap, and outbox sync.
 - `lib/storage/local_app_store.dart` keeps a cached snapshot plus pending sync
   events so the app can reopen quickly and retry sync later.
-- `app-api/` contains the new learner-state service scaffold.
-- `strapi/` contains the content model and import tooling for moving curriculum
-  content into Strapi.
+- `app-api/` now contains the learner-state API plus a custom responsive admin
+  web for managing content.
+- `strapi/` remains as migration/reference material from the earlier CMS-based
+  plan, but the active direction is the custom admin in `app-api/public/admin`.
 
-### Run the learner-state API
+### Run the learner-state API and admin
 
 Provide a catalog snapshot at `strapi/seed/seed_content.json` first.
 The repo includes:
@@ -29,7 +30,7 @@ Then install and run the app API:
 ```bash
 cd app-api
 npm install
-CATALOG_SNAPSHOT_PATH=../strapi/seed/seed_content.json npm start
+BOOTSTRAP_CATALOG_PATH=../strapi/seed/seed_content.json npm start
 ```
 
 Point Flutter at it with:
@@ -39,6 +40,10 @@ flutter run \
   --dart-define=APP_API_BASE_URL=http://127.0.0.1:8788 \
   --dart-define=SANDBOX_API_BASE_URL=http://127.0.0.1:8787
 ```
+
+Open the admin web at [http://127.0.0.1:8788/admin](http://127.0.0.1:8788/admin).
+Set `ADMIN_API_KEY` before `npm start` if you do not want to use the local
+default key.
 
 ## Sandbox Proxy MVP
 

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pocket Coding Coach Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Custom Admin</p>
+          <h1>Pocket Coding Coach Content Studio</h1>
+          <p class="subtitle">
+            Manage draft content, publish changes, and keep the learner app fed
+            from the same app API.
+          </p>
+        </div>
+        <div class="auth-card">
+          <label for="admin-key">Admin key</label>
+          <div class="auth-row">
+            <input id="admin-key" type="password" placeholder="Enter x-admin-key" />
+            <button id="connect-button">Connect</button>
+          </div>
+          <p id="auth-status" class="muted">Waiting for admin key…</p>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="sidebar card">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Catalog</p>
+              <h2>Tracks</h2>
+            </div>
+            <button id="new-track-button" class="ghost-button">New track</button>
+          </div>
+          <div id="tracks-list" class="entity-list"></div>
+        </section>
+
+        <section class="editor card">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Editor</p>
+              <h2 id="editor-title">Select an entry</h2>
+            </div>
+            <div class="button-row">
+              <button id="refresh-button" class="ghost-button">Refresh</button>
+              <button id="delete-button" class="danger-button">Delete</button>
+            </div>
+          </div>
+          <div id="editor-meta" class="editor-meta muted">
+            No item selected.
+          </div>
+          <textarea id="editor-textarea" spellcheck="false"></textarea>
+          <div class="button-row sticky-actions">
+            <button id="save-button">Save draft</button>
+            <button id="publish-button" class="accent-button">Publish</button>
+            <button id="unpublish-button" class="ghost-button">Unpublish</button>
+          </div>
+        </section>
+
+        <section class="sidebar card">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Catalog</p>
+              <h2>Skills</h2>
+            </div>
+            <button id="new-skill-button" class="ghost-button">New skill</button>
+          </div>
+          <div id="skills-list" class="entity-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="entity-item-template">
+      <button class="entity-item">
+        <span class="entity-title"></span>
+        <span class="entity-status"></span>
+      </button>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

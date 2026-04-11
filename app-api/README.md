@@ -1,17 +1,16 @@
 # App API
 
-This service owns learner-specific state that should not live in Strapi:
+This service now owns both:
 
-- anonymous learner bootstrap
-- sync cursor / idempotent learner events
-- derived progress, dashboard, review queue, and skill memory
+- learner-specific state for the mobile app
+- a lightweight custom admin web for managing learning content without Strapi
 
 ## Local development
 
-1. Export a catalog snapshot from the old seed curriculum:
+1. Optionally provide a bootstrap snapshot from the old seed curriculum.
 
 ```bash
-dart run tool/export_seed_content.dart
+flutter pub run tool/export_seed_content.dart strapi/seed/seed_content.json
 ```
 
 2. Install dependencies and run the API:
@@ -19,14 +18,29 @@ dart run tool/export_seed_content.dart
 ```bash
 cd app-api
 npm install
-CATALOG_SNAPSHOT_PATH=../strapi/seed/seed_content.json npm start
+BOOTSTRAP_CATALOG_PATH=../strapi/seed/seed_content.json npm start
 ```
 
 The service listens on `http://127.0.0.1:8788` by default.
 
+## Admin web
+
+Open:
+
+```text
+http://127.0.0.1:8788/admin
+```
+
+Authentication uses `x-admin-key` with `ADMIN_API_KEY`. If you do not provide
+the variable locally, the default key is:
+
+```text
+local-dev-admin-key
+```
+
 ## Persistence
 
-The current TypeScript server runs an in-memory learner store so the mobile app
-can integrate end-to-end immediately. The Prisma schema in `prisma/schema.prisma`
-defines the target PostgreSQL persistence model for moving this service from
-single-process dev mode to durable storage.
+The learner event store is still in-memory for local development. Content is now
+persisted to `app-api/data/content-store.json` with draft/published workflow.
+The Prisma schema in `prisma/schema.prisma` still defines the target PostgreSQL
+model for moving this service to durable storage later.

@@ -32,6 +32,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+app-api/node_modules/
+app-api/data/content-store.json
 
 # Symbolication related
 app.*.symbols
