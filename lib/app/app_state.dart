@@ -1,31 +1,123 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/sample_curriculum.dart';
+import '../models/app_sync_models.dart';
 import '../models/learning_models.dart';
+import '../repositories/catalog_repository.dart';
+import '../repositories/learner_repository.dart';
+import '../repositories/sync_repository.dart';
+import '../services/app_api_service.dart';
 import '../services/sandbox_api_service.dart';
+import '../storage/local_app_store.dart';
 
 class AppState extends ChangeNotifier {
-  AppState.seeded({
-    SandboxApiService? sandboxApiService,
-  })  : _sandboxApiService = sandboxApiService ?? SandboxApiService(),
-        _tracks = SeedData.tracks(),
-        _skillNodes = SeedData.skills(),
-        _skillMemory = SeedData.skillMemory();
+  AppState._({
+    required CatalogRepository catalogRepository,
+    required LearnerRepository learnerRepository,
+    required SyncRepository syncRepository,
+    required SandboxApiService sandboxApiService,
+    required LearnerProfile learnerProfile,
+    required List<LearningTrack> tracks,
+    required List<SkillNode> skillNodes,
+    required Map<String, SkillMasteryRecord> skillMemory,
+    required Set<String> completedMilestones,
+  })  : _catalogRepository = catalogRepository,
+        _learnerRepository = learnerRepository,
+        _syncRepository = syncRepository,
+        _sandboxApiService = sandboxApiService,
+        _learnerProfile = learnerProfile,
+        _tracks = tracks,
+        _skillNodes = skillNodes,
+        _skillMemory = skillMemory,
+        _completedMilestones = completedMilestones;
 
+  static Future<AppState> bootstrap({
+    CatalogRepository? catalogRepository,
+    LearnerRepository? learnerRepository,
+    SyncRepository? syncRepository,
+    LocalAppStore? localAppStore,
+    AppApiService? appApiService,
+    SandboxApiService? sandboxApiService,
+  }) async {
+    final store = localAppStore ?? FileLocalAppStore();
+    final apiService = appApiService ?? AppApiService();
+    final resolvedCatalogRepository = catalogRepository ??
+        AppApiCatalogRepository(
+          localAppStore: store,
+          appApiService: apiService,
+        );
+    final resolvedLearnerRepository = learnerRepository ??
+        AppApiLearnerRepository(
+          localAppStore: store,
+          appApiService: apiService,
+        );
+    final resolvedSyncRepository = syncRepository ??
+        AppApiSyncRepository(
+          localAppStore: store,
+          appApiService: apiService,
+        );
+
+    final learnerProfile = await resolvedLearnerRepository.bootstrapLearner();
+
+    try {
+      await resolvedCatalogRepository.refreshCatalogIfNeeded();
+    } catch (_) {
+      // Keep cached catalog when the network is unavailable during bootstrap.
+    }
+
+    try {
+      await resolvedSyncRepository.flushPendingEvents(
+        learnerProfile: learnerProfile,
+      );
+      await resolvedLearnerRepository.refreshLearnerState();
+    } catch (_) {
+      // Offline bootstrap should still succeed from cache.
+    }
+
+    final tracks = await resolvedCatalogRepository.readCachedTracks();
+    final skillNodes = await resolvedCatalogRepository.readCachedSkillNodes();
+    final cachedSkillMemory =
+        await resolvedLearnerRepository.readCachedSkillMemory();
+    final completedMilestones =
+        await resolvedLearnerRepository.readCachedCompletedMilestoneIds();
+
+    return AppState._(
+      catalogRepository: resolvedCatalogRepository,
+      learnerRepository: resolvedLearnerRepository,
+      syncRepository: resolvedSyncRepository,
+      sandboxApiService: sandboxApiService ?? SandboxApiService(),
+      learnerProfile: learnerProfile,
+      tracks: tracks,
+      skillNodes: skillNodes,
+      skillMemory: _normalizeSkillMemory(skillNodes, cachedSkillMemory),
+      completedMilestones: completedMilestones,
+    );
+  }
+
+  final CatalogRepository _catalogRepository;
+  final LearnerRepository _learnerRepository;
+  final SyncRepository _syncRepository;
   final SandboxApiService _sandboxApiService;
+  LearnerProfile _learnerProfile;
+
   final List<LearningTrack> _tracks;
   final List<SkillNode> _skillNodes;
   final Map<String, SkillMasteryRecord> _skillMemory;
-  final Set<String> _completedMilestones = <String>{};
+  final Set<String> _completedMilestones;
+  Future<ValidationResult>? _inFlightSandboxExecution;
   PracticeSession? _activeSession;
 
   List<LearningTrack> get tracks => List<LearningTrack>.unmodifiable(_tracks);
   List<SkillNode> get skillNodes => List<SkillNode>.unmodifiable(_skillNodes);
   PracticeSession? get activeSession => _activeSession;
+  bool get isSandboxExecutionRunning =>
+      _inFlightSandboxExecution != null ||
+      _activeSession?.validationResult.status == ValidationStatus.running;
   Map<String, SkillMasteryRecord> get skillMemory =>
       Map<String, SkillMasteryRecord>.unmodifiable(_skillMemory);
+  LearnerProfile get learnerProfile => _learnerProfile;
 
   List<LearningTrack> tracksForType(LearningTrackType type) {
     return _tracks.where((track) => track.type == type).toList(growable: false);
@@ -88,13 +180,64 @@ class AppState extends ChangeNotifier {
 
   List<SkillMasteryView> weakestSkills() {
     final views = _skillNodes.map((skill) {
-      final record = _skillMemory[skill.id]!;
+      final record = _skillMemory[skill.id] ?? _defaultRecord(skill.id);
       return SkillMasteryView(skill: skill, record: record);
     }).toList();
 
     views
         .sort((a, b) => a.record.masteryScore.compareTo(b.record.masteryScore));
     return views;
+  }
+
+  Future<void> refreshFromRemote({
+    bool forceCatalogRefresh = false,
+  }) async {
+    var changed = false;
+    try {
+      changed = await _catalogRepository.refreshCatalogIfNeeded(
+            force: forceCatalogRefresh,
+          ) ||
+          changed;
+    } catch (_) {
+      // Keep cached data on network failures.
+    }
+
+    try {
+      changed = await _syncRepository.flushPendingEvents(
+            learnerProfile: _learnerProfile,
+          ) ||
+          changed;
+      changed = await _learnerRepository.refreshLearnerState() || changed;
+    } catch (_) {
+      // Offline mode is expected on mobile.
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    final latestTracks = await _catalogRepository.readCachedTracks();
+    final latestSkillNodes = await _catalogRepository.readCachedSkillNodes();
+    final latestSkillMemory = await _learnerRepository.readCachedSkillMemory();
+    final latestCompletedMilestones =
+        await _learnerRepository.readCachedCompletedMilestoneIds();
+    final latestLearnerProfile =
+        await _learnerRepository.readCachedLearnerProfile() ?? _learnerProfile;
+
+    _tracks
+      ..clear()
+      ..addAll(latestTracks);
+    _skillNodes
+      ..clear()
+      ..addAll(latestSkillNodes);
+    _skillMemory
+      ..clear()
+      ..addAll(_normalizeSkillMemory(latestSkillNodes, latestSkillMemory));
+    _completedMilestones
+      ..clear()
+      ..addAll(latestCompletedMilestones);
+    _learnerProfile = latestLearnerProfile;
+    notifyListeners();
   }
 
   void startSession({
@@ -123,6 +266,17 @@ class AppState extends ChangeNotifier {
       executionHistory: const <ExecutionAttempt>[],
     );
     notifyListeners();
+    unawaited(
+      _recordEvent(
+        LearnerSyncEventType.sessionStarted,
+        <String, Object?>{
+          'track_id': track.id,
+          'module_id': module.id,
+          'milestone_id': milestone.id,
+          'mode': mode.name,
+        },
+      ),
+    );
   }
 
   bool startReviewTask(ReviewTask task) {
@@ -161,7 +315,6 @@ class AppState extends ChangeNotifier {
         activeFilePath: code,
       },
     );
-    notifyListeners();
   }
 
   void updateSessionFileCode({
@@ -183,7 +336,6 @@ class AppState extends ChangeNotifier {
         filePath: code,
       },
     );
-    notifyListeners();
   }
 
   void selectSessionFile(String filePath) {
@@ -229,15 +381,43 @@ class AppState extends ChangeNotifier {
     }
 
     notifyListeners();
+    unawaited(
+      _persistDerivedStateAndSync(
+        eventType: LearnerSyncEventType.hintRevealed,
+        payload: <String, Object?>{
+          'milestone_id': session.milestone.id,
+          'hint_level': nextLevel.name,
+          'skill_ids': session.milestone.skillIds,
+        },
+      ),
+    );
     return hint;
   }
 
   Future<ValidationResult> buildSession() {
-    return _executeSession(action: SandboxExecutionAction.build);
+    return _startSandboxExecution(action: SandboxExecutionAction.build);
   }
 
   Future<ValidationResult> runSession() {
-    return _executeSession(action: SandboxExecutionAction.run);
+    return _startSandboxExecution(action: SandboxExecutionAction.run);
+  }
+
+  Future<ValidationResult> _startSandboxExecution({
+    required SandboxExecutionAction action,
+  }) {
+    final existingExecution = _inFlightSandboxExecution;
+    if (existingExecution != null) {
+      return existingExecution;
+    }
+
+    final execution = _executeSession(action: action);
+    _inFlightSandboxExecution = execution;
+    execution.whenComplete(() {
+      if (identical(_inFlightSandboxExecution, execution)) {
+        _inFlightSandboxExecution = null;
+      }
+    });
+    return execution;
   }
 
   Future<ValidationResult> _executeSession({
@@ -278,7 +458,8 @@ class AppState extends ChangeNotifier {
         action: action,
         milestone: session.milestone,
         fileContents: session.fileContents,
-        entryFilePath: session.primaryFilePath,
+        entryFilePath:
+            session.milestone.sandboxEntryFilePath ?? session.primaryFilePath,
       );
 
       final result = ValidationResult(
@@ -314,6 +495,22 @@ class AppState extends ChangeNotifier {
         ),
       );
       notifyListeners();
+
+      unawaited(
+        _recordEvent(
+          action == SandboxExecutionAction.build
+              ? LearnerSyncEventType.sandboxBuild
+              : LearnerSyncEventType.sandboxRun,
+          <String, Object?>{
+            'milestone_id': session.milestone.id,
+            'status': result.status.name,
+            'summary': result.summary,
+            'passed_case_count': result.executionReport?.passedCaseCount,
+            'total_case_count': result.executionReport?.totalCaseCount,
+          },
+        ),
+      );
+
       return result;
     } catch (error) {
       final result = ValidationResult(
@@ -417,6 +614,30 @@ class AppState extends ChangeNotifier {
     );
 
     notifyListeners();
+    unawaited(
+      _persistDerivedStateAndSync(
+        eventType:
+            passed ? LearnerSyncEventType.checkPassed : LearnerSyncEventType.checkFailed,
+        payload: <String, Object?>{
+          'milestone_id': session.milestone.id,
+          'matched_requirements': matched,
+          'missing_requirements': missing,
+          'skill_ids': session.milestone.skillIds,
+        },
+      ),
+    );
+    if (passed) {
+      unawaited(
+        _recordEvent(
+          LearnerSyncEventType.milestoneCompleted,
+          <String, Object?>{
+            'milestone_id': session.milestone.id,
+            'track_id': session.track.id,
+            'module_id': session.module.id,
+          },
+        ),
+      );
+    }
     return result;
   }
 
@@ -425,13 +646,17 @@ class AppState extends ChangeNotifier {
 
   Map<String, String> _initialFileContentsFor(Milestone milestone) {
     if (milestone.relatedFiles.isEmpty) {
-      return <String, String>{'solution.txt': milestone.starterCode};
+      return <String, String>{
+        'solution.txt':
+            milestone.starterFiles['solution.txt'] ?? milestone.starterCode,
+      };
     }
 
     final fileContents = <String, String>{};
     for (var i = 0; i < milestone.relatedFiles.length; i += 1) {
       final path = milestone.relatedFiles[i];
-      fileContents[path] = i == 0 ? milestone.starterCode : '';
+      fileContents[path] =
+          milestone.starterFiles[path] ?? (i == 0 ? milestone.starterCode : '');
     }
     return fileContents;
   }
@@ -479,12 +704,82 @@ class AppState extends ChangeNotifier {
         for (final milestone in module.milestones) {
           if (milestone.id == milestoneId) {
             return MilestoneBundle(
-                track: track, module: module, milestone: milestone);
+              track: track,
+              module: module,
+              milestone: milestone,
+            );
           }
         }
       }
     }
     return null;
+  }
+
+  Future<void> _persistDerivedStateAndSync({
+    required LearnerSyncEventType eventType,
+    required Map<String, Object?> payload,
+  }) async {
+    await _learnerRepository.saveDerivedState(
+      skillMemory: _skillMemory,
+      reviewQueue: reviewQueue,
+      dashboardStats: dashboardStats,
+      completedMilestoneIds: _completedMilestones,
+    );
+    await _recordEvent(eventType, payload);
+  }
+
+  Future<void> _recordEvent(
+    LearnerSyncEventType type,
+    Map<String, Object?> payload,
+  ) async {
+    await _syncRepository.enqueueEvent(
+      PendingSyncEvent(
+        clientEventId:
+            '${DateTime.now().microsecondsSinceEpoch}-${type.name}-${Random().nextInt(1 << 32)}',
+        type: type,
+        occurredAt: DateTime.now().toUtc(),
+        payload: payload,
+      ),
+    );
+
+    try {
+      final flushed = await _syncRepository.flushPendingEvents(
+        learnerProfile: _learnerProfile,
+      );
+      if (flushed) {
+        await _learnerRepository.refreshLearnerState();
+      }
+      _learnerProfile =
+          await _learnerRepository.readCachedLearnerProfile() ?? _learnerProfile;
+    } catch (_) {
+      // Keep pending events queued for the next retry.
+    }
+  }
+
+  static Map<String, SkillMasteryRecord> _normalizeSkillMemory(
+    List<SkillNode> skillNodes,
+    Map<String, SkillMasteryRecord> cachedSkillMemory,
+  ) {
+    final normalized = <String, SkillMasteryRecord>{
+      ...cachedSkillMemory,
+    };
+
+    for (final skillNode in skillNodes) {
+      normalized.putIfAbsent(skillNode.id, () => _defaultRecord(skillNode.id));
+    }
+
+    return normalized;
+  }
+
+  static SkillMasteryRecord _defaultRecord(String skillId) {
+    return SkillMasteryRecord(
+      skillId: skillId,
+      masteryScore: 0.5,
+      confidenceScore: 0.5,
+      hintDependence: 0.0,
+      failureCount: 0,
+      lastOutcome: 'Waiting for your first real attempt.',
+    );
   }
 }
 
@@ -498,14 +793,4 @@ class MilestoneBundle {
   final LearningTrack track;
   final LearningModule module;
   final Milestone milestone;
-}
-
-class SkillMasteryView {
-  const SkillMasteryView({
-    required this.skill,
-    required this.record,
-  });
-
-  final SkillNode skill;
-  final SkillMasteryRecord record;
 }

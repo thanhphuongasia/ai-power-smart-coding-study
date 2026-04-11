@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Learner {
+  id                 String              @id @default(cuid())
+  installId          String              @unique
+  accessTokenHash    String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  devices            LearnerDevice[]
+  events             LearnerEvent[]
+  milestoneProgress  MilestoneProgress[]
+  skillMemory        SkillMemory[]
+  syncCursor         SyncCursor?
+}
+
+model LearnerDevice {
+  id         String   @id @default(cuid())
+  learnerId  String
+  platform   String
+  appVersion String
+  locale     String
+  createdAt  DateTime @default(now())
+  learner    Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+model LearnerEvent {
+  id            String   @id @default(cuid())
+  learnerId     String
+  clientEventId String
+  type          String
+  occurredAt    DateTime
+  payloadJson   Json
+  createdAt     DateTime @default(now())
+  learner       Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, clientEventId])
+}
+
+model MilestoneProgress {
+  id           String   @id @default(cuid())
+  learnerId    String
+  milestoneId  String
+  trackId      String?
+  moduleId     String?
+  status       String
+  completedAt  DateTime?
+  updatedAt    DateTime @updatedAt
+  learner      Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, milestoneId])
+}
+
+model SkillMemory {
+  id              String   @id @default(cuid())
+  learnerId       String
+  skillId         String
+  masteryScore    Float
+  confidenceScore Float
+  hintDependence  Float
+  failureCount    Int
+  lastOutcome     String
+  updatedAt       DateTime @updatedAt
+  learner         Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, skillId])
+}
+
+model SyncCursor {
+  learnerId   String   @id
+  current     Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  learner     Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+model ContentManifestCache {
+  id             String   @id @default(cuid())
+  contentVersion String
+  checksum       String
+  publishedAt    DateTime
+  snapshotJson   Json
+  updatedAt      DateTime @updatedAt
+}

@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ai_powerd_mobile_code_assitant/app/app.dart';
-import 'package:ai_powerd_mobile_code_assitant/app/app_state.dart';
 import 'package:ai_powerd_mobile_code_assitant/models/learning_models.dart';
 import 'package:ai_powerd_mobile_code_assitant/screens/practice_session_screen.dart';
+
+import 'support/test_bootstrap.dart';
 
 void main() {
   testWidgets('renders the mobile coding coach dashboard',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const AICodingCoachApp());
+    await tester.pumpWidget(
+      AICodingCoachApp(
+        appStateLoader: buildTestAppState,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Pocket Coding Coach'), findsOneWidget);
@@ -20,7 +25,11 @@ void main() {
 
   testWidgets('can open a project session from the practice library',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const AICodingCoachApp());
+    await tester.pumpWidget(
+      AICodingCoachApp(
+        appStateLoader: buildTestAppState,
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Practice'));
@@ -32,7 +41,7 @@ void main() {
 
   testWidgets('session editor accepts code input and can validate it',
       (WidgetTester tester) async {
-    final state = AppState.seeded();
+    final state = await buildTestAppState();
     final track = state.tracks.firstWhere(
       (item) => item.type == LearningTrackType.project,
     );

@@ -1,0 +1,103 @@
+{
+  "collections": {
+    "learning-track": {
+      "fields": {
+        "id": "string",
+        "slug": "uid",
+        "title": "string",
+        "summary": "text",
+        "type": "enumeration(project,dataStructure,leetcode)",
+        "difficultyLabel": "string",
+        "focusAreas": "json",
+        "version": "string",
+        "modules": "component.repeatable(learning.module)",
+        "status": "enumeration(draft,published)"
+      }
+    },
+    "skill-node": {
+      "fields": {
+        "id": "string",
+        "slug": "uid",
+        "title": "string",
+        "category": "enumeration(languageSyntax,oopClassDesign,dataStructureFundamentals,algorithmPatterns,debugging,testingEdgeCases)",
+        "description": "text",
+        "reviewMilestoneId": "string",
+        "version": "string",
+        "status": "enumeration(draft,published)"
+      }
+    }
+  },
+  "components": {
+    "learning.module": {
+      "fields": {
+        "id": "string",
+        "title": "string",
+        "summary": "text",
+        "estimatedMinutes": "integer",
+        "milestones": "component.repeatable(learning.milestone)"
+      }
+    },
+    "learning.milestone": {
+      "fields": {
+        "id": "string",
+        "title": "string",
+        "objective": "text",
+        "problemStatement": "richtext",
+        "languageLabel": "string",
+        "relatedFiles": "json",
+        "acceptanceCriteria": "json",
+        "taskSteps": "component.repeatable(learning.task-step)",
+        "supportedModes": "json",
+        "hints": "component.repeatable(learning.hint)",
+        "starterCode": "text",
+        "starterFiles": "component.repeatable(learning.starter-file)",
+        "solutionCode": "text",
+        "exampleInput": "text",
+        "exampleOutput": "text",
+        "sandboxHarnessTemplate": "text",
+        "sandboxEntryFilePath": "string",
+        "demoFilePath": "string",
+        "testCases": "component.repeatable(learning.test-case)",
+        "reflectionPrompts": "json",
+        "skillIds": "json",
+        "requirements": "component.repeatable(learning.requirement-check)",
+        "runCommand": "string",
+        "reviewPrompt": "text"
+      }
+    },
+    "learning.task-step": {
+      "fields": {
+        "id": "string",
+        "title": "string",
+        "description": "text"
+      }
+    },
+    "learning.hint": {
+      "fields": {
+        "level": "string",
+        "body": "text"
+      }
+    },
+    "learning.starter-file": {
+      "fields": {
+        "path": "string",
+        "contents": "text"
+      }
+    },
+    "learning.test-case": {
+      "fields": {
+        "id": "string",
+        "label": "string",
+        "body": "text",
+        "expectedOutput": "text"
+      }
+    },
+    "learning.requirement-check": {
+      "fields": {
+        "label": "string",
+        "pattern": "string",
+        "feedback": "text"
+      }
+    }
+  }
+}

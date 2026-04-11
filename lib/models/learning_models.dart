@@ -66,9 +66,13 @@ class Milestone {
     required this.supportedModes,
     required this.hints,
     required this.starterCode,
+    this.starterFiles = const <String, String>{},
+    this.solutionCode,
     required this.exampleInput,
     required this.exampleOutput,
     this.sandboxHarnessTemplate = defaultSandboxHarnessTemplate,
+    this.sandboxEntryFilePath,
+    this.demoFilePath,
     this.testCases = const <ExecutionTestCase>[],
     required this.reflectionPrompts,
     required this.skillIds,
@@ -88,9 +92,13 @@ class Milestone {
   final List<PracticeMode> supportedModes;
   final Map<HintLevel, String> hints;
   final String starterCode;
+  final Map<String, String> starterFiles;
+  final String? solutionCode;
   final String exampleInput;
   final String exampleOutput;
   final String sandboxHarnessTemplate;
+  final String? sandboxEntryFilePath;
+  final String? demoFilePath;
   final List<ExecutionTestCase> testCases;
   final List<String> reflectionPrompts;
   final List<String> skillIds;
@@ -310,6 +318,7 @@ class ExecutionReport {
     required this.statusLabel,
     required this.passedCaseCount,
     required this.totalCaseCount,
+    required this.programResult,
     required this.sections,
     required this.caseResults,
   });
@@ -318,8 +327,31 @@ class ExecutionReport {
   final String statusLabel;
   final int passedCaseCount;
   final int totalCaseCount;
+  final ExecutionProgramResult? programResult;
   final List<ExecutionOutputSection> sections;
   final List<ExecutionCaseResult> caseResults;
+}
+
+class ExecutionProgramResult {
+  const ExecutionProgramResult({
+    required this.label,
+    required this.passed,
+    required this.statusLabel,
+    required this.actualOutput,
+    required this.stdout,
+    required this.stderr,
+    required this.compileOutput,
+    required this.message,
+  });
+
+  final String label;
+  final bool passed;
+  final String statusLabel;
+  final String actualOutput;
+  final String stdout;
+  final String stderr;
+  final String compileOutput;
+  final String message;
 }
 
 class ExecutionOutputSection {
@@ -390,6 +422,16 @@ class DashboardStats {
   final int completedDsAlgo;
   final int reviewQueueCount;
   final double averageMastery;
+}
+
+class SkillMasteryView {
+  const SkillMasteryView({
+    required this.skill,
+    required this.record,
+  });
+
+  final SkillNode skill;
+  final SkillMasteryRecord record;
 }
 
 extension LearningTrackTypeCopy on LearningTrackType {

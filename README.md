@@ -3,6 +3,43 @@
 A Flutter prototype for a mobile-first AI coding coach covering project slices,
 data structures, and LeetCode practice.
 
+## Synced App Data
+
+The app now bootstraps from repository-backed data instead of calling
+`AppState.seeded()` at runtime.
+
+- `lib/services/app_api_service.dart` talks to the learner-data API.
+- `lib/repositories/*` own catalog refresh, learner bootstrap, and outbox sync.
+- `lib/storage/local_app_store.dart` keeps a cached snapshot plus pending sync
+  events so the app can reopen quickly and retry sync later.
+- `app-api/` contains the new learner-state service scaffold.
+- `strapi/` contains the content model and import tooling for moving curriculum
+  content into Strapi.
+
+### Run the learner-state API
+
+Provide a catalog snapshot at `strapi/seed/seed_content.json` first.
+The repo includes:
+
+- `tool/export_seed_content.dart` to serialize the legacy seed curriculum
+- `strapi/importers/upsert-seed-content.mjs` to push that snapshot into Strapi
+
+Then install and run the app API:
+
+```bash
+cd app-api
+npm install
+CATALOG_SNAPSHOT_PATH=../strapi/seed/seed_content.json npm start
+```
+
+Point Flutter at it with:
+
+```bash
+flutter run \
+  --dart-define=APP_API_BASE_URL=http://127.0.0.1:8788 \
+  --dart-define=SANDBOX_API_BASE_URL=http://127.0.0.1:8787
+```
+
 ## Sandbox Proxy MVP
 
 `Build` and `Run` now go through a thin sandbox proxy that calls Judge0 on the
@@ -36,7 +73,17 @@ The proxy exposes:
 
 ### Run the Flutter app
 
-Point Flutter at the proxy instead of Judge0 directly:
+Debug builds now auto-fall back to a local proxy when no
+`SANDBOX_API_BASE_URL` is provided:
+
+- iOS simulator / macOS: `http://127.0.0.1:8787`
+- Android emulator: `http://10.0.2.2:8787`
+
+That means `Build` and `Run` work locally as soon as the proxy is running.
+You only need `--dart-define` when targeting a real device or a non-default
+host.
+
+To override the default and point Flutter at a different proxy:
 
 ```bash
 flutter run \
