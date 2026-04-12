@@ -288,18 +288,44 @@ h3 {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
 .field-span-2 {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
-.field-shell span {
+.field-shell .field-caption {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.help-icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 94, 47, 0.14);
+  background: rgba(119, 94, 47, 0.08);
+  color: var(--muted);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.help-icon:hover {
+  transform: none;
+  filter: none;
+  background: rgba(31, 143, 123, 0.12);
+  color: var(--accent-strong);
 }
 
 input,
@@ -394,6 +420,30 @@ button:hover {
 .entity-summary {
   font-size: 13px;
   line-height: 1.45;
+}
+
+.entity-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 94, 47, 0.12);
+  background: rgba(119, 94, 47, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge-pill strong {
+  color: var(--text);
 }
 
 .entity-kind,
@@ -548,6 +598,44 @@ button:hover {
   gap: 16px;
 }
 
+.wizard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(119, 94, 47, 0.12);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.wizard-step {
+  width: auto;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(119, 94, 47, 0.08);
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wizard-step.active {
+  background: rgba(31, 143, 123, 0.16);
+  color: var(--accent-strong);
+}
+
+.wizard-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.wizard-controls .ghost-button,
+.wizard-controls .secondary-button {
+  width: auto;
+}
+
 .editor-section {
   padding: 18px;
   border-radius: 22px;
@@ -633,6 +721,59 @@ button:hover {
 .checkbox-pill input {
   width: auto;
   margin: 0;
+}
+
+.token-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.token-row input {
+  flex: 1;
+}
+
+.token-row .ghost-button {
+  width: auto;
+  justify-content: center;
+  padding-inline: 16px;
+}
+
+.token-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.token-chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 94, 47, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.token-remove {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(198, 90, 70, 0.12);
+  color: var(--danger);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.token-remove:hover {
+  transform: none;
+  filter: none;
+  background: rgba(198, 90, 70, 0.18);
 }
 
 button {

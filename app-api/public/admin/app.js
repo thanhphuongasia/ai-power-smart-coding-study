@@ -10,17 +10,23 @@ const state = {
   searchQuery: "",
   laneFilter: "",
   levelFilter: "",
+  languageFilter: "",
   statusFilter: "",
+  topicFilter: "",
+  domainFilter: "",
+  tagFilter: "",
   view: "list",
   editorMode: "idle",
   editorInputMode: "form",
   editorKind: "tracks",
   editorSourceId: null,
   editorDraft: null,
+  editorStepIndex: 0,
   editorVariantIndex: 0,
   editorJsonText: "",
   sidebarVisible: true,
   detailMenuOpen: false,
+  createMenuOpen: false,
 };
 
 const dom = {
@@ -31,13 +37,25 @@ const dom = {
   refreshButton: document.getElementById("refresh-button"),
   sidebar: document.getElementById("sidebar"),
   sidebarToggle: document.getElementById("sidebar-toggle"),
+  clearFiltersButton: document.getElementById("clear-filters-button"),
+  createEntryShell: document.getElementById("create-entry-shell"),
   createEntryButton: document.getElementById("create-entry-button"),
+  createEntryMenu: document.getElementById("create-entry-menu"),
   searchInput: document.getElementById("search-input"),
   laneFilter: document.getElementById("lane-filter"),
   levelFilter: document.getElementById("level-filter"),
+  languageFilter: document.getElementById("language-filter"),
   statusFilter: document.getElementById("status-filter"),
+  topicFilter: document.getElementById("topic-filter"),
+  domainFilter: document.getElementById("domain-filter"),
+  tagFilter: document.getElementById("tag-filter"),
+  tagSuggestions: document.getElementById("tag-suggestions"),
   laneFilterShell: document.getElementById("lane-filter")?.closest(".field-shell"),
   levelFilterShell: document.getElementById("level-filter")?.closest(".field-shell"),
+  languageFilterShell: document.getElementById("language-filter")?.closest(".field-shell"),
+  topicFilterShell: document.getElementById("topic-filter")?.closest(".field-shell"),
+  domainFilterShell: document.getElementById("domain-filter")?.closest(".field-shell"),
+  tagFilterShell: document.getElementById("tag-filter")?.closest(".field-shell"),
   listScreen: document.getElementById("list-screen"),
   detailScreen: document.getElementById("detail-screen"),
   editorScreen: document.getElementById("editor-screen"),
@@ -100,9 +118,11 @@ function bindEvents() {
   dom.connectButton.addEventListener("click", () => runAction(connect));
   dom.refreshButton.addEventListener("click", () => runAction(refreshCatalog));
   dom.sidebarToggle?.addEventListener("click", () => toggleSidebarVisibility());
-  dom.createEntryButton.addEventListener("click", () =>
-    runAction(() => loadCreateDraft(state.selectedKind)),
-  );
+  dom.clearFiltersButton?.addEventListener("click", () => clearListFilters());
+  dom.createEntryButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleCreateMenu();
+  });
   dom.backToListButton.addEventListener("click", () => switchView("list"));
   dom.detailPublishButton.addEventListener("click", () => runAction(toggleSelectedPublishState));
   dom.detailMenuButton.addEventListener("click", (event) => {
@@ -134,8 +154,24 @@ function bindEvents() {
     state.levelFilter = event.target.value;
     renderListScreen();
   });
+  dom.languageFilter.addEventListener("change", (event) => {
+    state.languageFilter = event.target.value;
+    renderListScreen();
+  });
   dom.statusFilter.addEventListener("change", (event) => {
     state.statusFilter = event.target.value;
+    renderListScreen();
+  });
+  dom.topicFilter.addEventListener("change", (event) => {
+    state.topicFilter = event.target.value;
+    renderListScreen();
+  });
+  dom.domainFilter.addEventListener("change", (event) => {
+    state.domainFilter = event.target.value;
+    renderListScreen();
+  });
+  dom.tagFilter.addEventListener("input", (event) => {
+    state.tagFilter = String(event.target.value || "").trim();
     renderListScreen();
   });
   dom.adminKey.addEventListener("keydown", (event) => {
@@ -151,7 +187,9 @@ function bindEvents() {
       state.selectedId = null;
       resetEditor();
       closeDetailMenu();
+      closeCreateMenu();
       updateFilterVisibility();
+      hydrateFilterOptions();
       if (isNarrowViewport()) {
         state.sidebarVisible = false;
         applySidebarVisibility();
@@ -163,6 +201,9 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     if (!dom.detailMenuShell.contains(event.target)) {
       closeDetailMenu();
+    }
+    if (dom.createEntryShell && !dom.createEntryShell.contains(event.target)) {
+      closeCreateMenu();
     }
   });
 
@@ -211,6 +252,7 @@ async function refreshCatalog() {
     state.view = "list";
   }
 
+  hydrateFilterOptions();
   renderOverview();
   renderNavState();
   renderCurrentScreen();
@@ -223,6 +265,7 @@ async function refreshCatalog() {
 function switchView(view) {
   state.view = view;
   closeDetailMenu();
+  closeCreateMenu();
   if (isNarrowViewport() && view !== "list") {
     state.sidebarVisible = false;
     applySidebarVisibility();
@@ -253,6 +296,7 @@ function renderNavState() {
   dom.entityDomainsCount.textContent = String(catalog?.domains?.length || 0);
   dom.entitySkillsCount.textContent = String(catalog?.skills?.length || 0);
   dom.createEntryButton.textContent = `New ${entityLabel(state.selectedKind)}`;
+  renderCreateMenu();
 
   for (const button of dom.entityTabs) {
     button.classList.toggle("active", button.dataset.entityTab === state.selectedKind);
@@ -408,11 +452,16 @@ function renderEditorScreen() {
   }
 }
 
-async function loadCreateDraft(kind) {
+async function loadCreateDraft(kind, { lane = "" } = {}) {
   state.editorMode = "create";
   state.editorKind = kind;
   state.editorSourceId = null;
   state.editorDraft = structuredCloneSafe(defaultDraftFor(kind));
+  state.editorStepIndex = 0;
+  if (lane && (kind === "tracks" || kind === "exercises")) {
+    state.editorDraft.lane = lane;
+    state.editorDraft.contentKind = contentKindOptionsFor(lane, { isTrack: kind === "tracks" })[0]?.value || state.editorDraft.contentKind;
+  }
   if (kind === "tracks" && state.catalog && Array.isArray(state.catalog.exercises) && state.catalog.exercises.length > 0) {
     const draftLane = String(state.editorDraft.lane || "project");
     const laneMatch = state.catalog.exercises.find((exercise) => String(exercise.draft?.lane || "") === draftLane);
@@ -439,6 +488,7 @@ async function loadSelectedDraft() {
   state.editorKind = state.selectedKind;
   state.editorSourceId = item.id;
   state.editorDraft = structuredCloneSafe(item.draft);
+  state.editorStepIndex = 0;
   state.editorInputMode = "form";
   state.editorVariantIndex = guessDefaultVariantIndex(state.editorDraft);
   state.editorJsonText = "";
@@ -540,6 +590,7 @@ function resetEditor() {
   state.editorKind = state.selectedKind;
   state.editorInputMode = "form";
   state.editorDraft = null;
+  state.editorStepIndex = 0;
   state.editorVariantIndex = 0;
   state.editorJsonText = "";
   clearEditorError();
@@ -558,6 +609,97 @@ function closeDetailMenu() {
 function renderDetailMenu() {
   dom.detailMenu.hidden = !state.detailMenuOpen;
   dom.detailMenuButton.setAttribute("aria-expanded", String(state.detailMenuOpen));
+}
+
+function toggleCreateMenu() {
+  state.createMenuOpen = !state.createMenuOpen;
+  renderCreateMenu();
+}
+
+function closeCreateMenu() {
+  state.createMenuOpen = false;
+  renderCreateMenu();
+}
+
+function renderCreateMenu() {
+  if (!dom.createEntryMenu) {
+    return;
+  }
+
+  dom.createEntryMenu.hidden = !state.createMenuOpen;
+  dom.createEntryButton.setAttribute("aria-expanded", String(state.createMenuOpen));
+
+  if (!state.createMenuOpen) {
+    return;
+  }
+
+  dom.createEntryMenu.replaceChildren(...createCreateMenuItems(state.selectedKind));
+}
+
+function createCreateMenuItems(kind) {
+  const items = [];
+  if (kind === "tracks") {
+    items.push(
+      createMenuItem("New Project track", () => runAction(() => loadCreateDraft("tracks", { lane: "project" }))),
+      createMenuItem("New DSA track", () => runAction(() => loadCreateDraft("tracks", { lane: "dsa" }))),
+      createMenuItem("New LeetCode set", () =>
+        runAction(() => loadCreateDraft("tracks", { lane: "leetcode" })),
+      ),
+    );
+    return items;
+  }
+
+  if (kind === "exercises") {
+    items.push(
+      createMenuItem("New Project exercise", () =>
+        runAction(() => loadCreateDraft("exercises", { lane: "project" })),
+      ),
+      createMenuItem("New DSA exercise", () => runAction(() => loadCreateDraft("exercises", { lane: "dsa" }))),
+      createMenuItem("New LeetCode exercise", () =>
+        runAction(() => loadCreateDraft("exercises", { lane: "leetcode" })),
+      ),
+    );
+    return items;
+  }
+
+  items.push(createMenuItem(`New ${entityLabel(kind).toLowerCase()}`, () => runAction(() => loadCreateDraft(kind))));
+  return items;
+}
+
+function createMenuItem(label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "menu-item";
+  button.textContent = label;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCreateMenu();
+    onClick();
+  });
+  return button;
+}
+
+function clearListFilters() {
+  state.searchQuery = "";
+  state.laneFilter = "";
+  state.levelFilter = "";
+  state.languageFilter = "";
+  state.statusFilter = "";
+  state.topicFilter = "";
+  state.domainFilter = "";
+  state.tagFilter = "";
+
+  dom.searchInput.value = "";
+  dom.laneFilter.value = "";
+  dom.levelFilter.value = "";
+  dom.languageFilter.value = "";
+  dom.statusFilter.value = "";
+  dom.topicFilter.value = "";
+  dom.domainFilter.value = "";
+  dom.tagFilter.value = "";
+
+  renderListScreen();
 }
 
 function visibleEntries() {
@@ -589,6 +731,37 @@ function matchesFilters(item) {
     if (state.levelFilter && String(item.draft.level || "") !== state.levelFilter) {
       return false;
     }
+    if (state.topicFilter) {
+      const topics = Array.isArray(item.draft.topicIds) ? item.draft.topicIds : [];
+      if (!topics.includes(state.topicFilter)) {
+        return false;
+      }
+    }
+    if (state.domainFilter) {
+      const domains = Array.isArray(item.draft.domainIds) ? item.draft.domainIds : [];
+      if (!domains.includes(state.domainFilter)) {
+        return false;
+      }
+    }
+    if (state.tagFilter) {
+      const requiredTags = parseStringList(state.tagFilter);
+      const tags = Array.isArray(item.draft.tags) ? item.draft.tags : [];
+      if (requiredTags.length && !requiredTags.every((tag) => tags.includes(tag))) {
+        return false;
+      }
+    }
+    if (state.languageFilter) {
+      if (state.selectedKind === "exercises") {
+        const variants = Array.isArray(item.draft.languageVariants) ? item.draft.languageVariants : [];
+        if (!variants.some((variant) => String(variant.languageId || "") === state.languageFilter)) {
+          return false;
+        }
+      } else if (state.selectedKind === "tracks") {
+        if (!trackSupportsLanguage(item, state.languageFilter)) {
+          return false;
+        }
+      }
+    }
   }
   if (!state.searchQuery) {
     return true;
@@ -615,14 +788,154 @@ function supportsLaneLevelFilters() {
 
 function updateFilterVisibility() {
   const visible = supportsLaneLevelFilters();
-  dom.laneFilterShell.hidden = !visible;
-  dom.levelFilterShell.hidden = !visible;
+  setNodeHidden(dom.laneFilterShell, !visible);
+  setNodeHidden(dom.levelFilterShell, !visible);
+  setNodeHidden(dom.languageFilterShell, !visible);
+  setNodeHidden(dom.topicFilterShell, !visible);
+  setNodeHidden(dom.domainFilterShell, !visible);
+  setNodeHidden(dom.tagFilterShell, !visible);
+
   if (!visible) {
     state.laneFilter = "";
     state.levelFilter = "";
+    state.languageFilter = "";
+    state.topicFilter = "";
+    state.domainFilter = "";
+    state.tagFilter = "";
     dom.laneFilter.value = "";
     dom.levelFilter.value = "";
+    dom.languageFilter.value = "";
+    dom.topicFilter.value = "";
+    dom.domainFilter.value = "";
+    dom.tagFilter.value = "";
   }
+}
+
+function setNodeHidden(node, hidden) {
+  if (!node) return;
+  node.hidden = !!hidden;
+}
+
+function hydrateFilterOptions() {
+  if (!state.catalog) {
+    return;
+  }
+
+  hydrateLanguageFilter();
+  hydrateTopicFilter();
+  hydrateDomainFilter();
+  hydrateTagSuggestions();
+}
+
+function hydrateLanguageFilter() {
+  if (!dom.languageFilter) {
+    return;
+  }
+
+  const languageLabels = new Map();
+  for (const exercise of state.catalog.exercises || []) {
+    const variants = Array.isArray(exercise?.draft?.languageVariants)
+      ? exercise.draft.languageVariants
+      : [];
+    for (const variant of variants) {
+      const id = String(variant?.languageId || "").trim();
+      if (!id) continue;
+      const label = String(variant?.languageLabel || id).trim();
+      if (!languageLabels.has(id)) {
+        languageLabels.set(id, label);
+      }
+    }
+  }
+
+  const options = [{ value: "", label: "All languages" }];
+  const sorted = Array.from(languageLabels.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  for (const [id, label] of sorted) {
+    options.push({ value: id, label: `${label} (${id})` });
+  }
+
+  replaceSelectOptions(dom.languageFilter, options);
+  if (!options.some((option) => option.value === state.languageFilter)) {
+    state.languageFilter = "";
+  }
+  dom.languageFilter.value = state.languageFilter;
+}
+
+function hydrateTopicFilter() {
+  if (!dom.topicFilter) {
+    return;
+  }
+
+  const topics = Array.isArray(state.catalog.topics) ? state.catalog.topics : [];
+  const options = [{ value: "", label: "All topics" }];
+  const sorted = [...topics].sort((a, b) =>
+    String(a?.draft?.title || a?.id || "").localeCompare(String(b?.draft?.title || b?.id || "")),
+  );
+  for (const topic of sorted) {
+    const id = String(topic?.id || "").trim();
+    if (!id) continue;
+    const title = String(topic?.draft?.title || id);
+    options.push({ value: id, label: `${title} (${id})` });
+  }
+
+  replaceSelectOptions(dom.topicFilter, options);
+  if (!options.some((option) => option.value === state.topicFilter)) {
+    state.topicFilter = "";
+  }
+  dom.topicFilter.value = state.topicFilter;
+}
+
+function hydrateDomainFilter() {
+  if (!dom.domainFilter) {
+    return;
+  }
+
+  const domains = Array.isArray(state.catalog.domains) ? state.catalog.domains : [];
+  const options = [{ value: "", label: "All domains" }];
+  const sorted = [...domains].sort((a, b) =>
+    String(a?.draft?.title || a?.id || "").localeCompare(String(b?.draft?.title || b?.id || "")),
+  );
+  for (const domain of sorted) {
+    const id = String(domain?.id || "").trim();
+    if (!id) continue;
+    const title = String(domain?.draft?.title || id);
+    options.push({ value: id, label: `${title} (${id})` });
+  }
+
+  replaceSelectOptions(dom.domainFilter, options);
+  if (!options.some((option) => option.value === state.domainFilter)) {
+    state.domainFilter = "";
+  }
+  dom.domainFilter.value = state.domainFilter;
+}
+
+function hydrateTagSuggestions() {
+  if (!dom.tagSuggestions) {
+    return;
+  }
+
+  const tags = new Set();
+  const suggestions = Array.isArray(state.catalog.tagSuggestions) ? state.catalog.tagSuggestions : [];
+  for (const tag of suggestions) {
+    const value = String(tag || "").trim();
+    if (value) tags.add(value);
+  }
+  for (const entry of allEntries()) {
+    const entryTags = Array.isArray(entry?.draft?.tags) ? entry.draft.tags : [];
+    for (const tag of entryTags) {
+      const value = String(tag || "").trim();
+      if (value) tags.add(value);
+    }
+  }
+
+  dom.tagSuggestions.replaceChildren(
+    ...Array.from(tags)
+      .sort((a, b) => a.localeCompare(b))
+      .map((tag) => {
+        const option = document.createElement("option");
+        option.value = tag;
+        return option;
+      }),
+  );
 }
 
 function isNarrowViewport() {
@@ -1004,12 +1317,83 @@ function renderEditorForm() {
   dom.editorFormShell.appendChild(form);
 }
 
-function renderTrackForm(draft) {
-  const shell = document.createElement("div");
-  shell.className = "editor-form-shell";
+function createEditorWizard(steps) {
+  const wizard = document.createElement("div");
+  wizard.className = "editor-form-shell editor-wizard";
 
-  shell.appendChild(renderBasicsSection(draft, { includeLaneLevel: true, isTrack: true }));
-  shell.appendChild(renderTaxonomySection(draft));
+  const nav = document.createElement("nav");
+  nav.className = "wizard-nav";
+
+  const panels = document.createElement("div");
+  panels.className = "wizard-panels";
+
+  const stepButtons = [];
+  steps.forEach((step, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "wizard-step";
+    button.textContent = step.title;
+    button.addEventListener("click", () => setEditorWizardStep(wizard, steps.length, index));
+    stepButtons.push(button);
+    nav.appendChild(button);
+
+    step.section.dataset.wizardStep = String(index);
+    panels.appendChild(step.section);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "wizard-controls";
+  const previous = document.createElement("button");
+  previous.type = "button";
+  previous.className = "ghost-button wizard-prev";
+  previous.textContent = "Previous";
+  previous.addEventListener("click", () =>
+    setEditorWizardStep(wizard, steps.length, state.editorStepIndex - 1),
+  );
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "secondary-button wizard-next";
+  next.textContent = "Next";
+  next.addEventListener("click", () =>
+    setEditorWizardStep(wizard, steps.length, state.editorStepIndex + 1),
+  );
+  controls.append(previous, next);
+
+  wizard.append(nav, panels, controls);
+  applyEditorWizardState(wizard, steps.length, { stepButtons, previous, next });
+  return wizard;
+}
+
+function applyEditorWizardState(wizard, stepsCount, { stepButtons, previous, next }) {
+  const active = Math.min(Math.max(state.editorStepIndex, 0), Math.max(stepsCount - 1, 0));
+  state.editorStepIndex = active;
+
+  stepButtons.forEach((button, index) => {
+    button.classList.toggle("active", index === active);
+    button.setAttribute("aria-current", index === active ? "step" : "false");
+  });
+
+  wizard.querySelectorAll("[data-wizard-step]").forEach((panel) => {
+    panel.hidden = Number(panel.dataset.wizardStep) !== active;
+  });
+
+  previous.disabled = active <= 0;
+  next.disabled = active >= stepsCount - 1;
+  next.textContent = active >= stepsCount - 1 ? "Done" : "Next";
+}
+
+function setEditorWizardStep(wizard, stepsCount, index) {
+  state.editorStepIndex = Math.min(Math.max(index, 0), Math.max(stepsCount - 1, 0));
+  const stepButtons = Array.from(wizard.querySelectorAll(".wizard-step"));
+  const previous = wizard.querySelector(".wizard-controls .wizard-prev");
+  const next = wizard.querySelector(".wizard-controls .wizard-next");
+  applyEditorWizardState(wizard, stepsCount, { stepButtons, previous, next });
+  wizard.scrollIntoView({ block: "start" });
+}
+
+function renderTrackForm(draft) {
+  const basics = renderBasicsSection(draft, { includeLaneLevel: true, isTrack: true });
+  const taxonomy = renderTaxonomySection(draft);
 
   const structure = createEditorSection("Structure");
   const grid = createFormGrid({ columns: 1 });
@@ -1022,20 +1406,22 @@ function renderTrackForm(draft) {
         : "",
       placeholder: "project_list_documents\nproject_update_document",
       className: "textarea-medium",
+      help:
+        "Ordered list of exercise ids for this track. Learner app will walk through these in order.",
+      sample: "project_list_documents\nproject_update_document",
     }),
   );
   structure.appendChild(grid);
-  shell.appendChild(structure);
-
-  return shell;
+  return createEditorWizard([
+    { title: "Basics", section: basics },
+    { title: "Taxonomy", section: taxonomy },
+    { title: "Structure", section: structure },
+  ]);
 }
 
 function renderExerciseForm(draft) {
-  const shell = document.createElement("div");
-  shell.className = "editor-form-shell";
-
-  shell.appendChild(renderBasicsSection(draft, { includeLaneLevel: true, isTrack: false }));
-  shell.appendChild(renderTaxonomySection(draft));
+  const basics = renderBasicsSection(draft, { includeLaneLevel: true, isTrack: false });
+  const taxonomy = renderTaxonomySection(draft);
 
   const content = createEditorSection("Content");
   const contentGrid = createFormGrid({ columns: 1 });
@@ -1046,6 +1432,10 @@ function renderExerciseForm(draft) {
       value: String(draft.problemStatement || ""),
       placeholder: "Describe the goal, constraints, and expected behavior…",
       className: "textarea-medium",
+      help:
+        "The learner-facing prompt. Include the real-world scenario, constraints, and what 'done' looks like.",
+      sample:
+        "You are building a Document API. Implement listDocuments(params) with pagination and filters.\nConstraints: stable ordering, handle empty input.",
     }),
   );
   contentGrid.appendChild(
@@ -1056,6 +1446,8 @@ function renderExerciseForm(draft) {
         ? draft.acceptanceCriteria.join("\n")
         : "",
       placeholder: "Returns the correct result\nHandles empty input",
+      help: "Checklist shown at the end of the session to self-verify correctness.",
+      sample: "Returns the correct result\nHandles empty input\nDoes not mutate input",
     }),
   );
   contentGrid.appendChild(
@@ -1066,10 +1458,12 @@ function renderExerciseForm(draft) {
         ? draft.reflectionPrompts.join("\n")
         : "",
       placeholder: "What trade-offs did you consider?\nHow would you test edge-cases?",
+      help: "Prompts used after completion to reinforce reasoning and review memory.",
+      sample:
+        "What trade-offs did you consider?\nHow would you test edge-cases?\nWhat would you improve in a follow-up refactor?",
     }),
   );
   content.appendChild(contentGrid);
-  shell.appendChild(content);
 
   const workflow = createEditorSection("Execution");
   const workflowGrid = createFormGrid({ columns: 1 });
@@ -1082,10 +1476,11 @@ function renderExerciseForm(draft) {
         { value: "standard", label: "Standard" },
       ],
       selected: Array.isArray(draft.supportedModes) ? draft.supportedModes : [],
+      help:
+        "Guided shows more coaching, Standard is closer to a blank editor. You can enable both.",
     }),
   );
   workflow.appendChild(workflowGrid);
-  shell.appendChild(workflow);
 
   const advanced = createEditorSection("Advanced");
   const advancedGrid = createFormGrid({ columns: 1 });
@@ -1095,6 +1490,9 @@ function renderExerciseForm(draft) {
       label: "Hints (JSON map)",
       value: JSON.stringify(draft.hints || {}, null, 2),
       placeholder: "{\n  \"tip\": \"Try using a hash map\"\n}",
+      help:
+        "Optional hints keyed by hint level. Keys are arbitrary but should stay consistent across exercises.",
+      sample: "{\n  \"foundation\": \"Start with a loop.\",\n  \"intermediate\": \"Consider a hash map.\",\n  \"advanced\": \"Think about time/space trade-offs.\"\n}",
     }),
   );
   advancedGrid.appendChild(
@@ -1103,6 +1501,10 @@ function renderExerciseForm(draft) {
       label: "Task steps (JSON array)",
       value: JSON.stringify(draft.taskSteps || [], null, 2),
       placeholder: "[{\"id\":\"step1\",\"title\":\"\",\"description\":\"\"}]",
+      help:
+        "Optional structured steps for multi-part exercises. Used by the guided mode and review summaries.",
+      sample:
+        "[\n  {\"id\":\"step1\",\"title\":\"Parse input\",\"description\":\"Read params and validate\"},\n  {\"id\":\"step2\",\"title\":\"Query\",\"description\":\"Build the SQL query\"}\n]",
     }),
   );
   advancedGrid.appendChild(
@@ -1111,14 +1513,24 @@ function renderExerciseForm(draft) {
       label: "Requirements (JSON array)",
       value: JSON.stringify(draft.requirements || [], null, 2),
       placeholder: "[{\"label\":\"\",\"pattern\":\"\",\"feedback\":\"\"}]",
+      help:
+        "Optional regex-based checks for the learner's code. Use sparingly (prefer tests when possible).",
+      sample:
+        "[\n  {\"label\":\"Uses pagination\",\"pattern\":\"limit\\\\s+\\\\d+\",\"feedback\":\"Add a LIMIT clause for pagination.\"}\n]",
     }),
   );
   advanced.appendChild(advancedGrid);
-  shell.appendChild(advanced);
 
-  shell.appendChild(renderExerciseVariantsSection(draft));
+  const variants = renderExerciseVariantsSection(draft);
 
-  return shell;
+  return createEditorWizard([
+    { title: "Basics", section: basics },
+    { title: "Taxonomy", section: taxonomy },
+    { title: "Content", section: content },
+    { title: "Execution", section: workflow },
+    { title: "Advanced", section: advanced },
+    { title: "Languages", section: variants },
+  ]);
 }
 
 function renderSimpleTaxonomyForm(draft, label) {
@@ -1126,13 +1538,31 @@ function renderSimpleTaxonomyForm(draft, label) {
   shell.className = "editor-form-shell";
   const basics = createEditorSection("Basics");
   const grid = createFormGrid({ columns: 2 });
-  grid.appendChild(createTextField({ name: "id", label: `${label} id`, value: draft.id || "", readOnly: state.editorMode === "edit" }));
-  grid.appendChild(createTextField({ name: "title", label: `${label} title`, value: draft.title || "" }));
+  grid.appendChild(
+    createTextField({
+      name: "id",
+      label: `${label} id`,
+      value: draft.id || "",
+      readOnly: state.editorMode === "edit",
+      help: `Stable identifier referenced by content entries.`,
+      sample: label.toLowerCase() === "topic" ? "sql" : "document-management",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "title",
+      label: `${label} title`,
+      value: draft.title || "",
+      help: "Human-friendly label shown in pickers and badges.",
+      sample: label.toLowerCase() === "topic" ? "SQL" : "Document Management",
+    }),
+  );
   const summaryField = createTextareaField({
     name: "summary",
     label: "Summary",
     value: String(draft.summary || ""),
     className: "textarea-medium",
+    help: "Optional description for the taxonomy entry.",
   });
   summaryField.classList.add("field-span-all");
   grid.appendChild(summaryField);
@@ -1147,16 +1577,50 @@ function renderSkillForm(draft) {
 
   const basics = createEditorSection("Basics");
   const grid = createFormGrid({ columns: 2 });
-  grid.appendChild(createTextField({ name: "id", label: "Skill id", value: draft.id || "", readOnly: state.editorMode === "edit" }));
-  grid.appendChild(createTextField({ name: "title", label: "Title", value: draft.title || "" }));
-  grid.appendChild(createTextField({ name: "category", label: "Category", value: draft.category || "" }));
-  grid.appendChild(createTextField({ name: "reviewExerciseId", label: "Review exercise id", value: draft.reviewExerciseId || "" }));
+  grid.appendChild(
+    createTextField({
+      name: "id",
+      label: "Skill id",
+      value: draft.id || "",
+      readOnly: state.editorMode === "edit",
+      help: "Stable identifier referenced by exercises via skillIds.",
+      sample: "sql_basics",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "title",
+      label: "Title",
+      value: draft.title || "",
+      help: "Human-friendly title shown in review cards.",
+      sample: "SQL Basics",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "category",
+      label: "Category",
+      value: draft.category || "",
+      help: "Used to group skills in the admin list. Keep categories stable.",
+      sample: "languageSyntax",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "reviewExerciseId",
+      label: "Review exercise id",
+      value: draft.reviewExerciseId || "",
+      help: "Optional shortcut exercise used during review sessions.",
+      sample: "project_list_documents",
+    }),
+  );
   grid.appendChild(
     createTextareaField({
       name: "description",
       label: "Description",
       value: String(draft.description || ""),
       className: "textarea-medium",
+      help: "Shown to the learner when reviewing this skill.",
     }),
   );
   basics.appendChild(grid);
@@ -1168,8 +1632,26 @@ function renderBasicsSection(draft, { includeLaneLevel, isTrack }) {
   const section = createEditorSection("Basics");
   const grid = createFormGrid({ columns: includeLaneLevel ? 3 : 2 });
 
-  grid.appendChild(createTextField({ name: "id", label: "ID", value: draft.id || "", readOnly: state.editorMode === "edit" }));
-  grid.appendChild(createTextField({ name: "title", label: "Title", value: draft.title || "" }));
+  grid.appendChild(
+    createTextField({
+      name: "id",
+      label: "ID",
+      value: draft.id || "",
+      readOnly: state.editorMode === "edit",
+      help:
+        "Stable identifier referenced by tracks, skills, and the learner app. Prefer lowercase snake_case.",
+      sample: isTrack ? "project_foundations_track" : "project_list_documents",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "title",
+      label: "Title",
+      value: draft.title || "",
+      help: "Human-friendly title shown in lists and headers.",
+      sample: isTrack ? "Document Management" : "List documents",
+    }),
+  );
 
   if (includeLaneLevel) {
     const lane = String(draft.lane || "project");
@@ -1183,12 +1665,15 @@ function renderBasicsSection(draft, { includeLaneLevel, isTrack }) {
         { value: "dsa", label: "DSA" },
         { value: "leetcode", label: "LeetCode" },
       ],
+      help:
+        "Controls which learner surface this appears in and which contentKind options are allowed.",
     });
     const kindField = createSelectField({
       name: "contentKind",
       label: "Content kind",
       value: contentKind,
       options: contentKindOptionsFor(lane, { isTrack }),
+      help: "Derived from lane. Keep it consistent unless you have a custom kind.",
     });
     const levelField = createSelectField({
       name: "level",
@@ -1199,6 +1684,7 @@ function renderBasicsSection(draft, { includeLaneLevel, isTrack }) {
         { value: "intermediate", label: "Intermediate" },
         { value: "advanced", label: "Advanced" },
       ],
+      help: "Difficulty tier used for filtering and learner progression.",
     });
 
     const laneSelect = laneField.querySelector("select");
@@ -1222,6 +1708,11 @@ function renderBasicsSection(draft, { includeLaneLevel, isTrack }) {
     label: "Summary",
     value: String(draft.summary || ""),
     className: "textarea-medium",
+    help: "One-paragraph preview shown in the list and detail summary card.",
+    sample:
+      isTrack
+        ? "A curated path through the key milestones of a document service."
+        : "Build the list endpoint with filtering, pagination, and stable ordering.",
   });
   summaryField.classList.add("field-span-all");
   grid.appendChild(summaryField);
@@ -1233,16 +1724,98 @@ function renderBasicsSection(draft, { includeLaneLevel, isTrack }) {
 function renderTaxonomySection(draft) {
   const section = createEditorSection("Taxonomy");
   const grid = createFormGrid({ columns: 2 });
-  grid.appendChild(createTextareaField({ name: "topicIds", label: "Topic ids (one per line)", value: Array.isArray(draft.topicIds) ? draft.topicIds.join("\n") : "", placeholder: "sql\nhttp" }));
-  grid.appendChild(createTextareaField({ name: "domainIds", label: "Domain ids (one per line)", value: Array.isArray(draft.domainIds) ? draft.domainIds.join("\n") : "", placeholder: "document-management" }));
-  grid.appendChild(createTextareaField({ name: "tags", label: "Tags (one per line)", value: Array.isArray(draft.tags) ? draft.tags.join("\n") : "", placeholder: "list\nquery" }));
-  grid.appendChild(createTextareaField({ name: "skillIds", label: "Skill ids (one per line)", value: Array.isArray(draft.skillIds) ? draft.skillIds.join("\n") : "", placeholder: "spaced_repetition_scheduler" }));
+  const topicSuggestions = (state.catalog?.topics || [])
+    .map((topic) => ({
+      value: String(topic?.id || ""),
+      label: String(topic?.draft?.title || topic?.id || ""),
+    }))
+    .filter((option) => option.value);
+  const domainSuggestions = (state.catalog?.domains || [])
+    .map((domain) => ({
+      value: String(domain?.id || ""),
+      label: String(domain?.draft?.title || domain?.id || ""),
+    }))
+    .filter((option) => option.value);
+  const skillSuggestions = (state.catalog?.skills || [])
+    .map((skill) => ({
+      value: String(skill?.id || ""),
+      label: String(skill?.draft?.title || skill?.id || ""),
+    }))
+    .filter((option) => option.value);
+  const tagSuggestions = Array.from(
+    new Set([
+      ...((state.catalog?.tagSuggestions || []).map((tag) => String(tag || "").trim()).filter(Boolean)),
+      ...((draft.tags || []).map((tag) => String(tag || "").trim()).filter(Boolean)),
+    ]),
+  )
+    .sort((a, b) => a.localeCompare(b))
+    .map((tag) => ({ value: tag, label: tag }));
+
+  grid.appendChild(
+    createTokenListField({
+      name: "topicIds",
+      label: "Topics",
+      values: Array.isArray(draft.topicIds) ? draft.topicIds : [],
+      suggestions: topicSuggestions,
+      placeholder: "Type a topic id and press Enter…",
+      help: "Curated topic taxonomy. Add multiple topics to improve filtering.",
+      sample: "sql\nconcurrency\nrace-condition",
+    }),
+  );
+  grid.appendChild(
+    createTokenListField({
+      name: "domainIds",
+      label: "Domains",
+      values: Array.isArray(draft.domainIds) ? draft.domainIds : [],
+      suggestions: domainSuggestions,
+      placeholder: "Type a domain id and press Enter…",
+      help: "Curated domain taxonomy. Domains describe the real-world system context.",
+      sample: "document-management\nmessaging-system\ntransaction-service",
+    }),
+  );
+  grid.appendChild(
+    createTokenListField({
+      name: "tags",
+      label: "Tags",
+      values: Array.isArray(draft.tags) ? draft.tags : [],
+      suggestions: tagSuggestions,
+      placeholder: "Type a tag and press Enter…",
+      help: "Free-form keywords for cross-cutting filters.",
+      sample: "list\nquery\npagination\ncache",
+    }),
+  );
+  grid.appendChild(
+    createTokenListField({
+      name: "skillIds",
+      label: "Skills",
+      values: Array.isArray(draft.skillIds) ? draft.skillIds : [],
+      suggestions: skillSuggestions,
+      placeholder: "Type a skill id and press Enter…",
+      help: "Skills power the review queue. Add only the skills you want to be reviewable.",
+      sample: "sql_basics\nhttp_status_codes\nidempotency",
+    }),
+  );
   section.appendChild(grid);
   return section;
 }
 
 function renderExerciseVariantsSection(draft) {
   const section = createEditorSection("Language variants");
+  section.dataset.variantSection = "exercises";
+  renderExerciseVariantsBody(section, draft);
+  return section;
+}
+
+function renderExerciseVariantsBody(section, draft) {
+  const header = section.querySelector(".section-title");
+  section.replaceChildren();
+  if (header) {
+    section.appendChild(header);
+  }
+
+  if (!state.editorDraft) {
+    return;
+  }
 
   const variants = Array.isArray(state.editorDraft?.languageVariants)
     ? state.editorDraft.languageVariants
@@ -1266,7 +1839,7 @@ function renderExerciseVariantsSection(draft) {
     button.className = `variant-tab ${index === activeIndex ? "active" : ""}`;
     const title = variant.languageLabel || variant.languageId || `Variant ${index + 1}`;
     button.textContent = variant.isDefault ? `${title} *` : title;
-    button.addEventListener("click", () => runAction(() => selectExerciseVariant(index)));
+    button.addEventListener("click", () => runAction(() => selectExerciseVariant(section, index)));
     tabs.appendChild(button);
   });
 
@@ -1274,7 +1847,7 @@ function renderExerciseVariantsSection(draft) {
   addButton.type = "button";
   addButton.className = "secondary-button";
   addButton.textContent = "+ Variant";
-  addButton.addEventListener("click", () => runAction(addExerciseVariant));
+  addButton.addEventListener("click", () => runAction(() => addExerciseVariant(section)));
   tabs.appendChild(addButton);
 
   const removeButton = document.createElement("button");
@@ -1282,26 +1855,74 @@ function renderExerciseVariantsSection(draft) {
   removeButton.className = "danger-button";
   removeButton.textContent = "Remove";
   removeButton.disabled = state.editorDraft.languageVariants.length <= 1;
-  removeButton.addEventListener("click", () => runAction(removeExerciseVariant));
+  removeButton.addEventListener("click", () => runAction(() => removeExerciseVariant(section)));
   tabs.appendChild(removeButton);
 
   section.appendChild(tabs);
 
   const active = state.editorDraft.languageVariants[activeIndex];
   const grid = createFormGrid({ columns: 3 });
-  grid.appendChild(createTextField({ name: "variantLanguageId", label: "Language id", value: active.languageId || "" }));
-  grid.appendChild(createTextField({ name: "variantLanguageLabel", label: "Label", value: active.languageLabel || "" }));
-  grid.appendChild(createCheckboxField({ name: "variantIsDefault", label: "Default", checked: !!active.isDefault }));
+  grid.appendChild(
+    createTextField({
+      name: "variantLanguageId",
+      label: "Language id",
+      value: active.languageId || "",
+      help: "Short stable id used for filtering and preference (e.g. python, csharp).",
+      sample: "python",
+    }),
+  );
+  grid.appendChild(
+    createTextField({
+      name: "variantLanguageLabel",
+      label: "Label",
+      value: active.languageLabel || "",
+      help: "Human-friendly label shown to learners.",
+      sample: "Python",
+    }),
+  );
+  grid.appendChild(
+    createCheckboxField({
+      name: "variantIsDefault",
+      label: "Default",
+      checked: !!active.isDefault,
+      help: "The default language chosen when the learner has no preference set.",
+    }),
+  );
 
   const runGrid = createFormGrid({ columns: 2 });
-  runGrid.appendChild(createTextField({ name: "variantRunCommand", label: "Run command", value: active.runCommand || "" }));
-  runGrid.appendChild(createTextField({ name: "variantEntryFilePath", label: "Entry file path", value: active.entryFilePath || "" }));
-  runGrid.appendChild(createTextField({ name: "variantDemoFilePath", label: "Demo file path (optional)", value: active.demoFilePath || "" }));
+  runGrid.appendChild(
+    createTextField({
+      name: "variantRunCommand",
+      label: "Run command",
+      value: active.runCommand || "",
+      help: "Command used inside the sandbox to run the entry file.",
+      sample: "python main.py",
+    }),
+  );
+  runGrid.appendChild(
+    createTextField({
+      name: "variantEntryFilePath",
+      label: "Entry file path",
+      value: active.entryFilePath || "",
+      help: "Main file path that the sandbox executes.",
+      sample: "main.py",
+    }),
+  );
+  runGrid.appendChild(
+    createTextField({
+      name: "variantDemoFilePath",
+      label: "Demo file path (optional)",
+      value: active.demoFilePath || "",
+      help: "Optional file to show as a starting point in the UI.",
+      sample: "demo.py",
+    }),
+  );
   const solutionField = createTextareaField({
     name: "variantSolutionCode",
     label: "Solution code (optional)",
     value: active.solutionCode || "",
     className: "textarea-medium textarea-code",
+    help: "Optional reference solution for internal use or previews.",
   });
   solutionField.classList.add("field-span-all");
   runGrid.appendChild(solutionField);
@@ -1313,6 +1934,8 @@ function renderExerciseVariantsSection(draft) {
       label: "Starter code",
       value: active.starterCode || "",
       className: "textarea-code",
+      help: "Code shown in the learner editor when starting the exercise.",
+      sample: "def list_documents(params):\n    pass\n",
     }),
   );
   codeGrid.appendChild(
@@ -1321,6 +1944,9 @@ function renderExerciseVariantsSection(draft) {
       label: "Sandbox harness template",
       value: active.sandboxHarnessTemplate || "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
       className: "textarea-medium textarea-code",
+      help:
+        "Template used to combine user code and test body. Use {{USER_CODE}} and {{TEST_BODY}} placeholders.",
+      sample: "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
     }),
   );
   codeGrid.appendChild(
@@ -1329,6 +1955,8 @@ function renderExerciseVariantsSection(draft) {
       label: "Starter files (JSON map)",
       value: JSON.stringify(active.starterFiles || {}, null, 2),
       placeholder: "{\n  \"helpers.py\": \"\"\n}",
+      help: "Additional files written into the sandbox filesystem for this variant.",
+      sample: "{\n  \"helpers.py\": \"# helper functions\\n\"\n}",
     }),
   );
   codeGrid.appendChild(
@@ -1337,22 +1965,25 @@ function renderExerciseVariantsSection(draft) {
       label: "Test cases (JSON array)",
       value: JSON.stringify(active.testCases || [], null, 2),
       placeholder: "[{\"id\":\"case1\",\"label\":\"\",\"body\":\"\",\"expectedOutput\":\"\"}]",
+      help:
+        "Optional per-variant tests. For LeetCode lane, include at least one case for each variant.",
+      sample:
+        "[\n  {\"id\":\"case1\",\"label\":\"empty\",\"body\":\"print(list_documents({}))\",\"expectedOutput\":\"[]\"}\n]",
     }),
   );
 
   section.appendChild(grid);
   section.appendChild(runGrid);
   section.appendChild(codeGrid);
-  return section;
 }
 
-async function selectExerciseVariant(index) {
+async function selectExerciseVariant(section, index) {
   persistActiveExerciseVariantFromForm();
   state.editorVariantIndex = index;
-  renderEditorForm();
+  renderExerciseVariantsBody(section, state.editorDraft);
 }
 
-async function addExerciseVariant() {
+async function addExerciseVariant(section) {
   persistActiveExerciseVariantFromForm();
   const variants = Array.isArray(state.editorDraft.languageVariants)
     ? state.editorDraft.languageVariants
@@ -1360,10 +1991,10 @@ async function addExerciseVariant() {
   variants.push(defaultLanguageVariant());
   state.editorDraft.languageVariants = variants;
   state.editorVariantIndex = variants.length - 1;
-  renderEditorForm();
+  renderExerciseVariantsBody(section, state.editorDraft);
 }
 
-async function removeExerciseVariant() {
+async function removeExerciseVariant(section) {
   persistActiveExerciseVariantFromForm();
   const variants = Array.isArray(state.editorDraft.languageVariants)
     ? state.editorDraft.languageVariants
@@ -1377,7 +2008,7 @@ async function removeExerciseVariant() {
   }
   state.editorDraft.languageVariants = variants;
   state.editorVariantIndex = Math.min(state.editorVariantIndex, variants.length - 1);
-  renderEditorForm();
+  renderExerciseVariantsBody(section, state.editorDraft);
 }
 
 function createEditorSection(title) {
@@ -1400,26 +2031,63 @@ function createFormGrid({ columns = 2 } = {}) {
   return grid;
 }
 
-function createTextField({ name, label, value, placeholder = "", readOnly = false }) {
+function createFieldLabel({ label, help = "", sample = "" }) {
+  const row = document.createElement("div");
+  row.className = "field-label";
+
+  const caption = document.createElement("span");
+  caption.className = "field-caption";
+  caption.textContent = label;
+  row.appendChild(caption);
+
+  const tooltip = formatFieldTooltip({ help, sample });
+  if (tooltip) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "help-icon";
+    button.textContent = "?";
+    button.title = tooltip;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    row.appendChild(button);
+  }
+
+  return row;
+}
+
+function formatFieldTooltip({ help = "", sample = "" }) {
+  const parts = [];
+  const trimmedHelp = String(help || "").trim();
+  if (trimmedHelp) {
+    parts.push(trimmedHelp);
+  }
+  const trimmedSample = String(sample || "").trim();
+  if (trimmedSample) {
+    parts.push(`Example:\n${trimmedSample}`);
+  }
+  return parts.join("\n\n");
+}
+
+function createTextField({ name, label, value, placeholder = "", readOnly = false, help = "", sample = "" }) {
   const shell = document.createElement("label");
   shell.className = "field-shell";
-  const caption = document.createElement("span");
-  caption.textContent = label;
+  const labelRow = createFieldLabel({ label, help, sample });
   const input = document.createElement("input");
   input.name = name;
   input.type = "text";
   input.value = String(value ?? "");
   input.placeholder = placeholder;
   input.readOnly = !!readOnly;
-  shell.append(caption, input);
+  shell.append(labelRow, input);
   return shell;
 }
 
-function createTextareaField({ name, label, value, placeholder = "", className = "" }) {
+function createTextareaField({ name, label, value, placeholder = "", className = "", help = "", sample = "" }) {
   const shell = document.createElement("label");
   shell.className = "field-shell";
-  const caption = document.createElement("span");
-  caption.textContent = label;
+  const labelRow = createFieldLabel({ label, help, sample });
   const textarea = document.createElement("textarea");
   textarea.name = name;
   textarea.value = String(value ?? "");
@@ -1427,20 +2095,135 @@ function createTextareaField({ name, label, value, placeholder = "", className =
   if (className) {
     textarea.className = className;
   }
-  shell.append(caption, textarea);
+  shell.append(labelRow, textarea);
   return shell;
 }
 
-function createSelectField({ name, label, value, options }) {
+function createTokenListField({
+  name,
+  label,
+  values,
+  suggestions = [],
+  placeholder = "",
+  help = "",
+  sample = "",
+}) {
+  const shell = document.createElement("div");
+  shell.className = "field-shell token-field";
+  shell.appendChild(createFieldLabel({ label, help, sample }));
+
+  const suggestionMap = new Map(
+    suggestions
+      .map((option) => [String(option?.value || "").trim(), String(option?.label || "").trim()])
+      .filter(([value]) => value),
+  );
+
+  const row = document.createElement("div");
+  row.className = "token-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.autocomplete = "off";
+
+  const datalistId = `${name}-suggestions-${Math.random().toString(16).slice(2)}`;
+  let datalist = null;
+  if (suggestions.length) {
+    datalist = document.createElement("datalist");
+    datalist.id = datalistId;
+    datalist.replaceChildren(
+      ...suggestions.map((option) => {
+        const node = document.createElement("option");
+        node.value = option.value;
+        return node;
+      }),
+    );
+    input.setAttribute("list", datalistId);
+  }
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "ghost-button";
+  addButton.textContent = "Add";
+
+  row.append(input, addButton);
+  shell.appendChild(row);
+
+  const chips = document.createElement("div");
+  chips.className = "token-chips";
+  shell.appendChild(chips);
+
+  const hidden = document.createElement("textarea");
+  hidden.name = name;
+  hidden.hidden = true;
+  shell.appendChild(hidden);
+  if (datalist) {
+    shell.appendChild(datalist);
+  }
+
+  const tokens = Array.isArray(values) ? [...values] : parseStringList(values);
+
+  function sync() {
+    hidden.value = tokens.join("\n");
+    chips.replaceChildren(
+      ...tokens.map((token) => {
+        const chip = document.createElement("span");
+        chip.className = "token-chip";
+        chip.textContent = suggestionMap.get(token) ? `${suggestionMap.get(token)} (${token})` : token;
+        if (suggestionMap.get(token)) {
+          chip.title = suggestionMap.get(token);
+        }
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "token-remove";
+        remove.textContent = "×";
+        remove.addEventListener("click", () => {
+          const index = tokens.indexOf(token);
+          if (index >= 0) {
+            tokens.splice(index, 1);
+            sync();
+          }
+        });
+
+        chip.appendChild(remove);
+        return chip;
+      }),
+    );
+  }
+
+  function addToken(raw) {
+    const value = String(raw || "").trim();
+    if (!value) return;
+    if (!tokens.includes(value)) {
+      tokens.push(value);
+      tokens.sort((a, b) => a.localeCompare(b));
+    }
+    input.value = "";
+    sync();
+  }
+
+  addButton.addEventListener("click", () => addToken(input.value));
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addToken(input.value);
+    }
+  });
+
+  sync();
+  return shell;
+}
+
+function createSelectField({ name, label, value, options, help = "", sample = "" }) {
   const shell = document.createElement("label");
   shell.className = "field-shell";
-  const caption = document.createElement("span");
-  caption.textContent = label;
+  const labelRow = createFieldLabel({ label, help, sample });
   const select = document.createElement("select");
   select.name = name;
   replaceSelectOptions(select, options);
   select.value = value;
-  shell.append(caption, select);
+  shell.append(labelRow, select);
   return shell;
 }
 
@@ -1455,11 +2238,10 @@ function replaceSelectOptions(select, options) {
   );
 }
 
-function createCheckboxField({ name, label, checked }) {
+function createCheckboxField({ name, label, checked, help = "", sample = "" }) {
   const shell = document.createElement("label");
   shell.className = "field-shell";
-  const caption = document.createElement("span");
-  caption.textContent = label;
+  const labelRow = createFieldLabel({ label, help, sample });
   const inputWrap = document.createElement("div");
   inputWrap.className = "checkbox-row";
   const input = document.createElement("input");
@@ -1467,15 +2249,14 @@ function createCheckboxField({ name, label, checked }) {
   input.name = name;
   input.checked = !!checked;
   inputWrap.appendChild(input);
-  shell.append(caption, inputWrap);
+  shell.append(labelRow, inputWrap);
   return shell;
 }
 
-function createCheckboxGroupField({ name, label, options, selected }) {
+function createCheckboxGroupField({ name, label, options, selected, help = "", sample = "" }) {
   const shell = document.createElement("div");
   shell.className = "field-shell";
-  const caption = document.createElement("span");
-  caption.textContent = label;
+  const labelRow = createFieldLabel({ label, help, sample });
   const row = document.createElement("div");
   row.className = "checkbox-row";
   const selectedSet = new Set(Array.isArray(selected) ? selected : []);
@@ -1492,7 +2273,7 @@ function createCheckboxGroupField({ name, label, options, selected }) {
     optionLabel.append(input, text);
     row.appendChild(optionLabel);
   }
-  shell.append(caption, row);
+  shell.append(labelRow, row);
   return shell;
 }
 
@@ -1599,6 +2380,7 @@ function createEntityListItem(item) {
   const button = fragment.querySelector(".entity-item");
   const title = fragment.querySelector(".entity-title");
   const summary = fragment.querySelector(".entity-summary");
+  const badges = fragment.querySelector(".entity-badges");
   const itemKind = fragment.querySelector(".entity-kind");
   const status = fragment.querySelector(".entity-status");
 
@@ -1607,6 +2389,8 @@ function createEntityListItem(item) {
   itemKind.textContent = entityBadgeForItem(state.selectedKind, item);
   status.textContent = humanizeValue(item.workflowStatus);
   status.classList.add(`status-${item.workflowStatus}`);
+
+  badges?.replaceChildren(...buildListBadges(state.selectedKind, item));
 
   button.addEventListener("click", () => {
     state.selectedId = item.id;
@@ -1618,6 +2402,94 @@ function createEntityListItem(item) {
   });
 
   return fragment;
+}
+
+function buildListBadges(kind, item) {
+  if (kind !== "tracks" && kind !== "exercises") {
+    return [];
+  }
+
+  const draft = item.draft || {};
+  const nodes = [];
+
+  nodes.push(createBadgePill(`Lane: ${laneLabel(String(draft.lane || "project"))}`));
+  nodes.push(createBadgePill(`Level: ${humanizeValue(String(draft.level || "foundation"))}`));
+
+  const languages =
+    kind === "exercises"
+      ? collectExerciseLanguages(draft)
+      : collectTrackLanguages(item);
+  if (languages.length) {
+    const display = summarizeList(languages.map((lang) => lang.label), { max: 2 });
+    nodes.push(
+      createBadgePill(`Lang: ${display}`, {
+        title: `Supported languages: ${languages.map((lang) => lang.label).join(", ")}`,
+      }),
+    );
+  }
+
+  const topics = Array.isArray(draft.topicIds) ? draft.topicIds : [];
+  if (topics.length) {
+    nodes.push(
+      createBadgePill(`Topics: ${summarizeList(topics, { max: 2 })}`, {
+        title: `Topics: ${topics.join(", ")}`,
+      }),
+    );
+  }
+
+  const domains = Array.isArray(draft.domainIds) ? draft.domainIds : [];
+  if (domains.length) {
+    nodes.push(
+      createBadgePill(`Domains: ${summarizeList(domains, { max: 2 })}`, {
+        title: `Domains: ${domains.join(", ")}`,
+      }),
+    );
+  }
+
+  const tags = Array.isArray(draft.tags) ? draft.tags : [];
+  if (tags.length) {
+    nodes.push(
+      createBadgePill(`Tags: ${summarizeList(tags, { max: 2 })}`, {
+        title: `Tags: ${tags.join(", ")}`,
+      }),
+    );
+  }
+
+  return nodes;
+}
+
+function collectExerciseLanguages(draft) {
+  const variants = Array.isArray(draft?.languageVariants) ? draft.languageVariants : [];
+  const labels = new Map();
+  for (const variant of variants) {
+    const id = String(variant?.languageId || "").trim();
+    if (!id) continue;
+    const label = String(variant?.languageLabel || id).trim();
+    if (!labels.has(id)) {
+      labels.set(id, label);
+    }
+  }
+  return Array.from(labels.entries())
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function summarizeList(values, { max = 2 } = {}) {
+  const list = Array.isArray(values) ? values.filter(Boolean) : [];
+  if (list.length <= max) {
+    return list.join(", ");
+  }
+  return `${list.slice(0, max).join(", ")} +${list.length - max}`;
+}
+
+function createBadgePill(text, { title = "" } = {}) {
+  const node = document.createElement("span");
+  node.className = "badge-pill";
+  node.textContent = text;
+  if (title) {
+    node.title = title;
+  }
+  return node;
 }
 
 function buildStructure(kind, draft) {
@@ -1846,24 +2718,47 @@ function entityBadgeForItem(kind, item) {
 function describeItem(kind, item) {
   if (kind === "tracks") {
     const refs = Array.isArray(item.draft.exerciseRefs) ? item.draft.exerciseRefs.length : 0;
-    return [item.draft.summary || "Track summary is empty.", `${refs} exercise refs`].join(" · ");
+    return [item.draft.summary || "Track summary is empty.", `${refs} refs`].join(" · ");
   }
   if (kind === "exercises") {
-    const variants = Array.isArray(item.draft.languageVariants)
-      ? item.draft.languageVariants
-      : [];
-    const languages = variants
-      .map((variant) => variant.languageLabel || variant.languageId)
-      .filter(Boolean)
-      .join(", ");
-    return [item.draft.summary || "Exercise summary is empty.", languages || "No languages"].join(
-      " · ",
-    );
+    return item.draft.summary || "Exercise summary is empty.";
   }
   if (kind === "skills") {
     return item.draft.description || "Skill description is empty.";
   }
   return item.draft.summary || "No summary yet.";
+}
+
+function collectTrackLanguages(trackItem) {
+  if (!state.catalog) {
+    return [];
+  }
+  const labels = new Map();
+  const refs = Array.isArray(trackItem?.draft?.exerciseRefs) ? trackItem.draft.exerciseRefs : [];
+  for (const ref of refs) {
+    const exercise = findEntry("exercises", ref.exerciseId);
+    const variants = Array.isArray(exercise?.draft?.languageVariants)
+      ? exercise.draft.languageVariants
+      : [];
+    for (const variant of variants) {
+      const id = String(variant?.languageId || "").trim();
+      if (!id) continue;
+      const label = String(variant?.languageLabel || id).trim();
+      if (!labels.has(id)) {
+        labels.set(id, label);
+      }
+    }
+  }
+  return Array.from(labels.entries())
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function trackSupportsLanguage(trackItem, languageId) {
+  if (!languageId) {
+    return true;
+  }
+  return collectTrackLanguages(trackItem).some((language) => language.id === languageId);
 }
 
 function listSubtitleForKind(kind) {

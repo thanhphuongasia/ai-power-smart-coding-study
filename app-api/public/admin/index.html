@@ -29,7 +29,7 @@
 
           <div class="auth-inline">
             <label class="field-shell">
-              <span>Admin key</span>
+              <span class="field-caption">Admin key</span>
               <input
                 id="admin-key"
                 type="password"
@@ -126,18 +126,31 @@
               </div>
               <div class="screen-actions">
                 <span id="entity-count-pill" class="pill subtle-pill">0</span>
-                <button id="create-entry-button" class="secondary-button">New track</button>
+                <button id="clear-filters-button" class="ghost-button" type="button">
+                  Clear filters
+                </button>
+                <div id="create-entry-shell" class="detail-menu-shell">
+                  <button
+                    id="create-entry-button"
+                    class="secondary-button"
+                    type="button"
+                    aria-expanded="false"
+                  >
+                    New track
+                  </button>
+                  <div id="create-entry-menu" class="dropdown-menu" hidden></div>
+                </div>
               </div>
             </div>
 
             <div class="filters-grid">
               <label class="field-shell field-span-2">
-                <span>Search</span>
+                <span class="field-caption">Search</span>
                 <input id="search-input" type="search" placeholder="Title, id, summary, tags…" />
               </label>
 
               <label class="field-shell">
-                <span>Lane</span>
+                <span class="field-caption">Lane</span>
                 <select id="lane-filter">
                   <option value="">All lanes</option>
                   <option value="project">Project</option>
@@ -147,7 +160,7 @@
               </label>
 
               <label class="field-shell">
-                <span>Level</span>
+                <span class="field-caption">Level</span>
                 <select id="level-filter">
                   <option value="">All levels</option>
                   <option value="foundation">Foundation</option>
@@ -157,7 +170,14 @@
               </label>
 
               <label class="field-shell">
-                <span>Status</span>
+                <span class="field-caption">Language</span>
+                <select id="language-filter">
+                  <option value="">All languages</option>
+                </select>
+              </label>
+
+              <label class="field-shell">
+                <span class="field-caption">Status</span>
                 <select id="status-filter">
                   <option value="">All statuses</option>
                   <option value="draft">Draft</option>
@@ -165,6 +185,27 @@
                   <option value="published">Published</option>
                 </select>
               </label>
+
+              <label class="field-shell">
+                <span class="field-caption">Topic</span>
+                <select id="topic-filter">
+                  <option value="">All topics</option>
+                </select>
+              </label>
+
+              <label class="field-shell">
+                <span class="field-caption">Domain</span>
+                <select id="domain-filter">
+                  <option value="">All domains</option>
+                </select>
+              </label>
+
+              <label class="field-shell">
+                <span class="field-caption">Tag</span>
+                <input id="tag-filter" list="tag-suggestions" placeholder="list, query, cache…" />
+              </label>
+
+              <datalist id="tag-suggestions"></datalist>
             </div>
 
             <div id="entity-groups" class="group-list"></div>
@@ -271,6 +312,7 @@
         <div class="entity-copy">
           <span class="entity-title"></span>
           <span class="entity-summary"></span>
+          <div class="entity-badges"></div>
         </div>
         <div class="entity-meta">
           <span class="entity-kind"></span>
