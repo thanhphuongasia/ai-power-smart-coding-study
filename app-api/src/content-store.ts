@@ -87,6 +87,11 @@ export class ContentStoreRepository {
     return toPublishedCatalog(store);
   }
 
+  async listDraftCatalog(): Promise<PublishedCatalogSnapshot> {
+    const store = await this.load();
+    return toDraftCatalog(store);
+  }
+
   async buildManifest() {
     const store = await this.load();
     const publishedCatalog = toPublishedCatalog(store);
@@ -97,6 +102,21 @@ export class ContentStoreRepository {
 
     return {
       contentVersion: String(store.contentVersion),
+      publishedAt: store.lastPublishedAt ?? new Date(0).toISOString(),
+      checksum,
+    };
+  }
+
+  async buildDraftManifest() {
+    const store = await this.load();
+    const draftCatalog = toDraftCatalog(store);
+    const checksum = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(draftCatalog))
+      .digest("hex");
+
+    return {
+      contentVersion: `draft-${checksum.slice(0, 12)}`,
       publishedAt: store.lastPublishedAt ?? new Date(0).toISOString(),
       checksum,
     };
@@ -318,6 +338,21 @@ export function toPublishedCatalog(store: ContentStore): PublishedCatalogSnapsho
   };
 }
 
+export function toDraftCatalog(store: ContentStore): PublishedCatalogSnapshot {
+  const snapshot = {
+    tracks: draftEntries(store.tracks),
+    exercises: draftEntries(store.exercises),
+    topics: draftEntries(store.topics),
+    domains: draftEntries(store.domains),
+    skills: draftEntries(store.skills),
+  };
+
+  return {
+    ...snapshot,
+    tagSuggestions: deriveTagSuggestions(snapshot),
+  };
+}
+
 export function withWorkflowStatus<T extends PlainObject>(entry: ManagedEntry<T>) {
   const draftChecksum = stableChecksum(entry.draft);
   const publishedChecksum = entry.published ? stableChecksum(entry.published) : "";
@@ -384,7 +419,7 @@ function sanitizePayload<K extends CollectionKey>(
 
 function normalizeStore(raw: Partial<ContentStore>): ContentStore {
   if ((raw.schemaVersion ?? 0) < 2) {
-    return createStoreFromBootstrap(raw as Record<string, unknown>);
+    return normalizeLegacyStore(raw as Record<string, unknown>);
   }
 
   return {
@@ -396,6 +431,23 @@ function normalizeStore(raw: Partial<ContentStore>): ContentStore {
     topics: normalizeEntries("topics", raw.topics),
     domains: normalizeEntries("domains", raw.domains),
     skills: normalizeEntries("skills", raw.skills),
+  };
+}
+
+function normalizeLegacyStore(raw: Record<string, unknown>): ContentStore {
+  const exerciseEntriesById = new Map<string, ManagedEntry<ExerciseDefinition>>();
+  const trackEntries = normalizeLegacyTrackEntries(raw.tracks, exerciseEntriesById);
+  const skillEntries = normalizeLegacySkillEntries(raw.skills);
+
+  return {
+    schemaVersion: 2,
+    contentVersion: Number(raw.contentVersion ?? 1),
+    lastPublishedAt: String(raw.lastPublishedAt ?? raw.exportedAt ?? new Date().toISOString()),
+    tracks: trackEntries,
+    exercises: Array.from(exerciseEntriesById.values()),
+    topics: [],
+    domains: [],
+    skills: skillEntries,
   };
 }
 
@@ -417,6 +469,76 @@ function normalizeEntries<K extends CollectionKey>(
   }));
 }
 
+function normalizeLegacyTrackEntries(
+  entries: unknown,
+  exerciseEntriesById: Map<string, ManagedEntry<ExerciseDefinition>>,
+) {
+  const rawEntries = Array.isArray(entries) ? entries : [];
+  return rawEntries
+    .filter((entry): entry is Partial<ManagedEntry<PlainObject>> =>
+      typeof entry === "object" && entry !== null,
+    )
+    .map((entry) => {
+      const draftLegacy = (entry.draft ?? entry.published ?? {}) as PlainObject;
+      const publishedLegacy = entry.published ? (entry.published as PlainObject) : null;
+      const migratedDraft = migrateLegacyTrackDefinition(draftLegacy);
+      const migratedPublished = publishedLegacy
+        ? migrateLegacyTrackDefinition(publishedLegacy)
+        : null;
+
+      mergeLegacyExercises(
+        exerciseEntriesById,
+        migratedDraft.exercises,
+        entry.updatedAt ?? new Date().toISOString(),
+        "draft",
+      );
+      if (migratedPublished) {
+        mergeLegacyExercises(
+          exerciseEntriesById,
+          migratedPublished.exercises,
+          entry.publishedAt ?? entry.updatedAt ?? new Date().toISOString(),
+          "published",
+        );
+      }
+
+      return {
+        id: String(entry.id ?? migratedDraft.track.id),
+        draft: migratedDraft.track,
+        published: migratedPublished?.track ?? null,
+        updatedAt: entry.updatedAt ?? new Date().toISOString(),
+        publishedAt: entry.publishedAt ?? null,
+      } satisfies ManagedEntry<TrackDefinition>;
+    });
+}
+
+function normalizeLegacySkillEntries(entries: unknown) {
+  const rawEntries = Array.isArray(entries) ? entries : [];
+  return rawEntries
+    .filter((entry): entry is Partial<ManagedEntry<PlainObject>> =>
+      typeof entry === "object" && entry !== null,
+    )
+    .map((entry) => ({
+      id: String(
+        entry.id ??
+          (entry.draft as PlainObject | undefined)?.id ??
+          (entry.published as PlainObject | undefined)?.id ??
+          "",
+      ),
+      draft: sanitizePayload(
+        "skills",
+        migrateLegacySkillDefinition((entry.draft ?? entry.published ?? {}) as PlainObject),
+      ),
+      published: entry.published
+        ? sanitizePayload(
+            "skills",
+            migrateLegacySkillDefinition(entry.published as PlainObject),
+          )
+        : null,
+      updatedAt: entry.updatedAt ?? new Date().toISOString(),
+      publishedAt: entry.publishedAt ?? null,
+    }));
+}
+
 function createStoreFromBootstrap(payload: Record<string, unknown>): ContentStore {
   const migrated = migrateBootstrapPayload(payload);
   const exportedAt = String(migrated.exportedAt ?? new Date().toISOString());
@@ -432,6 +554,39 @@ function createStoreFromBootstrap(payload: Record<string, unknown>): ContentStor
     domains: migrated.domains.map((item) => createPublishedEntry("domains", item, exportedAt)),
     skills: migrated.skills.map((item) => createPublishedEntry("skills", item, exportedAt)),
   };
+}
+
+function mergeLegacyExercises(
+  exerciseEntriesById: Map<string, ManagedEntry<ExerciseDefinition>>,
+  exercises: ExerciseDefinition[],
+  timestamp: string,
+  mode: "draft" | "published",
+) {
+  for (const exercise of exercises) {
+    const existing = exerciseEntriesById.get(exercise.id);
+    if (!existing) {
+      exerciseEntriesById.set(exercise.id, {
+        id: exercise.id,
+        draft: mode === "draft" ? exercise : toPlainObject(exercise),
+        published: mode === "published" ? toPlainObject(exercise) : null,
+        updatedAt: timestamp,
+        publishedAt: mode === "published" ? timestamp : null,
+      });
+      continue;
+    }
+
+    if (mode === "draft") {
+      existing.draft = exercise;
+      existing.updatedAt = timestamp;
+    } else {
+      existing.published = toPlainObject(exercise);
+      existing.publishedAt = timestamp;
+      existing.updatedAt = timestamp;
+      if (!existing.draft.id) {
+        existing.draft = toPlainObject(exercise);
+      }
+    }
+  }
 }
 
 function migrateBootstrapPayload(payload: Record<string, unknown>) {
@@ -528,7 +683,7 @@ function migrateLegacyV1Payload(payload: Record<string, unknown>) {
                 "main.py",
               demoFilePath:
                 milestone.demoFilePath == null ? null : String(milestone.demoFilePath),
-              testCases: Array.isArray(milestone.testCases) ? milestone.testCases : [],
+              testCases: legacyTestCases(lane, milestone),
             },
           ],
         });
@@ -567,10 +722,133 @@ function migrateLegacyV1Payload(payload: Record<string, unknown>) {
   };
 }
 
+function migrateLegacyTrackDefinition(track: PlainObject) {
+  const lane =
+    String(track.type ?? "").toLowerCase() === "leetcode"
+      ? "leetcode"
+      : String(track.type ?? "").toLowerCase() === "datastructure"
+        ? "dsa"
+        : "project";
+  const exercises: ExerciseDefinition[] = [];
+  const refs: PlainObject[] = [];
+  const modules = Array.isArray(track.modules) ? track.modules : [];
+  for (const module of modules) {
+    if (typeof module !== "object" || module === null || !Array.isArray(module.milestones)) {
+      continue;
+    }
+    for (const rawMilestone of module.milestones) {
+      if (typeof rawMilestone !== "object" || rawMilestone === null) {
+        continue;
+      }
+      const milestone = rawMilestone as PlainObject;
+      const exerciseId = String(milestone.id ?? crypto.randomUUID());
+      exercises.push(
+        sanitizePayload("exercises", {
+          id: exerciseId,
+          title: String(milestone.title ?? exerciseId),
+          summary: String(milestone.objective ?? ""),
+          lane,
+          contentKind:
+            lane === "leetcode"
+              ? "leetcode_exercise"
+              : lane === "dsa"
+                ? "dsa_exercise"
+                : "project_exercise",
+          level: legacyDifficultyToLevel(track.difficultyLabel),
+          topicIds: [],
+          domainIds: [],
+          tags: [],
+          skillIds: Array.isArray(milestone.skillIds) ? milestone.skillIds : [],
+          problemStatement: String(milestone.problemStatement ?? ""),
+          acceptanceCriteria: Array.isArray(milestone.acceptanceCriteria)
+            ? milestone.acceptanceCriteria
+            : [],
+          taskSteps: Array.isArray(milestone.taskSteps) ? milestone.taskSteps : [],
+          supportedModes: Array.isArray(milestone.supportedModes)
+            ? milestone.supportedModes
+            : [],
+          hints:
+            typeof milestone.hints === "object" && milestone.hints !== null
+              ? milestone.hints
+              : {},
+          reflectionPrompts: Array.isArray(milestone.reflectionPrompts)
+            ? milestone.reflectionPrompts
+            : [],
+          requirements: Array.isArray(milestone.requirements) ? milestone.requirements : [],
+          languageVariants: [
+            {
+              languageId: legacyLanguageId(milestone.languageLabel),
+              languageLabel: String(milestone.languageLabel ?? "Python"),
+              isDefault: true,
+              starterCode: String(milestone.starterCode ?? ""),
+              starterFiles:
+                typeof milestone.starterFiles === "object" && milestone.starterFiles !== null
+                  ? milestone.starterFiles
+                  : {},
+              solutionCode:
+                milestone.solutionCode == null ? null : String(milestone.solutionCode),
+              sandboxHarnessTemplate: String(
+                milestone.sandboxHarnessTemplate ?? "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+              ),
+              runCommand: String(milestone.runCommand ?? "python main.py"),
+              entryFilePath:
+                String(milestone.sandboxEntryFilePath ?? "") ||
+                firstRelatedFile(milestone.relatedFiles) ||
+                "main.py",
+              demoFilePath:
+                milestone.demoFilePath == null ? null : String(milestone.demoFilePath),
+              testCases: legacyTestCases(lane, milestone),
+            },
+          ],
+        }),
+      );
+      refs.push({
+        exerciseId,
+        title: String(milestone.title ?? exerciseId),
+        summary: String(milestone.objective ?? ""),
+        milestoneLabel: String(module.title ?? ""),
+      });
+    }
+  }
+
+  return {
+    track: sanitizePayload("tracks", {
+      id: String(track.id ?? crypto.randomUUID()),
+      title: String(track.title ?? "Migrated track"),
+      summary: String(track.summary ?? ""),
+      lane,
+      contentKind:
+        lane === "leetcode"
+          ? "leetcode_set"
+          : lane === "dsa"
+            ? "dsa_track"
+            : "project_track",
+      level: legacyDifficultyToLevel(track.difficultyLabel),
+      topicIds: [],
+      domainIds: [],
+      tags: [],
+      skillIds: [],
+      exerciseRefs: refs,
+    }),
+    exercises,
+  };
+}
+
+function migrateLegacySkillDefinition(skill: PlainObject) {
+  return {
+    ...skill,
+    reviewExerciseId: String(skill.reviewMilestoneId ?? skill.reviewExerciseId ?? ""),
+  };
+}
+
 function publishedEntries<T extends PlainObject>(entries: ManagedEntry<T>[]) {
   return entries
     .filter((entry) => entry.published)
     .map((entry) => toPlainObject(entry.published!));
+}
+
+function draftEntries<T extends PlainObject>(entries: ManagedEntry<T>[]) {
+  return entries.map((entry) => toPlainObject(entry.draft));
 }
 
 function asPlainObjectArray(value: unknown): PlainObject[] {
@@ -610,6 +888,24 @@ function firstRelatedFile(value: unknown) {
     return "";
   }
   return String(value[0] ?? "");
+}
+
+function legacyTestCases(lane: string, milestone: PlainObject) {
+  const rawTestCases = Array.isArray(milestone.testCases) ? milestone.testCases : [];
+  if (rawTestCases.length > 0) {
+    return rawTestCases;
+  }
+  if (lane !== "leetcode") {
+    return [];
+  }
+  return [
+    {
+      id: `${String(milestone.id ?? "exercise")}_legacy_case`,
+      label: "Legacy placeholder testcase",
+      body: String(milestone.exampleInput ?? ""),
+      expectedOutput: String(milestone.exampleOutput ?? ""),
+    },
+  ];
 }
 
 function emptyStore(): ContentStore {

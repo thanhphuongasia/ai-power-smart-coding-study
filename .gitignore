@@ -34,6 +34,8 @@ migrate_working_dir/
 /build/
 app-api/node_modules/
 app-api/data/content-store.json
+app-api/test-results/
+app-api/playwright-report/
 
 # Symbolication related
 app.*.symbols

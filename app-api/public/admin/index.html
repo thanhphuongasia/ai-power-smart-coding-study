@@ -8,138 +8,135 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="nav-shell">
-        <section class="brand-card">
-          <div class="brand-mark">PC</div>
-          <div>
-            <p class="eyebrow">Content Workspace</p>
-            <h1>Studio v2</h1>
-            <p class="nav-copy">
-              Manage tracks, exercises, topics, domains, and skills with one compact workspace.
-            </p>
-          </div>
-        </section>
+      <header class="topbar card">
+        <div class="topbar-copy">
+          <p class="eyebrow">Admin Workspace</p>
+          <h1>Content Studio v2</h1>
+          <p class="subtitle">
+            Work from the menu on the left, browse a clean list view, then open a focused detail page
+            before editing.
+          </p>
+        </div>
 
-        <section class="nav-card">
-          <p class="eyebrow">Snapshot</p>
-          <div class="nav-stat">
-            <span>Published snapshot</span>
-            <strong id="last-published-value">Never</strong>
-          </div>
-          <div class="nav-stat">
-            <span>Catalog version</span>
-            <strong id="content-version-value">—</strong>
-          </div>
-          <div class="nav-stat">
-            <span>Pending changes</span>
-            <strong id="pending-count-value">0</strong>
-          </div>
-        </section>
-
-        <section class="nav-card">
-          <p class="eyebrow">Create</p>
-          <div class="catalog-groups">
-            <button id="new-track-button" class="secondary-button full-width">New track</button>
-            <button id="new-exercise-button" class="secondary-button full-width">New exercise</button>
-            <button id="new-topic-button" class="secondary-button full-width">New topic</button>
-            <button id="new-domain-button" class="secondary-button full-width">New domain</button>
-            <button id="new-skill-button" class="secondary-button full-width">New skill</button>
-            <button id="refresh-button" class="ghost-button full-width">Refresh catalog</button>
-          </div>
-        </section>
-      </aside>
-
-      <main class="content-shell">
-        <section class="hero-grid">
-          <article class="hero-card card">
-            <div class="hero-copy">
-              <p class="eyebrow">Multilanguage content ops</p>
-              <h2>Tracks + exercises + taxonomy in one editor</h2>
-              <p class="subtitle">
-                Filter by lane, level, and workflow status, then edit the raw JSON draft for any
-                entity in the v2 catalog.
-              </p>
+        <div class="topbar-side">
+          <div class="status-banner">
+            <span id="connection-indicator" class="status-dot"></span>
+            <div>
+              <p class="status-label">Connection</p>
+              <p id="auth-status" class="status-message">Waiting for admin key…</p>
             </div>
-            <div class="status-banner">
-              <span id="connection-indicator" class="status-dot"></span>
-              <div>
-                <p class="status-label">Connection status</p>
-                <p id="auth-status" class="status-message">Waiting for admin key…</p>
-              </div>
-            </div>
-          </article>
+          </div>
 
-          <article class="auth-card card">
-            <div class="auth-card-header">
-              <div>
-                <p class="eyebrow">Access</p>
-                <h2>Admin key</h2>
-              </div>
-              <span class="pill subtle-pill">x-admin-key</span>
-            </div>
-            <div class="auth-row">
+          <div class="auth-inline">
+            <label class="field-shell">
+              <span>Admin key</span>
               <input
                 id="admin-key"
                 type="password"
                 placeholder="local-dev-admin-key"
                 autocomplete="current-password"
               />
-              <button id="connect-button">Connect</button>
+            </label>
+            <button id="connect-button">Connect</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="overview-grid">
+        <article class="metric-card card">
+          <p class="metric-label">Published snapshot</p>
+          <strong id="last-published-value" class="metric-value">Never</strong>
+        </article>
+        <article class="metric-card card">
+          <p class="metric-label">Catalog version</p>
+          <strong id="content-version-value" class="metric-value">—</strong>
+        </article>
+        <article class="metric-card card">
+          <p class="metric-label">Tracks</p>
+          <strong id="overview-tracks-count-value" class="metric-value">0</strong>
+        </article>
+        <article class="metric-card card">
+          <p class="metric-label">Exercises</p>
+          <strong id="overview-exercises-count-value" class="metric-value">0</strong>
+        </article>
+        <article class="metric-card card">
+          <p class="metric-label">Taxonomy</p>
+          <strong id="overview-taxonomy-count-value" class="metric-value">0</strong>
+        </article>
+        <article class="metric-card card">
+          <p class="metric-label">Pending changes</p>
+          <strong id="pending-count-value" class="metric-value">0</strong>
+        </article>
+      </section>
+
+      <main class="workspace-grid">
+        <aside id="sidebar" class="sidebar card">
+          <section class="sidebar-section">
+            <p class="eyebrow">Content</p>
+            <div class="nav-group">
+              <button data-entity-tab="tracks" class="entity-nav active">
+                <span>Tracks</span>
+                <strong id="tracks-count-value">0</strong>
+              </button>
+              <button data-entity-tab="exercises" class="entity-nav">
+                <span>Exercises</span>
+                <strong id="entity-exercises-count">0</strong>
+              </button>
             </div>
-            <p class="muted auth-hint">
-              Local dev uses the default key unless you override <code>ADMIN_API_KEY</code>.
-            </p>
-          </article>
-        </section>
+          </section>
 
-        <section class="overview-grid">
-          <article class="metric-card card">
-            <p class="metric-label">Tracks</p>
-            <strong id="tracks-count-value" class="metric-value">0</strong>
-            <span class="metric-footnote">Curated learning paths</span>
-          </article>
-          <article class="metric-card card">
-            <p class="metric-label">Exercises</p>
-            <strong id="exercises-count-value" class="metric-value">0</strong>
-            <span class="metric-footnote">Standalone and track-linked practice units</span>
-          </article>
-          <article class="metric-card card">
-            <p class="metric-label">Taxonomy</p>
-            <strong id="taxonomy-count-value" class="metric-value">0</strong>
-            <span class="metric-footnote">Topics, domains, and skills</span>
-          </article>
-          <article class="metric-card card">
-            <p class="metric-label">Published</p>
-            <strong id="published-count-value" class="metric-value">0</strong>
-            <span class="metric-footnote">Entries visible to learners</span>
-          </article>
-        </section>
+          <section class="sidebar-section">
+            <p class="eyebrow">Taxonomy</p>
+            <div class="nav-group">
+              <button data-entity-tab="topics" class="entity-nav">
+                <span>Topics</span>
+                <strong id="entity-topics-count">0</strong>
+              </button>
+              <button data-entity-tab="domains" class="entity-nav">
+                <span>Domains</span>
+                <strong id="entity-domains-count">0</strong>
+              </button>
+              <button data-entity-tab="skills" class="entity-nav">
+                <span>Skills</span>
+                <strong id="entity-skills-count">0</strong>
+              </button>
+            </div>
+          </section>
 
-        <section class="dashboard-grid">
-          <section class="catalog-panel card">
-            <div class="panel-header">
+          <section class="sidebar-section">
+            <p class="eyebrow">Operations</p>
+            <div class="nav-group">
+              <button id="refresh-button" class="ghost-button full-width">Refresh catalog</button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="stage-panel card">
+          <div class="mobile-nav">
+            <button id="sidebar-toggle" class="ghost-button" type="button">Menu</button>
+          </div>
+          <section id="list-screen" class="screen">
+            <div class="screen-header">
               <div>
-                <p class="eyebrow">Browser</p>
-                <h2>Entity workspace</h2>
+                <p class="eyebrow">List</p>
+                <h2 id="list-title">Tracks</h2>
+                <p id="list-subtitle" class="screen-subtitle">
+                  Browse grouped content, then open an item to inspect it in detail.
+                </p>
               </div>
-              <span id="entity-count-pill" class="pill subtle-pill">0</span>
+              <div class="screen-actions">
+                <span id="entity-count-pill" class="pill subtle-pill">0</span>
+                <button id="create-entry-button" class="secondary-button">New track</button>
+              </div>
             </div>
 
-            <div class="entity-tabs">
-              <button data-entity-tab="tracks" class="secondary-button entity-tab active">Tracks</button>
-              <button data-entity-tab="exercises" class="secondary-button entity-tab">Exercises</button>
-              <button data-entity-tab="topics" class="secondary-button entity-tab">Topics</button>
-              <button data-entity-tab="domains" class="secondary-button entity-tab">Domains</button>
-              <button data-entity-tab="skills" class="secondary-button entity-tab">Skills</button>
-            </div>
-
-            <div class="filter-row">
-              <label class="search-shell" for="search-input">
+            <div class="filters-grid">
+              <label class="field-shell field-span-2">
                 <span>Search</span>
                 <input id="search-input" type="search" placeholder="Title, id, summary, tags…" />
               </label>
 
-              <label class="search-shell" for="lane-filter">
+              <label class="field-shell">
                 <span>Lane</span>
                 <select id="lane-filter">
                   <option value="">All lanes</option>
@@ -149,7 +146,7 @@
                 </select>
               </label>
 
-              <label class="search-shell" for="level-filter">
+              <label class="field-shell">
                 <span>Level</span>
                 <select id="level-filter">
                   <option value="">All levels</option>
@@ -159,7 +156,7 @@
                 </select>
               </label>
 
-              <label class="search-shell" for="status-filter">
+              <label class="field-shell">
                 <span>Status</span>
                 <select id="status-filter">
                   <option value="">All statuses</option>
@@ -170,70 +167,101 @@
               </label>
             </div>
 
-            <div id="entity-list" class="entity-list"></div>
+            <div id="entity-groups" class="group-list"></div>
           </section>
 
-          <section class="editor card">
-            <div class="panel-header">
+          <section id="detail-screen" class="screen" hidden>
+            <div class="screen-header detail-header">
+              <div class="detail-heading">
+                <button id="back-to-list-button" class="ghost-button">Back to list</button>
+                <div>
+                  <p class="eyebrow">Detail</p>
+                  <h2 id="detail-title">Nothing selected</h2>
+                  <p id="detail-subtitle" class="screen-subtitle">
+                    Open an item from the list to inspect metadata, structure, and related content.
+                  </p>
+                </div>
+              </div>
+
+              <div class="detail-header-actions">
+                <span id="selection-status-pill" class="pill subtle-pill">Idle</span>
+                <button id="detail-publish-button" class="secondary-button">Publish</button>
+                <div id="detail-menu-shell" class="detail-menu-shell">
+                  <button id="detail-menu-button" class="ghost-icon-button" aria-expanded="false">
+                    ...
+                  </button>
+                  <div id="detail-menu" class="dropdown-menu" hidden>
+                    <button id="detail-edit-button" class="menu-item">Edit</button>
+                    <button id="detail-delete-button" class="menu-item danger-item">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-grid">
+              <section class="detail-section detail-summary-card">
+                <p class="detail-label">Summary</p>
+                <p id="detail-summary" class="detail-body">
+                  Pick an item from the list to inspect its structure and related content.
+                </p>
+              </section>
+
+              <section class="detail-section">
+                <p class="detail-label">Attributes</p>
+                <dl id="selection-attributes" class="attribute-list">
+                  <div>
+                    <dt>Status</dt>
+                    <dd>—</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section class="detail-section">
+                <p class="detail-label">Structure</p>
+                <div id="selection-structure" class="structure-list muted">No structure details yet.</div>
+              </section>
+
+              <section class="detail-section">
+                <p class="detail-label">Related</p>
+                <div id="selection-related" class="related-list muted">No related items yet.</div>
+              </section>
+            </div>
+          </section>
+
+          <section id="editor-screen" class="screen" hidden>
+            <div class="screen-header">
               <div>
+                <button id="editor-back-button" class="ghost-button">Back</button>
                 <p class="eyebrow">Editor</p>
-                <h2 id="editor-title">Select an entry</h2>
+                <h2 id="editor-title">No draft loaded</h2>
+                <p id="editor-subtitle" class="screen-subtitle">
+                  Update the draft using the form (or switch to JSON), save it, then return to the detail page.
+                </p>
               </div>
-              <div class="button-row">
-                <span id="editor-kind-badge" class="pill subtle-pill">No selection</span>
-                <button id="delete-button" class="danger-button">Delete</button>
+              <div class="editor-header-actions">
+                <button id="editor-mode-toggle" class="ghost-button" type="button">JSON</button>
+                <span id="editor-kind-badge" class="pill subtle-pill">Idle</span>
               </div>
             </div>
 
-            <div id="editor-meta" class="editor-meta muted">Choose an entry to inspect or update.</div>
+            <div id="editor-meta" class="editor-meta muted">
+              Start a new item from the list view or open an existing item from the detail page.
+            </div>
 
-            <textarea id="editor-textarea" spellcheck="false"></textarea>
+            <div id="editor-error" class="editor-error" hidden></div>
 
-            <div class="button-row sticky-actions">
+            <div id="editor-form-shell" class="editor-form-shell"></div>
+
+            <div id="editor-json-shell" hidden>
+              <textarea id="editor-textarea" spellcheck="false"></textarea>
+            </div>
+
+            <div class="editor-actions">
+              <button id="cancel-editor-button" class="ghost-button">Cancel</button>
               <button id="save-button">Save draft</button>
-              <button id="publish-button" class="accent-button">Publish</button>
-              <button id="unpublish-button" class="ghost-button">Unpublish</button>
+              <button id="delete-button" class="danger-button">Delete</button>
             </div>
           </section>
-
-          <aside class="inspector card">
-            <div class="panel-header">
-              <div>
-                <p class="eyebrow">Inspector</p>
-                <h2>Selection summary</h2>
-              </div>
-              <span id="selection-status-pill" class="pill subtle-pill">Idle</span>
-            </div>
-
-            <section class="inspector-card">
-              <p class="inspector-label">Overview</p>
-              <h3 id="selection-heading">Nothing selected</h3>
-              <p id="selection-summary" class="muted">
-                Connect to the admin API, then pick an entity to inspect.
-              </p>
-            </section>
-
-            <section class="inspector-card">
-              <p class="inspector-label">Attributes</p>
-              <dl id="selection-attributes" class="attribute-list">
-                <div>
-                  <dt>Status</dt>
-                  <dd>—</dd>
-                </div>
-                <div>
-                  <dt>Published</dt>
-                  <dd>—</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section class="inspector-card">
-              <p class="inspector-label">Structure</p>
-              <div id="selection-structure" class="structure-list muted">
-                No structure details yet.
-              </div>
-            </section>
-          </aside>
         </section>
       </main>
     </div>

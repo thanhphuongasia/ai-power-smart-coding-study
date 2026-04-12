@@ -45,7 +45,10 @@ class AppApiService {
   }
 
   Future<ContentManifest> fetchCatalogManifest() async {
-    final payload = await _get('/v1/catalog/manifest');
+    final payload = await _get(
+      _settings.usesPreview ? '/v1/catalog/manifest/preview' : '/v1/catalog/manifest',
+      includePreviewKey: _settings.usesPreview,
+    );
     return ContentManifest(
       contentVersion: payload['content_version'] as String? ?? '0',
       publishedAt:
@@ -56,7 +59,10 @@ class AppApiService {
   }
 
   Future<CatalogApiSnapshot> fetchCatalog() async {
-    final payload = await _get('/v1/catalog');
+    final payload = await _get(
+      _settings.usesPreview ? '/v1/catalog/preview' : '/v1/catalog',
+      includePreviewKey: _settings.usesPreview,
+    );
     return CatalogApiSnapshot(
       tracks: (payload['tracks'] as List<dynamic>? ?? const <dynamic>[])
           .whereType<Map>()
@@ -165,6 +171,7 @@ class AppApiService {
   Future<Map<String, dynamic>> _get(
     String path, {
     String? accessToken,
+    bool includePreviewKey = false,
   }) async {
     if (!isConfigured) {
       throw const SocketException('App API is not configured.');
@@ -172,7 +179,10 @@ class AppApiService {
 
     final response = await _client.get(
       _settings.uri.resolve(path),
-      headers: _headers(accessToken: accessToken),
+      headers: _headers(
+        accessToken: accessToken,
+        includePreviewKey: includePreviewKey,
+      ),
     );
     return _decodeResponse(response);
   }
@@ -196,11 +206,14 @@ class AppApiService {
 
   Map<String, String> _headers({
     String? accessToken,
+    bool includePreviewKey = false,
   }) {
     return <String, String>{
       'Content-Type': 'application/json',
       if (accessToken != null && accessToken.isNotEmpty)
         'Authorization': 'Bearer $accessToken',
+      if (includePreviewKey && _settings.previewKey.isNotEmpty)
+        'x-preview-key': _settings.previewKey,
     };
   }
 
@@ -222,18 +235,22 @@ class AppApiService {
 class AppApiSettings {
   const AppApiSettings({
     required this.baseUrl,
+    this.previewKey = '',
     this.usesDebugFallback = false,
   });
 
   factory AppApiSettings.fromEnvironment({
     String environmentBaseUrl =
         const String.fromEnvironment('APP_API_BASE_URL'),
+    String environmentPreviewKey =
+        const String.fromEnvironment('APP_API_PREVIEW_KEY'),
     bool enableDebugFallback = kDebugMode,
     TargetPlatform? targetPlatform,
   }) {
     final trimmedBaseUrl = environmentBaseUrl.trim();
+    final trimmedPreviewKey = environmentPreviewKey.trim();
     if (trimmedBaseUrl.isNotEmpty) {
-      return AppApiSettings(baseUrl: trimmedBaseUrl);
+      return AppApiSettings(baseUrl: trimmedBaseUrl, previewKey: trimmedPreviewKey);
     }
 
     final fallbackBaseUrl = enableDebugFallback
@@ -242,12 +259,16 @@ class AppApiSettings {
 
     return AppApiSettings(
       baseUrl: fallbackBaseUrl,
+      previewKey: trimmedPreviewKey,
       usesDebugFallback: fallbackBaseUrl.isNotEmpty,
     );
   }
 
   final String baseUrl;
+  final String previewKey;
   final bool usesDebugFallback;
+
+  bool get usesPreview => previewKey.isNotEmpty;
 
   Uri get uri => Uri.parse(
         baseUrl.endsWith('/')

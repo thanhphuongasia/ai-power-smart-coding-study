@@ -165,6 +165,15 @@ test("admin workflow keeps draft changes private until publish", async () => {
     };
     assert.equal(beforePublishPayload.exercises[0].summary, "Published exercise summary");
 
+    const draftPreviewResponse = await fetch(`${baseUrl}/v1/catalog/preview`, {
+      headers: { "x-preview-key": "test-admin-key" },
+    });
+    assert.equal(draftPreviewResponse.status, 200);
+    const draftPreviewPayload = (await draftPreviewResponse.json()) as {
+      exercises: Array<{ summary: string }>;
+    };
+    assert.equal(draftPreviewPayload.exercises[0].summary, "Draft summary only");
+
     const publishResponse = await fetch(
       `${baseUrl}/admin/api/exercises/project_list_documents/publish`,
       {

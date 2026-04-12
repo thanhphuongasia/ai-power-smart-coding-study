@@ -185,6 +185,8 @@
 ## Progress Update
 - Updated on `2026-04-12`.
 - Hoàn thành phần core execution cho schema v2, catalog/admin API, seed data, learner app, language variant flow, sandbox payload, và review queue.
+- Admin workspace đã chuyển sang flow theo menu `content / taxonomy`: màn `list` có grouping + search/filter, click item mở `detail`, và từ `detail` mới đi tiếp sang `edit/delete`.
+- Admin API không còn fail khi đọc `content-store.json` schema cũ; backend đã migrate legacy store vào model v2 trước khi validate.
 - Còn lại 2 hạng mục admin chuyên sâu:
   - lane-specific form thay vì raw JSON scaffold
   - filter UI admin đầy đủ cho `language`, `topic`, `domain`, `tags`

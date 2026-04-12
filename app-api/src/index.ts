@@ -37,6 +37,7 @@ export function createApp({
       path.resolve(process.cwd(), "../strapi/seed/seed_content.json"),
   }),
   adminApiKey = process.env.ADMIN_API_KEY || "local-dev-admin-key",
+  previewApiKey = process.env.PREVIEW_API_KEY || adminApiKey,
 } = {}) {
   const learnersByToken = new Map<string, LearnerRecord>();
   const learnersByInstallId = new Map<string, LearnerRecord>();
@@ -97,8 +98,25 @@ export function createApp({
     });
   });
 
+  app.get(
+    "/v1/catalog/manifest/preview",
+    withPreviewAuth(previewApiKey),
+    async (_request, response) => {
+      const manifest = await contentStoreRepository.buildDraftManifest();
+      response.json({
+        content_version: manifest.contentVersion,
+        published_at: manifest.publishedAt,
+        checksum: manifest.checksum,
+      });
+    },
+  );
+
   app.get("/v1/catalog", async (_request, response) => {
     response.json(await contentStoreRepository.listPublishedCatalog());
+  });
+
+  app.get("/v1/catalog/preview", withPreviewAuth(previewApiKey), async (_request, response) => {
+    response.json(await contentStoreRepository.listDraftCatalog());
   });
 
   app.post("/v1/sync/events", async (request, response) => {
@@ -365,6 +383,23 @@ function withAdminAuth(adminApiKey: string) {
   ) => {
     const provided = String(request.headers["x-admin-key"] || "");
     if (!provided || provided !== adminApiKey) {
+      return response.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+  };
+}
+
+function withPreviewAuth(previewApiKey: string) {
+  return (
+    request: express.Request,
+    response: express.Response,
+    next: express.NextFunction,
+  ) => {
+    const headerValue = String(request.headers["x-preview-key"] || "");
+    const queryValue =
+      typeof request.query?.preview_key === "string" ? request.query.preview_key : "";
+    const provided = headerValue || queryValue;
+    if (!provided || provided !== previewApiKey) {
       return response.status(401).json({ error: "Unauthorized" });
     }
     next();

@@ -40,6 +40,23 @@ the variable locally, the default key is:
 local-dev-admin-key
 ```
 
+## Preview draft catalog (customer side)
+
+Use draft preview endpoints to test edits in the customer app before publishing:
+
+- `GET /v1/catalog/preview` (requires `x-preview-key`)
+- `GET /v1/catalog/manifest/preview` (requires `x-preview-key`)
+
+By default, `PREVIEW_API_KEY` falls back to `ADMIN_API_KEY` (so local dev works
+without extra config).
+
+For Flutter debug builds, set:
+
+```bash
+--dart-define=APP_API_BASE_URL=http://127.0.0.1:8788 \
+--dart-define=APP_API_PREVIEW_KEY=local-dev-admin-key
+```
+
 ## Persistence
 
 The learner event store is still in-memory for local development. Content is now
