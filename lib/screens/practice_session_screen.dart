@@ -31,6 +31,7 @@ class PracticeSessionScreen extends StatefulWidget {
 
 class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   final TextEditingController _controller = TextEditingController();
+  String? _autoOpenedEditorForSessionId;
 
   @override
   void didChangeDependencies() {
@@ -69,6 +70,15 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       return _EmptySession(onBackToCatalog: widget.onBackToCatalog);
     }
 
+    if (session.openEditorOnStart &&
+        _autoOpenedEditorForSessionId != session.id) {
+      _autoOpenedEditorForSessionId = session.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openFullscreenEditor();
+      });
+    }
+
     final theme = Theme.of(context);
     final result = session.validationResult;
     final isSandboxExecutionRunning =
@@ -98,9 +108,16 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                   ],
                 ),
               ),
-              FilledButton.tonal(
+              IconButton.filledTonal(
+                tooltip: 'Prompt',
                 onPressed: _showProblemSheet,
-                child: const Text('Prompt'),
+                icon: const Icon(Icons.article_rounded),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: 'Open editor',
+                onPressed: _openFullscreenEditor,
+                icon: const Icon(Icons.open_in_full_rounded),
               ),
             ],
           ),

@@ -343,6 +343,7 @@ class AppState extends ChangeNotifier {
     LearningTrack? track,
     PracticeMode mode = PracticeMode.guided,
     String? languageId,
+    bool openEditorOnStart = false,
   }) {
     final selectedVariant = exercise.resolveVariant(
       preferredLanguageId: _preferredLanguageId,
@@ -360,6 +361,7 @@ class AppState extends ChangeNotifier {
       selectedVariant: selectedVariant,
       mode: mode,
       track: track,
+      openEditorOnStart: openEditorOnStart,
       fileContents: fileContents,
       activeFilePath: selectedVariant.entryFilePath,
       revealedHintLevel: null,

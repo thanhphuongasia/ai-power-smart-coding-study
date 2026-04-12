@@ -292,6 +292,7 @@ class PracticeSession {
     required this.selectedVariant,
     required this.mode,
     this.track,
+    this.openEditorOnStart = false,
     required this.fileContents,
     required this.activeFilePath,
     required this.revealedHintLevel,
@@ -305,6 +306,7 @@ class PracticeSession {
   final ExerciseLanguageVariant selectedVariant;
   final PracticeMode mode;
   final LearningTrack? track;
+  final bool openEditorOnStart;
   final Map<String, String> fileContents;
   final String activeFilePath;
   final HintLevel? revealedHintLevel;
@@ -325,6 +327,7 @@ class PracticeSession {
 
   PracticeSession copyWith({
     ExerciseLanguageVariant? selectedVariant,
+    bool? openEditorOnStart,
     Map<String, String>? fileContents,
     String? activeFilePath,
     HintLevel? revealedHintLevel,
@@ -339,6 +342,7 @@ class PracticeSession {
       selectedVariant: selectedVariant ?? this.selectedVariant,
       mode: mode,
       track: track,
+      openEditorOnStart: openEditorOnStart ?? this.openEditorOnStart,
       fileContents: fileContents ?? this.fileContents,
       activeFilePath: activeFilePath ?? this.activeFilePath,
       revealedHintLevel:

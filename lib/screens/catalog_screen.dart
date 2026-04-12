@@ -18,6 +18,7 @@ class CatalogScreen extends StatefulWidget {
     required LearningExercise exercise,
     required PracticeMode mode,
     String? languageId,
+    bool openEditorOnStart,
   }) onStartSession;
 
   @override
@@ -78,7 +79,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   return ChoiceChip(
                     label: Text(type.label),
                     selected: _selectedType == type,
-                    avatar: Icon(type.icon, size: 18),
+                    avatar: Icon(type.icon, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                     onSelected: (_) => setState(() => _selectedType = type),
                   );
                 }).toList(),
@@ -150,6 +155,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 return _TrackCard(
                   appState: widget.appState,
                   track: track,
+                  sequenceNumber: index + 1,
                   exercises: trackExercises,
                   onStartSession: widget.onStartSession,
                 );
@@ -158,6 +164,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               return _ExerciseCard(
                 appState: widget.appState,
                 exercise: exercise,
+                sequenceNumber: index + 1,
                 onStartSession: widget.onStartSession,
               );
             },
@@ -275,94 +282,117 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
-        _DropdownChip<LearningLevel?>(
-          label: 'Level',
-          value: selectedLevel,
-          items: <DropdownMenuItem<LearningLevel?>>[
-            const DropdownMenuItem<LearningLevel?>(
-              value: null,
-              child: Text('All levels'),
-            ),
-            ...LearningLevel.values.map(
-              (level) => DropdownMenuItem<LearningLevel?>(
-                value: level,
-                child: Text(level.label),
-              ),
-            ),
-          ],
-          onChanged: onLevelChanged,
+        _FilterIconButton(
+          tooltip: 'Level',
+          icon: Icons.stairs_rounded,
+          isActive: selectedLevel != null,
+          onPressed: () async {
+            final choice = await _openSelectionSheet<LearningLevel?>(
+              context,
+              title: 'Level',
+              selectedValue: selectedLevel,
+              options: <_SelectionOption<LearningLevel?>>[
+                const _SelectionOption(value: null, label: 'All levels'),
+                ...LearningLevel.values.map(
+                  (level) =>
+                      _SelectionOption(value: level, label: level.label),
+                ),
+              ],
+            );
+            if (choice == null) return;
+            onLevelChanged(choice.value);
+          },
         ),
-        _DropdownChip<String?>(
-          label: 'Language',
-          value: selectedLanguageId,
-          items: <DropdownMenuItem<String?>>[
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('All languages'),
-            ),
-            ...availableLanguageIds.map(
-              (languageId) => DropdownMenuItem<String?>(
-                value: languageId,
-                child: Text(languageId),
-              ),
-            ),
-          ],
-          onChanged: onLanguageChanged,
+        _FilterIconButton(
+          tooltip: 'Language',
+          icon: Icons.translate_rounded,
+          isActive: selectedLanguageId != null,
+          onPressed: () async {
+            final choice = await _openSelectionSheet<String?>(
+              context,
+              title: 'Language',
+              selectedValue: selectedLanguageId,
+              options: <_SelectionOption<String?>>[
+                const _SelectionOption(value: null, label: 'All languages'),
+                ...availableLanguageIds.map(
+                  (languageId) =>
+                      _SelectionOption(value: languageId, label: languageId),
+                ),
+              ],
+            );
+            if (choice == null) return;
+            onLanguageChanged(choice.value);
+          },
         ),
-        _DropdownChip<String?>(
-          label: 'Topic',
-          value: selectedTopicId,
-          items: <DropdownMenuItem<String?>>[
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('All topics'),
-            ),
-            ...topics.map(
-              (topic) => DropdownMenuItem<String?>(
-                value: topic.id,
-                child: Text(topic.title),
-              ),
-            ),
-          ],
-          onChanged: onTopicChanged,
+        _FilterIconButton(
+          tooltip: 'Topic',
+          icon: Icons.category_rounded,
+          isActive: selectedTopicId != null,
+          onPressed: () async {
+            final choice = await _openSelectionSheet<String?>(
+              context,
+              title: 'Topic',
+              selectedValue: selectedTopicId,
+              options: <_SelectionOption<String?>>[
+                const _SelectionOption(value: null, label: 'All topics'),
+                ...topics.map(
+                  (topic) =>
+                      _SelectionOption(value: topic.id, label: topic.title),
+                ),
+              ],
+            );
+            if (choice == null) return;
+            onTopicChanged(choice.value);
+          },
         ),
-        _DropdownChip<String?>(
-          label: 'Domain',
-          value: selectedDomainId,
-          items: <DropdownMenuItem<String?>>[
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('All domains'),
-            ),
-            ...domains.map(
-              (domain) => DropdownMenuItem<String?>(
-                value: domain.id,
-                child: Text(domain.title),
-              ),
-            ),
-          ],
-          onChanged: onDomainChanged,
+        _FilterIconButton(
+          tooltip: 'Domain',
+          icon: Icons.public_rounded,
+          isActive: selectedDomainId != null,
+          onPressed: () async {
+            final choice = await _openSelectionSheet<String?>(
+              context,
+              title: 'Domain',
+              selectedValue: selectedDomainId,
+              options: <_SelectionOption<String?>>[
+                const _SelectionOption(value: null, label: 'All domains'),
+                ...domains.map(
+                  (domain) => _SelectionOption(
+                    value: domain.id,
+                    label: domain.title,
+                  ),
+                ),
+              ],
+            );
+            if (choice == null) return;
+            onDomainChanged(choice.value);
+          },
         ),
-        _DropdownChip<String?>(
-          label: 'Tag',
-          value: selectedTag,
-          items: <DropdownMenuItem<String?>>[
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('All tags'),
-            ),
-            ...tagSuggestions.map(
-              (tag) => DropdownMenuItem<String?>(
-                value: tag,
-                child: Text(tag),
-              ),
-            ),
-          ],
-          onChanged: onTagChanged,
+        _FilterIconButton(
+          tooltip: 'Tag',
+          icon: Icons.sell_rounded,
+          isActive: selectedTag != null,
+          onPressed: () async {
+            final choice = await _openSelectionSheet<String?>(
+              context,
+              title: 'Tag',
+              selectedValue: selectedTag,
+              options: <_SelectionOption<String?>>[
+                const _SelectionOption(value: null, label: 'All tags'),
+                ...tagSuggestions.map(
+                  (tag) => _SelectionOption(value: tag, label: tag),
+                ),
+              ],
+            );
+            if (choice == null) return;
+            onTagChanged(choice.value);
+          },
         ),
+        const SizedBox(width: 6),
         FilledButton.tonalIcon(
           onPressed: onReset,
           icon: const Icon(Icons.restart_alt_rounded),
@@ -373,34 +403,155 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-class _DropdownChip<T> extends StatelessWidget {
-  const _DropdownChip({
-    required this.label,
+class _SelectionOption<T> {
+  const _SelectionOption({
     required this.value,
-    required this.items,
-    required this.onChanged,
+    required this.label,
   });
 
-  final String label;
   final T value;
-  final List<DropdownMenuItem<T>> items;
-  final ValueChanged<T?> onChanged;
+  final String label;
+}
+
+class _SelectionChoice<T> {
+  const _SelectionChoice(this.value);
+  final T value;
+}
+
+Future<_SelectionChoice<T>?> _openSelectionSheet<T>(
+  BuildContext context, {
+  required String title,
+  required T selectedValue,
+  required List<_SelectionOption<T>> options,
+}) {
+  return showModalBottomSheet<_SelectionChoice<T>>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) {
+      final maxHeight = MediaQuery.sizeOf(context).height * 0.75;
+      return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    final isSelected = option.value == selectedValue;
+                    return ListTile(
+                      title: Text(option.label),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_rounded)
+                          : const SizedBox.shrink(),
+                      onTap: () => Navigator.of(context)
+                          .pop(_SelectionChoice<T>(option.value)),
+                    );
+                  },
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemCount: options.length,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _FilterIconButton extends StatelessWidget {
+  const _FilterIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.isActive,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final theme = Theme.of(context);
+    final button = IconButton.filledTonal(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+    );
+
+    if (!isActive) {
+      return button;
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        button,
+        Positioned(
+          right: -2,
+          top: -2,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: theme.colorScheme.surface,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NumberBadge extends StatelessWidget {
+  const _NumberBadge({
+    required this.value,
+  });
+
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
+        color: theme.colorScheme.surfaceContainerHighest,
+        shape: BoxShape.circle,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: DropdownButton<T>(
-          value: value,
-          underline: const SizedBox.shrink(),
-          hint: Text(label),
-          items: items,
-          onChanged: onChanged,
+      child: Text(
+        value.toString(),
+        style: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -411,18 +562,21 @@ class _TrackCard extends StatelessWidget {
   const _TrackCard({
     required this.appState,
     required this.track,
+    required this.sequenceNumber,
     required this.exercises,
     required this.onStartSession,
   });
 
   final AppState appState;
   final LearningTrack track;
+  final int sequenceNumber;
   final List<LearningExercise> exercises;
   final void Function({
     LearningTrack? track,
     required LearningExercise exercise,
     required PracticeMode mode,
     String? languageId,
+    bool openEditorOnStart,
   }) onStartSession;
 
   @override
@@ -438,6 +592,8 @@ class _TrackCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                _NumberBadge(value: sequenceNumber),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,17 +638,20 @@ class _TrackCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('${(completion * 100).round()}% complete'),
             const SizedBox(height: 14),
-            ...exercises.map(
-              (exercise) => Padding(
+            ...exercises.asMap().entries.map((entry) {
+              final index = entry.key;
+              final exercise = entry.value;
+              return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _ExerciseTile(
                   appState: appState,
                   exercise: exercise,
                   track: track,
+                  sequenceNumber: index + 1,
                   onStartSession: onStartSession,
                 ),
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),
@@ -504,16 +663,19 @@ class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard({
     required this.appState,
     required this.exercise,
+    required this.sequenceNumber,
     required this.onStartSession,
   });
 
   final AppState appState;
   final LearningExercise exercise;
+  final int sequenceNumber;
   final void Function({
     LearningTrack? track,
     required LearningExercise exercise,
     required PracticeMode mode,
     String? languageId,
+    bool openEditorOnStart,
   }) onStartSession;
 
   @override
@@ -524,6 +686,7 @@ class _ExerciseCard extends StatelessWidget {
         child: _ExerciseTile(
           appState: appState,
           exercise: exercise,
+          sequenceNumber: sequenceNumber,
           onStartSession: onStartSession,
         ),
       ),
@@ -536,29 +699,40 @@ class _ExerciseTile extends StatelessWidget {
     required this.appState,
     required this.exercise,
     this.track,
+    this.sequenceNumber,
     required this.onStartSession,
   });
 
   final AppState appState;
   final LearningExercise exercise;
   final LearningTrack? track;
+  final int? sequenceNumber;
   final void Function({
     LearningTrack? track,
     required LearningExercise exercise,
     required PracticeMode mode,
     String? languageId,
+    bool openEditorOnStart,
   }) onStartSession;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCompleted = appState.isExerciseCompleted(exercise.id);
+    final defaultMode = exercise.supportedModes.contains(PracticeMode.guided)
+        ? PracticeMode.guided
+        : exercise.supportedModes.first;
+    final isInTrack = track != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Row(
           children: <Widget>[
+            if (sequenceNumber != null) ...<Widget>[
+              _NumberBadge(value: sequenceNumber!),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Text(exercise.title, style: theme.textTheme.titleMedium),
             ),
@@ -583,6 +757,27 @@ class _ExerciseTile extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        if (isInTrack)
+          FilledButton.tonalIcon(
+            onPressed: () => _startWithVariantPicker(
+              context,
+              defaultMode,
+              openEditorOnStart: true,
+            ),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Practice'),
+          )
+        else
+          FilledButton.icon(
+            onPressed: () => _startWithVariantPicker(
+              context,
+              defaultMode,
+              openEditorOnStart: true,
+            ),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: Text('Practice · ${defaultMode.label}'),
+          ),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -590,7 +785,11 @@ class _ExerciseTile extends StatelessWidget {
             return ActionChip(
               label: Text(mode.label),
               avatar: Icon(Icons.play_arrow_rounded, size: 18),
-              onPressed: () => _startWithVariantPicker(context, mode),
+              onPressed: () => _startWithVariantPicker(
+                context,
+                mode,
+                openEditorOnStart: true,
+              ),
             );
           }).toList(),
         ),
@@ -601,6 +800,7 @@ class _ExerciseTile extends StatelessWidget {
   Future<void> _startWithVariantPicker(
     BuildContext context,
     PracticeMode mode,
+    {bool openEditorOnStart = false}
   ) async {
     final variants = exercise.languageVariants;
     if (variants.length == 1) {
@@ -609,6 +809,7 @@ class _ExerciseTile extends StatelessWidget {
         exercise: exercise,
         mode: mode,
         languageId: variants.first.languageId,
+        openEditorOnStart: openEditorOnStart,
       );
       return;
     }
@@ -664,6 +865,7 @@ class _ExerciseTile extends StatelessWidget {
       exercise: exercise,
       mode: mode,
       languageId: selectedLanguageId,
+      openEditorOnStart: openEditorOnStart,
     );
   }
 }

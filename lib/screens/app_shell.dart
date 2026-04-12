@@ -118,12 +118,14 @@ class _AppShellState extends State<AppShell> {
     required LearningExercise exercise,
     required PracticeMode mode,
     String? languageId,
+    bool openEditorOnStart = false,
   }) {
     widget.appState.startSession(
       track: track,
       exercise: exercise,
       mode: mode,
       languageId: languageId,
+      openEditorOnStart: openEditorOnStart,
     );
     setState(() => _index = 3);
   }
