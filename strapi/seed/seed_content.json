@@ -26,6 +26,76 @@
       "id": "race-condition",
       "title": "Race Condition",
       "summary": "Detecting and preventing shared-state timing bugs."
+    },
+    {
+      "id": "multi-tenant",
+      "title": "Multi-tenant Data",
+      "summary": "Workspace scoping, tenant isolation, and per-account filtering rules."
+    },
+    {
+      "id": "billing",
+      "title": "Billing",
+      "summary": "Fees, payouts, invoices, and revenue-share calculations."
+    },
+    {
+      "id": "access-control",
+      "title": "Access Control",
+      "summary": "Ownership, team visibility, sharing rules, and permission checks."
+    },
+    {
+      "id": "document-versioning",
+      "title": "Document Versioning",
+      "summary": "Version history, approval states, and latest-valid revision selection."
+    },
+    {
+      "id": "booking-calendar",
+      "title": "Booking Calendar",
+      "summary": "Time-slot modeling, overlap checks, and reservation windows."
+    },
+    {
+      "id": "pricing",
+      "title": "Pricing Rules",
+      "summary": "Quotes, surcharges, discounts, and deterministic pricing logic."
+    },
+    {
+      "id": "event-driven",
+      "title": "Event-driven Systems",
+      "summary": "Signals, deduplication, message identity, and replay-safe processing."
+    },
+    {
+      "id": "idempotency",
+      "title": "Idempotency",
+      "summary": "Replay-safe processing, duplicate detection, and one-time state transitions."
+    },
+    {
+      "id": "risk-management",
+      "title": "Risk Management",
+      "summary": "Exposure limits, stop conditions, and trading safety controls."
+    },
+    {
+      "id": "retrieval",
+      "title": "Retrieval",
+      "summary": "Selecting grounded context before generating an answer."
+    },
+    {
+      "id": "vector-search",
+      "title": "Vector Search",
+      "summary": "Similarity scoring, reranking, and top-k context selection."
+    },
+    {
+      "id": "agent-orchestration",
+      "title": "Agent Orchestration",
+      "summary": "Planning the next step in a multi-stage agent workflow."
+    },
+    {
+      "id": "spaced-repetition",
+      "title": "Spaced Repetition",
+      "summary": "Scheduling reviews to maximize long-term recall."
+    },
+    {
+      "id": "content-normalization",
+      "title": "Content Normalization",
+      "summary": "Cleaning imported content, removing duplicates, and standardizing records."
     }
   ],
   "domains": [
@@ -48,6 +118,31 @@
       "id": "document-management",
       "title": "Document Management",
       "summary": "Listing, querying, and validating document metadata and storage flows."
+    },
+    {
+      "id": "saas-marketplace",
+      "title": "SaaS Marketplace",
+      "summary": "Tenant-scoped catalogs, vendor payouts, and product listing workflows."
+    },
+    {
+      "id": "soccer-field-booking",
+      "title": "Soccer Field Booking",
+      "summary": "Slot availability, conflict detection, and booking quote logic for sports venues."
+    },
+    {
+      "id": "automation-trading",
+      "title": "Automation Trading System",
+      "summary": "Signal intake, order execution safeguards, and risk-limit enforcement."
+    },
+    {
+      "id": "agentic-ai-rag",
+      "title": "Agentic AI RAG",
+      "summary": "Grounded retrieval, agent routing, and evidence-aware answer generation."
+    },
+    {
+      "id": "flashcard-learning",
+      "title": "Anki-like Flashcard System",
+      "summary": "Note import, scheduling, due queues, and retention-focused study workflows."
     }
   ],
   "skills": [
@@ -106,6 +201,174 @@
       "category": "algorithmPatterns",
       "description": "Sort and scan interval ranges while keeping the greedy invariant intact.",
       "reviewExerciseId": "lc_merge_intervals"
+    },
+    {
+      "id": "tenant_isolation_queries",
+      "title": "Tenant isolation queries",
+      "category": "testingEdgeCases",
+      "description": "Keep marketplace reads scoped to one workspace while preserving optional filters and ordering.",
+      "reviewExerciseId": "project_marketplace_scope_listings"
+    },
+    {
+      "id": "payout_reconciliation_rules",
+      "title": "Payout reconciliation rules",
+      "category": "oopClassDesign",
+      "description": "Compute vendor gross, fees, and net payouts from settled commerce events.",
+      "reviewExerciseId": "project_marketplace_vendor_payouts"
+    },
+    {
+      "id": "document_access_policy",
+      "title": "Document access policy",
+      "category": "oopClassDesign",
+      "description": "Encode owner, team, and explicit-share permissions without leaking archived files.",
+      "reviewExerciseId": "project_document_share_permissions"
+    },
+    {
+      "id": "document_version_selection",
+      "title": "Document version selection",
+      "category": "algorithmPatterns",
+      "description": "Choose the latest reviewable document revision from a mixed status timeline.",
+      "reviewExerciseId": "project_document_latest_version"
+    },
+    {
+      "id": "booking_conflict_detection",
+      "title": "Booking conflict detection",
+      "category": "algorithmPatterns",
+      "description": "Model half-open time ranges correctly so adjacent bookings do not collide.",
+      "reviewExerciseId": "project_booking_slot_conflicts"
+    },
+    {
+      "id": "booking_quote_rules",
+      "title": "Booking quote rules",
+      "category": "testingEdgeCases",
+      "description": "Apply weekend and evening surcharges in a deterministic booking quote function.",
+      "reviewExerciseId": "project_booking_quote"
+    },
+    {
+      "id": "idempotent_order_execution",
+      "title": "Idempotent order execution",
+      "category": "debugging",
+      "description": "Ignore duplicated trading signals so the executor cannot place the same order twice.",
+      "reviewExerciseId": "project_trading_signal_dedup"
+    },
+    {
+      "id": "trading_risk_guardrails",
+      "title": "Trading risk guardrails",
+      "category": "oopClassDesign",
+      "description": "Block new orders when exposure or daily-loss limits are already breached.",
+      "reviewExerciseId": "project_trading_risk_limits"
+    },
+    {
+      "id": "retrieval_pipeline_design",
+      "title": "Retrieval pipeline design",
+      "category": "algorithmPatterns",
+      "description": "Combine ranking signals to pick grounded chunks for a RAG answer.",
+      "reviewExerciseId": "project_rag_context_pack"
+    },
+    {
+      "id": "agent_workflow_planning",
+      "title": "Agent workflow planning",
+      "category": "debugging",
+      "description": "Choose whether an agent should clarify, retrieve, call a tool, or answer next.",
+      "reviewExerciseId": "project_rag_next_action"
+    },
+    {
+      "id": "spaced_repetition_scheduler",
+      "title": "Spaced repetition scheduler",
+      "category": "algorithmPatterns",
+      "description": "Build a due queue that respects review dates, suspension, and stable ordering.",
+      "reviewExerciseId": "project_flashcard_due_queue"
+    },
+    {
+      "id": "flashcard_import_normalization",
+      "title": "Flashcard import normalization",
+      "category": "testingEdgeCases",
+      "description": "Trim, validate, and deduplicate imported notes before creating cards.",
+      "reviewExerciseId": "project_flashcard_normalize_notes"
+    },
+    {
+      "id": "marketplace_install_policy",
+      "title": "Marketplace install policy",
+      "category": "oopClassDesign",
+      "description": "Allow marketplace installs only when listing and workspace state satisfy product rules.",
+      "reviewExerciseId": "project_marketplace_install_permissions"
+    },
+    {
+      "id": "marketplace_listing_ranking",
+      "title": "Marketplace listing ranking",
+      "category": "algorithmPatterns",
+      "description": "Rank featured listings deterministically across rating and install signals.",
+      "reviewExerciseId": "project_marketplace_featured_ranking"
+    },
+    {
+      "id": "document_review_queue_ordering",
+      "title": "Document review queue ordering",
+      "category": "testingEdgeCases",
+      "description": "Build a reviewer queue that keeps pending work filtered and stably ordered.",
+      "reviewExerciseId": "project_document_review_queue"
+    },
+    {
+      "id": "document_retention_rules",
+      "title": "Document retention rules",
+      "category": "oopClassDesign",
+      "description": "Select archival candidates while respecting legal hold and publish-state rules.",
+      "reviewExerciseId": "project_document_retention_candidates"
+    },
+    {
+      "id": "booking_reschedule_rules",
+      "title": "Booking reschedule rules",
+      "category": "testingEdgeCases",
+      "description": "Allow reschedules only when notice windows and target-slot checks both pass.",
+      "reviewExerciseId": "project_booking_reschedule_window"
+    },
+    {
+      "id": "booking_refund_calculation",
+      "title": "Booking refund calculation",
+      "category": "testingEdgeCases",
+      "description": "Compute cancellation refunds from notice windows and venue-side exceptions.",
+      "reviewExerciseId": "project_booking_refund_policy"
+    },
+    {
+      "id": "position_netting_logic",
+      "title": "Position netting logic",
+      "category": "algorithmPatterns",
+      "description": "Aggregate open fills into net exposure per symbol without losing side direction.",
+      "reviewExerciseId": "project_trading_position_net_exposure"
+    },
+    {
+      "id": "stop_order_trigger_rules",
+      "title": "Stop order trigger rules",
+      "category": "algorithmPatterns",
+      "description": "Trigger the correct active stop orders from a live market price tick.",
+      "reviewExerciseId": "project_trading_stop_order_trigger"
+    },
+    {
+      "id": "evidence_citation_mapping",
+      "title": "Evidence citation mapping",
+      "category": "debugging",
+      "description": "Attach stable citation markers so generated answers stay grounded in retrieved evidence.",
+      "reviewExerciseId": "project_rag_source_citations"
+    },
+    {
+      "id": "retrieval_diversification",
+      "title": "Retrieval diversification",
+      "category": "algorithmPatterns",
+      "description": "Diversify a context pack so one document does not crowd out all other evidence.",
+      "reviewExerciseId": "project_rag_diversified_context"
+    },
+    {
+      "id": "review_scheduling_rules",
+      "title": "Review scheduling rules",
+      "category": "algorithmPatterns",
+      "description": "Turn a flashcard review rating into the next interval and ease update.",
+      "reviewExerciseId": "project_flashcard_review_outcome"
+    },
+    {
+      "id": "deck_stats_aggregation",
+      "title": "Deck stats aggregation",
+      "category": "testingEdgeCases",
+      "description": "Aggregate deck counts for due, new, suspended, and total cards consistently.",
+      "reviewExerciseId": "project_flashcard_deck_overview"
     }
   ],
   "exercises": [
@@ -116,10 +379,20 @@
       "lane": "project",
       "contentKind": "project_exercise",
       "level": "foundation",
-      "topicIds": ["sql"],
-      "domainIds": ["document-management"],
-      "tags": ["list", "query", "pagination"],
-      "skillIds": ["sql_list_queries"],
+      "topicIds": [
+        "sql"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "list",
+        "query",
+        "pagination"
+      ],
+      "skillIds": [
+        "sql_list_queries"
+      ],
       "problemStatement": "Your document service needs a `list documents` endpoint. Return only active documents, support an optional owner filter, and preserve deterministic ordering so the mobile client can paginate safely.",
       "acceptanceCriteria": [
         "Only active documents are returned.",
@@ -143,7 +416,10 @@
           "description": "Sort consistently so the same page request gives the same order."
         }
       ],
-      "supportedModes": ["guided", "standard"],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
       "hints": {
         "concept": "This is a classic list endpoint: filter, sort, then project to a lightweight DTO.",
         "structure": "Keep a base query, branch on the optional owner filter, then apply ordering before materializing.",
@@ -207,10 +483,19 @@
       "lane": "project",
       "contentKind": "project_exercise",
       "level": "foundation",
-      "topicIds": ["linq"],
-      "domainIds": ["document-management"],
-      "tags": ["list", "projection"],
-      "skillIds": ["linq_projection_basics"],
+      "topicIds": [
+        "linq"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "list",
+        "projection"
+      ],
+      "skillIds": [
+        "linq_projection_basics"
+      ],
       "problemStatement": "Convert raw document rows into light card objects that keep only the title, owner, and a concise status label. Use a single LINQ pipeline so the shape is easy to reason about.",
       "acceptanceCriteria": [
         "Uses LINQ for filtering or projection.",
@@ -218,7 +503,10 @@
         "Keeps the owner and status information."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard"],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
       "hints": {
         "concept": "This is a projection problem: keep only the fields the UI needs.",
         "structure": "Filter the active rows, then project to card DTOs with `Select`.",
@@ -262,10 +550,19 @@
       "lane": "project",
       "contentKind": "project_exercise",
       "level": "intermediate",
-      "topicIds": ["ddd"],
-      "domainIds": ["transaction-service"],
-      "tags": ["aggregate", "idempotency"],
-      "skillIds": ["ddd_aggregate_rules"],
+      "topicIds": [
+        "ddd"
+      ],
+      "domainIds": [
+        "transaction-service"
+      ],
+      "tags": [
+        "aggregate",
+        "idempotency"
+      ],
+      "skillIds": [
+        "ddd_aggregate_rules"
+      ],
       "problemStatement": "Your transaction service has a transfer aggregate that can be authorized, settled, and cancelled. Add domain methods so a settled transfer cannot be settled twice and a cancelled transfer cannot move forward again.",
       "acceptanceCriteria": [
         "Explicit domain methods gate state changes.",
@@ -273,7 +570,10 @@
         "The aggregate owns the invariant."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard"],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
       "hints": {
         "concept": "The aggregate should own its state machine instead of leaving it to controllers.",
         "structure": "Add methods like `Authorize`, `Settle`, and `Cancel` with guard clauses.",
@@ -317,10 +617,22 @@
       "lane": "project",
       "contentKind": "project_exercise",
       "level": "advanced",
-      "topicIds": ["concurrency", "race-condition"],
-      "domainIds": ["messaging-system"],
-      "tags": ["lock", "queue", "idempotency"],
-      "skillIds": ["concurrency_locking", "race_condition_detection"],
+      "topicIds": [
+        "concurrency",
+        "race-condition"
+      ],
+      "domainIds": [
+        "messaging-system"
+      ],
+      "tags": [
+        "lock",
+        "queue",
+        "idempotency"
+      ],
+      "skillIds": [
+        "concurrency_locking",
+        "race_condition_detection"
+      ],
       "problemStatement": "Two background workers are competing to claim work from the same in-memory inbox. Add coordination so the same message cannot be claimed twice, even when both workers check at the same time.",
       "acceptanceCriteria": [
         "Shared state changes happen inside one critical section.",
@@ -328,7 +640,10 @@
         "The approach remains easy to explain to the next maintainer."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard"],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
       "hints": {
         "concept": "This is a shared-state timing issue, so you need one small critical section around the claim step.",
         "structure": "Check and update the inbox status while holding the same lock.",
@@ -387,10 +702,20 @@
       "lane": "project",
       "contentKind": "project_exercise",
       "level": "intermediate",
-      "topicIds": ["sql"],
-      "domainIds": ["social-network"],
-      "tags": ["feed", "query", "list"],
-      "skillIds": ["sql_list_queries"],
+      "topicIds": [
+        "sql"
+      ],
+      "domainIds": [
+        "social-network"
+      ],
+      "tags": [
+        "feed",
+        "query",
+        "list"
+      ],
+      "skillIds": [
+        "sql_list_queries"
+      ],
       "problemStatement": "A Twitter-like feed page needs the latest posts from a chosen set of authors. Filter by author ids, sort descending by publish time, and cap the results to the requested page size.",
       "acceptanceCriteria": [
         "Filters by the requested author ids.",
@@ -398,7 +723,10 @@
         "Caps the output to the requested size."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard"],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
       "hints": {
         "concept": "Think timeline windowing: filter first, sort second, then limit.",
         "structure": "Apply author filter, order by publish time descending, then take the page size.",
@@ -438,8 +766,13 @@
       "level": "foundation",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["map", "count"],
-      "skillIds": ["hash_map_lookup"],
+      "tags": [
+        "map",
+        "count"
+      ],
+      "skillIds": [
+        "hash_map_lookup"
+      ],
       "problemStatement": "Write a helper that returns how many times each value appears in the input list.",
       "acceptanceCriteria": [
         "Uses a map or dictionary.",
@@ -447,7 +780,11 @@
         "Returns the final counts."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard", "timed"],
+      "supportedModes": [
+        "guided",
+        "standard",
+        "timed"
+      ],
       "hints": {
         "concept": "This is the classic frequency counter pattern.",
         "structure": "Initialize an empty map, then increment inside one loop.",
@@ -493,8 +830,13 @@
       "level": "foundation",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["linked-list", "pointer"],
-      "skillIds": ["linked_list_pointer_updates"],
+      "tags": [
+        "linked-list",
+        "pointer"
+      ],
+      "skillIds": [
+        "linked_list_pointer_updates"
+      ],
       "problemStatement": "Given the head of a singly linked list, append a new node to the end and return the original head.",
       "acceptanceCriteria": [
         "Handles an empty list.",
@@ -502,7 +844,11 @@
         "Attaches a new node without breaking the chain."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard", "timed"],
+      "supportedModes": [
+        "guided",
+        "standard",
+        "timed"
+      ],
       "hints": {
         "concept": "Walk until the tail, then set its next pointer.",
         "structure": "Handle `None` first, otherwise traverse while `current.next` exists.",
@@ -548,8 +894,14 @@
       "level": "intermediate",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["interval", "sort", "greedy"],
-      "skillIds": ["interval_sorting_strategy"],
+      "tags": [
+        "interval",
+        "sort",
+        "greedy"
+      ],
+      "skillIds": [
+        "interval_sorting_strategy"
+      ],
       "problemStatement": "Given a list of intervals, merge all overlapping intervals and return a condensed list.",
       "acceptanceCriteria": [
         "Sorts intervals by start time.",
@@ -557,7 +909,11 @@
         "Returns the condensed list."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard", "timed"],
+      "supportedModes": [
+        "guided",
+        "standard",
+        "timed"
+      ],
       "hints": {
         "concept": "Sort first so overlaps appear next to each other.",
         "structure": "Seed the result with the first interval, then merge or append while scanning.",
@@ -632,8 +988,14 @@
       "level": "intermediate",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["interval", "heap", "greedy"],
-      "skillIds": ["interval_sorting_strategy"],
+      "tags": [
+        "interval",
+        "heap",
+        "greedy"
+      ],
+      "skillIds": [
+        "interval_sorting_strategy"
+      ],
       "problemStatement": "Given meeting intervals, return the minimum number of rooms required so that all meetings can happen without overlap conflicts.",
       "acceptanceCriteria": [
         "Accounts for overlapping meetings correctly.",
@@ -641,7 +1003,11 @@
         "Returns the minimum required room count."
       ],
       "taskSteps": [],
-      "supportedModes": ["guided", "standard", "timed"],
+      "supportedModes": [
+        "guided",
+        "standard",
+        "timed"
+      ],
       "hints": {
         "concept": "You are counting maximum overlap, not building actual room objects.",
         "structure": "Sort starts and ends separately, then walk both pointers.",
@@ -678,6 +1044,2043 @@
           ]
         }
       ]
+    },
+    {
+      "id": "project_marketplace_scope_listings",
+      "title": "Scope marketplace listings by workspace",
+      "summary": "Keep SaaS marketplace catalog queries tenant-safe while supporting optional category filters.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "multi-tenant",
+        "sql"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "tenant",
+        "catalog",
+        "query"
+      ],
+      "skillIds": [
+        "tenant_isolation_queries"
+      ],
+      "problemStatement": "Your marketplace API must list only published listings that belong to the active workspace. It should also support an optional category filter and keep the newest listings first.",
+      "acceptanceCriteria": [
+        "Returns only listings from the requested workspace.",
+        "Excludes draft or archived listings.",
+        "Applies the optional category filter and keeps deterministic ordering."
+      ],
+      "taskSteps": [
+        {
+          "id": "scope_workspace",
+          "title": "Scope the base query",
+          "description": "Filter rows to the active workspace before anything else."
+        },
+        {
+          "id": "apply_category",
+          "title": "Handle the optional category",
+          "description": "Only narrow the result when a category is provided."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Treat workspace isolation as a non-negotiable first filter.",
+        "structure": "Filter workspace and status first, then branch on the optional category and finally sort.",
+        "pseudocode": "Keep rows where workspace_id matches and status is published, optionally filter category, then sort by updated_at descending.",
+        "lineHint": "A simple list comprehension plus sorted call is enough in Python.",
+        "fullExplain": "A passing solution scopes the tenant correctly and preserves stable ordering."
+      },
+      "reflectionPrompts": [
+        "Why should tenant scoping happen before optional filters?",
+        "What production bug appears if draft listings leak into a shared catalog endpoint?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines listing function",
+          "pattern": "def\\s+list_workspace_listings",
+          "feedback": "Define the listing function first."
+        },
+        {
+          "label": "Uses workspace filter",
+          "pattern": "workspace_id",
+          "feedback": "Filter rows by the active workspace id."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def list_workspace_listings(rows, workspace_id, category=None):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"workspace_id\": \"acme\", \"name\": \"CRM Sync\", \"category\": \"ops\", \"status\": \"published\", \"updated_at\": 30},\n    {\"workspace_id\": \"acme\", \"name\": \"Draft Tool\", \"category\": \"ops\", \"status\": \"draft\", \"updated_at\": 40},\n    {\"workspace_id\": \"globex\", \"name\": \"Sales Board\", \"category\": \"sales\", \"status\": \"published\", \"updated_at\": 20},\n]\n\nfor item in list_workspace_listings(rows, \"acme\", \"ops\"):\n    print(item[\"name\"])\n"
+          },
+          "solutionCode": "def list_workspace_listings(rows, workspace_id, category=None):\n    filtered = [\n        row for row in rows\n        if row[\"workspace_id\"] == workspace_id and row[\"status\"] == \"published\"\n    ]\n    if category:\n        filtered = [row for row in filtered if row[\"category\"] == category]\n    return sorted(filtered, key=lambda row: row[\"updated_at\"], reverse=True)\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_marketplace_vendor_payouts",
+      "title": "Build a vendor payout summary",
+      "summary": "Aggregate settled marketplace transactions into a payout statement with fees and net total.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "billing",
+        "idempotency"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "payout",
+        "fees",
+        "aggregation"
+      ],
+      "skillIds": [
+        "payout_reconciliation_rules"
+      ],
+      "problemStatement": "Finance needs a helper that builds a vendor payout summary from raw transaction rows. Count only settled rows for the requested vendor, sum gross amount, platform fees, and return the resulting net payout.",
+      "acceptanceCriteria": [
+        "Ignores rows for other vendors.",
+        "Counts only settled transactions.",
+        "Returns gross, fees, net, and order_count in one summary object."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_vendor",
+          "title": "Keep relevant rows",
+          "description": "Restrict the input to settled rows for the selected vendor."
+        },
+        {
+          "id": "sum_amounts",
+          "title": "Compute payout totals",
+          "description": "Accumulate gross and fee totals before calculating net."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "This is a filter-then-reduce exercise.",
+        "structure": "Build a filtered list first, then compute gross, fees, net, and count.",
+        "pseudocode": "Sum amount and platform_fee from settled rows, then return net as gross minus fees.",
+        "lineHint": "Use sum(...) twice or one loop if you want to keep it explicit.",
+        "fullExplain": "A correct summary should be deterministic and not include pending or refunded rows."
+      },
+      "reflectionPrompts": [
+        "Where would currency handling or rounding become important here?",
+        "Why is it safer to derive net from raw rows instead of storing a mutable running total?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines payout helper",
+          "pattern": "def\\s+build_vendor_payout",
+          "feedback": "Create the payout helper function."
+        },
+        {
+          "label": "Uses platform fee",
+          "pattern": "platform_fee",
+          "feedback": "Subtract platform fees from gross amount to compute net."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def build_vendor_payout(transactions, vendor_id):\n    return {\"gross\": 0, \"fees\": 0, \"net\": 0, \"order_count\": 0}\n",
+          "starterFiles": {
+            "main.py": "transactions = [\n    {\"vendor_id\": \"v1\", \"status\": \"settled\", \"amount\": 120, \"platform_fee\": 12},\n    {\"vendor_id\": \"v1\", \"status\": \"pending\", \"amount\": 90, \"platform_fee\": 9},\n    {\"vendor_id\": \"v1\", \"status\": \"settled\", \"amount\": 80, \"platform_fee\": 8},\n]\n\nprint(build_vendor_payout(transactions, \"v1\"))\n"
+          },
+          "solutionCode": "def build_vendor_payout(transactions, vendor_id):\n    rows = [\n        row for row in transactions\n        if row[\"vendor_id\"] == vendor_id and row[\"status\"] == \"settled\"\n    ]\n    gross = sum(row[\"amount\"] for row in rows)\n    fees = sum(row[\"platform_fee\"] for row in rows)\n    return {\"gross\": gross, \"fees\": fees, \"net\": gross - fees, \"order_count\": len(rows)}\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_document_share_permissions",
+      "title": "Resolve document share permissions",
+      "summary": "Encode owner, team, and explicit-share rules before allowing a document read.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "access-control",
+        "ddd"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "permissions",
+        "policy",
+        "sharing"
+      ],
+      "skillIds": [
+        "document_access_policy"
+      ],
+      "problemStatement": "A document can be visible because the user owns it, belongs to the matching team, is explicitly shared, or the document is public. Archived documents must stay hidden even if another rule would allow access.",
+      "acceptanceCriteria": [
+        "Archived documents always return False.",
+        "Owners and explicit shares can view the document.",
+        "Team visibility works only for matching team members."
+      ],
+      "taskSteps": [
+        {
+          "id": "deny_archived",
+          "title": "Start with hard deny rules",
+          "description": "Short-circuit archived documents before checking grants."
+        },
+        {
+          "id": "check_grants",
+          "title": "Evaluate access grants",
+          "description": "Check owner, public visibility, team visibility, and explicit shares."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Permission code is easier to trust when deny rules are obvious and early.",
+        "structure": "Check archived first, then owner/public/team/share grants one by one.",
+        "pseudocode": "Return False for archived; otherwise return True if any grant rule matches.",
+        "lineHint": "A user dict with team_ids and shared_with lists is enough for this exercise.",
+        "fullExplain": "Passing means access is explicit and archived documents never leak."
+      },
+      "reflectionPrompts": [
+        "Which permission rules belong in the domain layer instead of the controller?",
+        "Why do hard deny rules make authorization code easier to audit?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines permission helper",
+          "pattern": "def\\s+can_view_document",
+          "feedback": "Define the permission helper."
+        },
+        {
+          "label": "Checks archived flag",
+          "pattern": "archived",
+          "feedback": "Archived documents should be denied before other grants."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def can_view_document(document, user):\n    return False\n",
+          "starterFiles": {
+            "main.py": "document = {\n    \"owner_id\": \"u1\",\n    \"team_id\": \"t1\",\n    \"visibility\": \"team\",\n    \"shared_with\": [\"u3\"],\n    \"archived\": False,\n}\nuser = {\"id\": \"u2\", \"team_ids\": [\"t1\"]}\nprint(can_view_document(document, user))\n"
+          },
+          "solutionCode": "def can_view_document(document, user):\n    if document.get(\"archived\"):\n        return False\n    if document.get(\"owner_id\") == user.get(\"id\"):\n        return True\n    if document.get(\"visibility\") == \"public\":\n        return True\n    if document.get(\"visibility\") == \"team\" and document.get(\"team_id\") in user.get(\"team_ids\", []):\n        return True\n    return user.get(\"id\") in document.get(\"shared_with\", [])\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_document_latest_version",
+      "title": "Pick the latest reviewable document version",
+      "summary": "Choose the newest approved or published document revision from a mixed timeline.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "document-versioning",
+        "sql"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "versions",
+        "timeline",
+        "selection"
+      ],
+      "skillIds": [
+        "document_version_selection"
+      ],
+      "problemStatement": "Editors keep multiple document revisions in draft, approved, and published states. Return the newest version that is reviewable, where reviewable means approved or published.",
+      "acceptanceCriteria": [
+        "Ignores draft-only versions.",
+        "Considers both approved and published as reviewable.",
+        "Returns the newest matching version by version_number."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_status",
+          "title": "Filter reviewable statuses",
+          "description": "Keep only approved and published versions."
+        },
+        {
+          "id": "pick_latest",
+          "title": "Choose the latest revision",
+          "description": "Select the record with the highest version number or return None."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "This is filter then max, not a full workflow engine.",
+        "structure": "Keep only approved or published rows, then choose the one with the highest version_number.",
+        "pseudocode": "A filtered list plus max(..., default=None) works well here.",
+        "lineHint": "If no version is reviewable, return None instead of a draft.",
+        "fullExplain": "Passing means the selector never surfaces an unapproved draft as the latest safe version."
+      },
+      "reflectionPrompts": [
+        "What changes if the product team wants latest-by-updated_at instead of version_number?",
+        "Why is a reviewable selector useful even when the UI already labels statuses?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines selector",
+          "pattern": "def\\s+latest_reviewable_version",
+          "feedback": "Define the version selector."
+        },
+        {
+          "label": "Uses status filter",
+          "pattern": "status",
+          "feedback": "Filter the input by reviewable status first."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def latest_reviewable_version(versions):\n    return None\n",
+          "starterFiles": {
+            "main.py": "versions = [\n    {\"version_number\": 1, \"status\": \"draft\"},\n    {\"version_number\": 2, \"status\": \"approved\"},\n    {\"version_number\": 3, \"status\": \"draft\"},\n]\nprint(latest_reviewable_version(versions))\n"
+          },
+          "solutionCode": "def latest_reviewable_version(versions):\n    reviewable = [v for v in versions if v.get(\"status\") in {\"approved\", \"published\"}]\n    if not reviewable:\n        return None\n    return max(reviewable, key=lambda item: item.get(\"version_number\", 0))\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_booking_slot_conflicts",
+      "title": "Detect soccer field booking conflicts",
+      "summary": "Reject overlapping reservations on the same field while allowing adjacent slots.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "booking-calendar",
+        "concurrency"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "booking",
+        "overlap",
+        "calendar"
+      ],
+      "skillIds": [
+        "booking_conflict_detection"
+      ],
+      "problemStatement": "Given existing bookings and one candidate booking, return whether the candidate conflicts with any existing reservation on the same field. Adjacent slots are allowed, but real overlap is not.",
+      "acceptanceCriteria": [
+        "Checks conflicts only on the same field.",
+        "Treats adjacent end-to-start slots as non-conflicting.",
+        "Returns True when time ranges overlap."
+      ],
+      "taskSteps": [
+        {
+          "id": "same_field",
+          "title": "Compare the correct field",
+          "description": "Ignore bookings from other fields before checking time windows."
+        },
+        {
+          "id": "half_open",
+          "title": "Use half-open overlap logic",
+          "description": "Two slots overlap when candidate starts before existing end and existing starts before candidate end."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Calendar bugs often come from overlap math, not storage.",
+        "structure": "Filter to the same field first, then test half-open overlap on start and end.",
+        "pseudocode": "Conflict exists when candidate.start < existing.end and existing.start < candidate.end.",
+        "lineHint": "Do not treat touching boundaries as overlap.",
+        "fullExplain": "Passing means adjacent bookings remain valid but true collisions are blocked."
+      },
+      "reflectionPrompts": [
+        "Why is half-open interval logic less error-prone for booking systems?",
+        "What race condition still exists even with correct overlap math?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines conflict helper",
+          "pattern": "def\\s+has_booking_conflict",
+          "feedback": "Define the conflict helper."
+        },
+        {
+          "label": "Uses field id",
+          "pattern": "field_id",
+          "feedback": "Conflicts should only be checked on the same field."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def has_booking_conflict(existing, candidate):\n    return False\n",
+          "starterFiles": {
+            "main.py": "existing = [\n    {\"field_id\": \"a\", \"start\": 18, \"end\": 20},\n    {\"field_id\": \"b\", \"start\": 18, \"end\": 20},\n]\ncandidate = {\"field_id\": \"a\", \"start\": 19, \"end\": 21}\nprint(has_booking_conflict(existing, candidate))\n"
+          },
+          "solutionCode": "def has_booking_conflict(existing, candidate):\n    for booking in existing:\n        if booking.get(\"field_id\") != candidate.get(\"field_id\"):\n            continue\n        if candidate.get(\"start\") < booking.get(\"end\") and booking.get(\"start\") < candidate.get(\"end\"):\n            return True\n    return False\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_booking_quote",
+      "title": "Quote a soccer field booking",
+      "summary": "Apply weekend and evening surcharges to produce a deterministic booking quote.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "pricing",
+        "booking-calendar"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "pricing",
+        "quote",
+        "booking"
+      ],
+      "skillIds": [
+        "booking_quote_rules"
+      ],
+      "problemStatement": "Pricing depends on duration, weekend status, and whether the booking starts during evening peak hours. Return the final quote using a base hourly price, a 20% weekend surcharge, and a 15% evening surcharge.",
+      "acceptanceCriteria": [
+        "Multiplies the base price by duration.",
+        "Adds weekend surcharge when applicable.",
+        "Adds evening surcharge when the booking starts at or after 18."
+      ],
+      "taskSteps": [
+        {
+          "id": "base_total",
+          "title": "Compute the base total",
+          "description": "Multiply base hourly price by booking duration."
+        },
+        {
+          "id": "apply_surcharges",
+          "title": "Layer pricing rules",
+          "description": "Add weekend and evening surcharges on top of the base total."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Start with the simple base cost before adding conditions.",
+        "structure": "Compute base first, then add percentage surcharges when the flags match.",
+        "pseudocode": "total = base_price * duration_hours, then increase for weekend and evening.",
+        "lineHint": "You can add each surcharge as total += base_total * rate to keep rules easy to read.",
+        "fullExplain": "Passing means the same input always produces the same quote."
+      },
+      "reflectionPrompts": [
+        "Why might product teams prefer surcharges over separate peak-hour price tables at first?",
+        "What changes if evening pricing depends on every hour in the booking window instead of only the start hour?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines quote function",
+          "pattern": "def\\s+quote_booking",
+          "feedback": "Define the booking quote function."
+        },
+        {
+          "label": "Uses weekend flag",
+          "pattern": "is_weekend",
+          "feedback": "Weekend bookings should change the quote."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def quote_booking(base_price, start_hour, duration_hours, is_weekend):\n    return 0\n",
+          "starterFiles": {
+            "main.py": "print(quote_booking(100, 19, 2, True))\n"
+          },
+          "solutionCode": "def quote_booking(base_price, start_hour, duration_hours, is_weekend):\n    base_total = base_price * duration_hours\n    total = base_total\n    if is_weekend:\n        total += base_total * 0.20\n    if start_hour >= 18:\n        total += base_total * 0.15\n    return round(total, 2)\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_trading_signal_dedup",
+      "title": "Deduplicate executable trading signals",
+      "summary": "Filter repeated signals so the trading executor never places the same order twice.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "idempotency",
+        "event-driven"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "signals",
+        "dedup",
+        "execution"
+      ],
+      "skillIds": [
+        "idempotent_order_execution"
+      ],
+      "problemStatement": "Your trading bot consumes a stream of signals. Return only signals that are in ready status and whose signal_id has not already been processed, while preserving input order.",
+      "acceptanceCriteria": [
+        "Skips already processed signal ids.",
+        "Skips signals that are not ready.",
+        "Preserves the original order of executable signals."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_ready",
+          "title": "Keep only ready signals",
+          "description": "Signals in queued, failed, or cancelled states should not execute."
+        },
+        {
+          "id": "skip_seen",
+          "title": "Ignore duplicates",
+          "description": "Do not emit a signal whose id is already in processed_ids."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "This is an idempotency filter, not a trading strategy.",
+        "structure": "Walk the stream in order and keep only ready signals whose ids are unseen.",
+        "pseudocode": "If signal.status == ready and signal_id not in processed_ids, append it.",
+        "lineHint": "A list comprehension works if you do not need to mutate processed_ids.",
+        "fullExplain": "Passing means the same replayed event stream does not create duplicate orders."
+      },
+      "reflectionPrompts": [
+        "Why is preserving order important even when you are only filtering?",
+        "What extra metadata would you persist in production to make deduplication durable?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines signal filter",
+          "pattern": "def\\s+executable_signals",
+          "feedback": "Define the signal filter helper."
+        },
+        {
+          "label": "Checks processed ids",
+          "pattern": "processed_ids",
+          "feedback": "Use the processed id set to block duplicates."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def executable_signals(signals, processed_ids):\n    return []\n",
+          "starterFiles": {
+            "main.py": "signals = [\n    {\"signal_id\": \"s1\", \"status\": \"ready\", \"side\": \"buy\"},\n    {\"signal_id\": \"s2\", \"status\": \"queued\", \"side\": \"sell\"},\n    {\"signal_id\": \"s3\", \"status\": \"ready\", \"side\": \"buy\"},\n]\nfor signal in executable_signals(signals, {\"s1\"}):\n    print(signal[\"signal_id\"])\n"
+          },
+          "solutionCode": "def executable_signals(signals, processed_ids):\n    return [\n        signal for signal in signals\n        if signal.get(\"status\") == \"ready\" and signal.get(\"signal_id\") not in processed_ids\n    ]\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_trading_risk_limits",
+      "title": "Enforce trading risk limits",
+      "summary": "Block new orders when exposure or daily-loss guardrails are already exceeded.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "risk-management",
+        "ddd"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "risk",
+        "limits",
+        "orders"
+      ],
+      "skillIds": [
+        "trading_risk_guardrails"
+      ],
+      "problemStatement": "Before opening a new position, validate that the account is still within daily loss and max exposure limits. Return False when the order would breach either limit.",
+      "acceptanceCriteria": [
+        "Rejects when current daily loss is already above the configured limit.",
+        "Rejects when the new order pushes exposure above max_exposure.",
+        "Allows the order only when both limits remain safe."
+      ],
+      "taskSteps": [
+        {
+          "id": "check_loss",
+          "title": "Validate hard stop conditions",
+          "description": "Daily loss breaches should fail before calculating anything else."
+        },
+        {
+          "id": "check_exposure",
+          "title": "Project new exposure",
+          "description": "Add the proposed order size to current exposure and compare it to the max."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Risk checks should be simple enough to audit under pressure.",
+        "structure": "Check the daily loss threshold first, then compute projected exposure.",
+        "pseudocode": "If abs(daily_pnl) already exceeds max_daily_loss, reject; otherwise compare exposure + order notional to max_exposure.",
+        "lineHint": "Keep the function boolean so the caller owns the user-facing error message.",
+        "fullExplain": "Passing means unsafe orders never slip through because one guard was forgotten."
+      },
+      "reflectionPrompts": [
+        "Why should risk validation stay deterministic and side-effect free?",
+        "What additional controls would you add for per-symbol concentration?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines risk validator",
+          "pattern": "def\\s+can_open_position",
+          "feedback": "Define the risk validation helper."
+        },
+        {
+          "label": "Checks max exposure",
+          "pattern": "max_exposure",
+          "feedback": "Compare projected exposure to the configured max."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def can_open_position(account, order):\n    return False\n",
+          "starterFiles": {
+            "main.py": "account = {\"daily_pnl\": -120, \"max_daily_loss\": 200, \"current_exposure\": 700, \"max_exposure\": 1000}\norder = {\"notional\": 250}\nprint(can_open_position(account, order))\n"
+          },
+          "solutionCode": "def can_open_position(account, order):\n    if abs(account.get(\"daily_pnl\", 0)) > account.get(\"max_daily_loss\", 0):\n        return False\n    projected = account.get(\"current_exposure\", 0) + order.get(\"notional\", 0)\n    return projected <= account.get(\"max_exposure\", 0)\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_rag_context_pack",
+      "title": "Select a grounded RAG context pack",
+      "summary": "Rank candidate chunks so the RAG agent receives the strongest grounded context first.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "retrieval",
+        "vector-search"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "rag",
+        "retrieval",
+        "ranking"
+      ],
+      "skillIds": [
+        "retrieval_pipeline_design"
+      ],
+      "problemStatement": "Your RAG backend has candidate chunks with keyword_score, vector_score, and tags. Return the top-k active chunks ordered by a combined score, giving a small bonus to chunks whose tags match the query tags.",
+      "acceptanceCriteria": [
+        "Ignores inactive chunks.",
+        "Combines multiple ranking signals into one order.",
+        "Returns only the requested number of chunks."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_chunks",
+          "title": "Keep usable chunks",
+          "description": "Ignore chunks that are inactive or deleted."
+        },
+        {
+          "id": "rank_chunks",
+          "title": "Build a combined score",
+          "description": "Use keyword score, vector score, and tag overlap to sort the context pack."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Retrieval quality often comes from a clear ranking function, not a complicated data structure.",
+        "structure": "Filter active chunks, compute a combined score, sort descending, then slice to limit.",
+        "pseudocode": "combined = keyword_score + vector_score + tag_bonus, where tag_bonus rewards overlap with query tags.",
+        "lineHint": "You can compute overlap with set(tags) & set(query_tags).",
+        "fullExplain": "Passing means the context pack is grounded, ordered, and limited."
+      },
+      "reflectionPrompts": [
+        "Why is a simple reranker often good enough before building a full learned ranker?",
+        "How would you avoid returning five chunks from the same document in production?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines context selector",
+          "pattern": "def\\s+select_context_chunks",
+          "feedback": "Define the context selection helper."
+        },
+        {
+          "label": "Uses vector score",
+          "pattern": "vector_score",
+          "feedback": "Include vector similarity in the ranking logic."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def select_context_chunks(chunks, query_tags, limit=3):\n    return []\n",
+          "starterFiles": {
+            "main.py": "chunks = [\n    {\"id\": \"c1\", \"active\": True, \"keyword_score\": 0.5, \"vector_score\": 0.7, \"tags\": [\"pricing\"]},\n    {\"id\": \"c2\", \"active\": True, \"keyword_score\": 0.6, \"vector_score\": 0.4, \"tags\": [\"contracts\", \"pricing\"]},\n]\nprint(select_context_chunks(chunks, [\"pricing\"], 1))\n"
+          },
+          "solutionCode": "def select_context_chunks(chunks, query_tags, limit=3):\n    ranked = []\n    query_tag_set = set(query_tags)\n    for chunk in chunks:\n        if not chunk.get(\"active\"):\n            continue\n        overlap = len(set(chunk.get(\"tags\", [])) & query_tag_set)\n        score = chunk.get(\"keyword_score\", 0) + chunk.get(\"vector_score\", 0) + overlap * 0.2\n        ranked.append((score, chunk))\n    ranked.sort(key=lambda item: item[0], reverse=True)\n    return [chunk for _, chunk in ranked[:limit]]\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_rag_next_action",
+      "title": "Choose the next action in an agentic RAG loop",
+      "summary": "Route the agent toward clarify, retrieve, tool_call, or answer based on current state.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "agent-orchestration",
+        "retrieval"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "agent",
+        "workflow",
+        "routing"
+      ],
+      "skillIds": [
+        "agent_workflow_planning"
+      ],
+      "problemStatement": "You have a small state object for an agentic RAG loop. Return clarify when the user objective is missing, retrieve when evidence is empty, tool_call when retrieval says external data is required, and answer when enough evidence is already present.",
+      "acceptanceCriteria": [
+        "Requests clarification when the objective is missing.",
+        "Retrieves when there is no evidence yet.",
+        "Routes to answer only when the state already has enough evidence."
+      ],
+      "taskSteps": [
+        {
+          "id": "missing_goal",
+          "title": "Handle incomplete requests",
+          "description": "Ask for clarification when the state does not include a real objective."
+        },
+        {
+          "id": "route_by_state",
+          "title": "Choose the next step",
+          "description": "Inspect evidence and external-data needs before deciding whether to retrieve, call a tool, or answer."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Agent loops are easier to trust when each branch has one clear reason.",
+        "structure": "Check for missing objective first, then missing evidence, then tool requirement, then answer.",
+        "pseudocode": "if not objective => clarify; elif no evidence => retrieve; elif needs_tool => tool_call; else => answer.",
+        "lineHint": "Keep the state checks simple and deterministic.",
+        "fullExplain": "Passing means the router chooses a sensible next step without hidden side effects."
+      },
+      "reflectionPrompts": [
+        "Why is explicit routing easier to debug than burying branching inside a prompt?",
+        "What telemetry would help you improve this router over time?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines router",
+          "pattern": "def\\s+next_agent_action",
+          "feedback": "Define the next-action router."
+        },
+        {
+          "label": "Checks objective",
+          "pattern": "objective",
+          "feedback": "Handle the missing-objective branch explicitly."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def next_agent_action(state):\n    return \"clarify\"\n",
+          "starterFiles": {
+            "main.py": "state = {\"objective\": \"summarize vendor pricing policy\", \"evidence\": [], \"needs_tool\": False}\nprint(next_agent_action(state))\n"
+          },
+          "solutionCode": "def next_agent_action(state):\n    if not state.get(\"objective\"):\n        return \"clarify\"\n    if not state.get(\"evidence\"):\n        return \"retrieve\"\n    if state.get(\"needs_tool\"):\n        return \"tool_call\"\n    return \"answer\"\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_due_queue",
+      "title": "Build a flashcard due queue",
+      "summary": "Select due cards for review while ignoring suspended cards and keeping stable order.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "spaced-repetition"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "flashcards",
+        "review",
+        "queue"
+      ],
+      "skillIds": [
+        "spaced_repetition_scheduler"
+      ],
+      "problemStatement": "Return the cards that are due on or before today. Suspended cards must be ignored, and the queue should be ordered by due_at ascending then ease ascending so the most urgent weak cards appear first.",
+      "acceptanceCriteria": [
+        "Includes only cards due on or before today.",
+        "Excludes suspended cards.",
+        "Keeps deterministic ordering for the review queue."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_due",
+          "title": "Filter due cards",
+          "description": "Ignore cards that are suspended or scheduled for the future."
+        },
+        {
+          "id": "sort_queue",
+          "title": "Order the queue",
+          "description": "Sort by due date first, then by ease so the weakest cards rise earlier."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Review scheduling starts with a reliable due filter.",
+        "structure": "Keep cards where due_at <= today and suspended is False, then sort by due_at and ease.",
+        "pseudocode": "Use sorted(filtered, key=lambda card: (card['due_at'], card['ease'])).",
+        "lineHint": "Stable ordering matters because the queue may be synced across devices.",
+        "fullExplain": "Passing means the review queue is repeatable and ignores hidden cards."
+      },
+      "reflectionPrompts": [
+        "Why is deterministic ordering helpful for a synced learning app?",
+        "What other priority signal might you add besides ease?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines due queue helper",
+          "pattern": "def\\s+due_cards",
+          "feedback": "Define the due queue helper."
+        },
+        {
+          "label": "Checks suspended flag",
+          "pattern": "suspended",
+          "feedback": "Suspended cards should never enter the queue."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def due_cards(cards, today):\n    return []\n",
+          "starterFiles": {
+            "main.py": "cards = [\n    {\"front\": \"bonjour\", \"due_at\": 3, \"ease\": 2.1, \"suspended\": False},\n    {\"front\": \"hola\", \"due_at\": 5, \"ease\": 2.5, \"suspended\": True},\n]\nprint(due_cards(cards, 3))\n"
+          },
+          "solutionCode": "def due_cards(cards, today):\n    filtered = [\n        card for card in cards\n        if not card.get(\"suspended\") and card.get(\"due_at\", 0) <= today\n    ]\n    return sorted(filtered, key=lambda card: (card.get(\"due_at\", 0), card.get(\"ease\", 0)))\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_normalize_notes",
+      "title": "Normalize imported flashcard notes",
+      "summary": "Trim, validate, and deduplicate imported notes before creating flashcards.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "content-normalization",
+        "spaced-repetition"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "import",
+        "notes",
+        "dedupe"
+      ],
+      "skillIds": [
+        "flashcard_import_normalization"
+      ],
+      "problemStatement": "Imported notes can contain empty text, extra whitespace, and duplicate cards. Return cleaned notes with trimmed front and back fields, skipping rows that become empty and deduplicating by normalized front and back text.",
+      "acceptanceCriteria": [
+        "Trims front and back text.",
+        "Drops rows with empty front or back after trimming.",
+        "Deduplicates notes by normalized front and back content."
+      ],
+      "taskSteps": [
+        {
+          "id": "trim_fields",
+          "title": "Clean raw text",
+          "description": "Strip whitespace from the front and back of each note."
+        },
+        {
+          "id": "dedupe_rows",
+          "title": "Drop invalid duplicates",
+          "description": "Skip empty notes and keep only the first occurrence of each normalized pair."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Imported content becomes easier to trust when normalization is explicit.",
+        "structure": "Trim first, validate second, then deduplicate using a normalized key.",
+        "pseudocode": "Build a key from lowercased trimmed front and back text and track seen keys in a set.",
+        "lineHint": "Keep the original trimmed casing in the returned rows if you want user-friendly output.",
+        "fullExplain": "Passing means blank rows disappear and repeated cards are not imported twice."
+      },
+      "reflectionPrompts": [
+        "Why is it safer to normalize before deduplicating?",
+        "What extra metadata would you keep when importing from multiple decks?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines normalization helper",
+          "pattern": "def\\s+normalize_notes",
+          "feedback": "Define the note normalization helper."
+        },
+        {
+          "label": "Uses strip",
+          "pattern": "strip",
+          "feedback": "Trim whitespace from imported note text."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def normalize_notes(rows):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"front\": \" Bonjour \", \"back\": \" Hello \"},\n    {\"front\": \"bonjour\", \"back\": \"hello\"},\n    {\"front\": \"  \", \"back\": \"Skip me\"},\n]\nprint(normalize_notes(rows))\n"
+          },
+          "solutionCode": "def normalize_notes(rows):\n    seen = set()\n    cleaned = []\n    for row in rows:\n        front = row.get(\"front\", \"\").strip()\n        back = row.get(\"back\", \"\").strip()\n        if not front or not back:\n            continue\n        key = (front.lower(), back.lower())\n        if key in seen:\n            continue\n        seen.add(key)\n        cleaned.append({\"front\": front, \"back\": back})\n    return cleaned\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_marketplace_install_permissions",
+      "title": "Validate marketplace install permissions",
+      "summary": "Decide whether a workspace can install a marketplace app based on listing and account state.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "access-control",
+        "billing"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "install",
+        "permissions",
+        "marketplace"
+      ],
+      "skillIds": [
+        "marketplace_install_policy"
+      ],
+      "problemStatement": "A workspace can install an app only when the listing is published, the workspace subscription is active, and the workspace plan is allowed for that app or the workspace is on enterprise.",
+      "acceptanceCriteria": [
+        "Rejects unpublished listings.",
+        "Rejects suspended or inactive workspaces.",
+        "Allows install only when the workspace plan is permitted or enterprise override applies."
+      ],
+      "taskSteps": [
+        {
+          "id": "check_listing",
+          "title": "Validate listing state",
+          "description": "Reject installs when the app listing is not published."
+        },
+        {
+          "id": "check_workspace",
+          "title": "Validate workspace eligibility",
+          "description": "Check subscription status and whether the workspace plan is allowed."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Permission checks are safer when each deny rule is explicit.",
+        "structure": "Check listing status first, then workspace status, then allowed plan rules.",
+        "pseudocode": "if listing not published => False; if workspace not active => False; else allow if plan in allowed_plans or plan == enterprise.",
+        "lineHint": "Keep the function boolean so callers can decide how to message the user.",
+        "fullExplain": "Passing means no invalid workspace can install an unavailable app."
+      },
+      "reflectionPrompts": [
+        "Why should plan and listing state be checked before provisioning starts?",
+        "What changes if apps can also be private to selected vendors?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines install validator",
+          "pattern": "def\\s+can_install_listing",
+          "feedback": "Define the install validation helper."
+        },
+        {
+          "label": "Checks allowed plans",
+          "pattern": "allowed_plans",
+          "feedback": "Use the listing's allowed plan list when deciding access."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def can_install_listing(listing, workspace):\n    return False\n",
+          "starterFiles": {
+            "main.py": "listing = {\"status\": \"published\", \"allowed_plans\": [\"pro\", \"team\"]}\nworkspace = {\"plan\": \"team\", \"subscription_status\": \"active\"}\nprint(can_install_listing(listing, workspace))\n"
+          },
+          "solutionCode": "def can_install_listing(listing, workspace):\n    if listing.get(\"status\") != \"published\":\n        return False\n    if workspace.get(\"subscription_status\") != \"active\":\n        return False\n    plan = workspace.get(\"plan\")\n    return plan == \"enterprise\" or plan in listing.get(\"allowed_plans\", [])\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_marketplace_featured_ranking",
+      "title": "Rank featured marketplace listings",
+      "summary": "Order marketplace listings for browse surfaces using featured, rating, and install signals.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "sql",
+        "multi-tenant"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "ranking",
+        "browse",
+        "marketplace"
+      ],
+      "skillIds": [
+        "marketplace_listing_ranking"
+      ],
+      "problemStatement": "Return only published listings for the requested workspace segment, then rank them by featured desc, rating desc, installs desc, and name asc so browse results remain deterministic.",
+      "acceptanceCriteria": [
+        "Returns only published listings for the requested segment.",
+        "Applies deterministic multi-key ordering.",
+        "Keeps featured listings ahead of non-featured ones."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_segment",
+          "title": "Filter the browse set",
+          "description": "Keep only listings that are published and belong to the requested segment."
+        },
+        {
+          "id": "sort_listings",
+          "title": "Apply ranking rules",
+          "description": "Sort by featured, rating, installs, and name in that order."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Browse ranking should be stable enough that the same request gives the same result.",
+        "structure": "Filter first, then sort with a tuple key that reflects all ranking fields.",
+        "pseudocode": "Use sorted(filtered, key=lambda row: (...)) with reverse ordering for numeric priority fields.",
+        "lineHint": "Name asc is a good final tie-breaker.",
+        "fullExplain": "Passing means ranking stays deterministic even for ties."
+      },
+      "reflectionPrompts": [
+        "Why is a final tie-breaker important in a marketplace browse API?",
+        "What product tradeoff appears when installs dominate rating too strongly?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines ranking helper",
+          "pattern": "def\\s+rank_featured_listings",
+          "feedback": "Define the ranking helper."
+        },
+        {
+          "label": "Uses featured field",
+          "pattern": "featured",
+          "feedback": "Featured status should affect ordering."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def rank_featured_listings(rows, segment):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"name\": \"CRM Sync\", \"segment\": \"smb\", \"status\": \"published\", \"featured\": True, \"rating\": 4.7, \"installs\": 210},\n    {\"name\": \"Lead Bot\", \"segment\": \"smb\", \"status\": \"published\", \"featured\": False, \"rating\": 4.9, \"installs\": 900},\n]\nprint(rank_featured_listings(rows, \"smb\"))\n"
+          },
+          "solutionCode": "def rank_featured_listings(rows, segment):\n    filtered = [row for row in rows if row.get(\"segment\") == segment and row.get(\"status\") == \"published\"]\n    return sorted(filtered, key=lambda row: (not row.get(\"featured\", False), -row.get(\"rating\", 0), -row.get(\"installs\", 0), row.get(\"name\", \"\")))\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_document_review_queue",
+      "title": "Build a document review queue",
+      "summary": "Return pending review items for one reviewer with clear due-date ordering.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "document-versioning",
+        "sql"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "review",
+        "queue",
+        "documents"
+      ],
+      "skillIds": [
+        "document_review_queue_ordering"
+      ],
+      "problemStatement": "Editors need a queue of review items assigned to them. Return only pending reviews for the given reviewer, ignore archived documents, and order by due_at ascending then version_number descending.",
+      "acceptanceCriteria": [
+        "Returns only pending reviews for the selected reviewer.",
+        "Excludes archived documents.",
+        "Orders the queue by due date then version number."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_items",
+          "title": "Filter assigned reviews",
+          "description": "Keep rows assigned to the reviewer and still pending."
+        },
+        {
+          "id": "order_queue",
+          "title": "Stabilize the queue",
+          "description": "Sort by due date ascending and newest version first for ties."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Queues are easiest to trust when stale or irrelevant rows disappear before ordering.",
+        "structure": "Filter reviewer, status, and archived state first, then sort.",
+        "pseudocode": "Keep rows where reviewer_id matches, status is pending, archived is False, then sort by due_at and negative version_number.",
+        "lineHint": "Use a tuple sort key to keep the output deterministic.",
+        "fullExplain": "Passing means reviewers only see actionable work in a stable order."
+      },
+      "reflectionPrompts": [
+        "Why might newest version first be useful when due dates tie?",
+        "What extra field would you add if urgent security reviews should jump the line?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines review queue helper",
+          "pattern": "def\\s+review_queue",
+          "feedback": "Define the review queue helper."
+        },
+        {
+          "label": "Checks reviewer id",
+          "pattern": "reviewer_id",
+          "feedback": "Filter the queue by reviewer id."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def review_queue(rows, reviewer_id):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"document_id\": \"d1\", \"reviewer_id\": \"u1\", \"status\": \"pending\", \"archived\": False, \"due_at\": 3, \"version_number\": 2},\n    {\"document_id\": \"d2\", \"reviewer_id\": \"u1\", \"status\": \"approved\", \"archived\": False, \"due_at\": 2, \"version_number\": 1},\n]\nprint(review_queue(rows, \"u1\"))\n"
+          },
+          "solutionCode": "def review_queue(rows, reviewer_id):\n    filtered = [row for row in rows if row.get(\"reviewer_id\") == reviewer_id and row.get(\"status\") == \"pending\" and not row.get(\"archived\")]\n    return sorted(filtered, key=lambda row: (row.get(\"due_at\", 0), -row.get(\"version_number\", 0)))\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_document_retention_candidates",
+      "title": "Select document retention candidates",
+      "summary": "Find documents eligible for archival while respecting legal holds.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "document-versioning",
+        "ddd"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "retention",
+        "archive",
+        "documents"
+      ],
+      "skillIds": [
+        "document_retention_rules"
+      ],
+      "problemStatement": "Compliance wants a helper that returns document ids eligible for archival. A document is eligible only when retention_until is on or before today, legal_hold is false, and the document status is approved or published.",
+      "acceptanceCriteria": [
+        "Skips documents under legal hold.",
+        "Skips draft documents even if retention date has passed.",
+        "Returns eligible document ids in ascending retention date order."
+      ],
+      "taskSteps": [
+        {
+          "id": "apply_policy",
+          "title": "Apply retention policy",
+          "description": "Keep only rows that are old enough and not under legal hold."
+        },
+        {
+          "id": "return_ids",
+          "title": "Return stable ids",
+          "description": "Sort eligible rows by retention date and emit document ids."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Retention code should make policy exceptions obvious.",
+        "structure": "Filter on date, legal hold, and allowed status before projecting ids.",
+        "pseudocode": "Keep rows where retention_until <= today, legal_hold is False, and status in approved/published.",
+        "lineHint": "Sort before projecting ids if you need stable output.",
+        "fullExplain": "Passing means legal holds always win over archival timing."
+      },
+      "reflectionPrompts": [
+        "Why should legal hold outrank normal retention windows?",
+        "What changes if retention is computed from the latest published version only?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines retention helper",
+          "pattern": "def\\s+retention_candidates",
+          "feedback": "Define the retention candidate helper."
+        },
+        {
+          "label": "Checks legal hold",
+          "pattern": "legal_hold",
+          "feedback": "Documents on legal hold should be excluded."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def retention_candidates(rows, today):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"document_id\": \"d1\", \"retention_until\": 5, \"legal_hold\": False, \"status\": \"published\"},\n    {\"document_id\": \"d2\", \"retention_until\": 4, \"legal_hold\": True, \"status\": \"approved\"},\n]\nprint(retention_candidates(rows, 5))\n"
+          },
+          "solutionCode": "def retention_candidates(rows, today):\n    filtered = [\n        row for row in rows\n        if row.get(\"retention_until\", 0) <= today\n        and not row.get(\"legal_hold\")\n        and row.get(\"status\") in {\"approved\", \"published\"}\n    ]\n    filtered.sort(key=lambda row: row.get(\"retention_until\", 0))\n    return [row.get(\"document_id\") for row in filtered]\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_booking_reschedule_window",
+      "title": "Validate a booking reschedule window",
+      "summary": "Allow booking reschedules only when notice and target-slot rules both pass.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "booking-calendar"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "reschedule",
+        "booking",
+        "policy"
+      ],
+      "skillIds": [
+        "booking_reschedule_rules"
+      ],
+      "problemStatement": "A booking can be rescheduled only when it is still active, the player gives at least 24 hours notice, and the requested target slot does not conflict with another booking on the same field.",
+      "acceptanceCriteria": [
+        "Rejects cancelled bookings.",
+        "Rejects reschedules with less than 24 hours notice.",
+        "Rejects target slots that overlap another booking on the same field."
+      ],
+      "taskSteps": [
+        {
+          "id": "check_notice",
+          "title": "Validate booking state and notice",
+          "description": "Ensure the booking is active and the notice window is long enough."
+        },
+        {
+          "id": "check_target",
+          "title": "Validate the target slot",
+          "description": "Reject the reschedule when the target collides with an existing booking on the same field."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Reschedule rules become easier to reason about when timing and collision checks are separate.",
+        "structure": "Check status and notice first, then scan bookings for a same-field overlap.",
+        "pseudocode": "If current booking is cancelled or hours_until_start < 24 => False; otherwise use normal overlap logic on the target slot.",
+        "lineHint": "You can ignore the booking being moved by comparing ids.",
+        "fullExplain": "Passing means a booking can only move to a safe future slot."
+      },
+      "reflectionPrompts": [
+        "Why is it useful to exclude the current booking id during conflict checks?",
+        "What product rule might change for premium members?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines reschedule helper",
+          "pattern": "def\\s+can_reschedule_booking",
+          "feedback": "Define the reschedule helper."
+        },
+        {
+          "label": "Checks hours until start",
+          "pattern": "hours_until_start",
+          "feedback": "Use the notice window in the decision."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def can_reschedule_booking(booking, target_slot, existing):\n    return False\n",
+          "starterFiles": {
+            "main.py": "booking = {\"id\": \"b1\", \"status\": \"active\", \"hours_until_start\": 30}\ntarget_slot = {\"field_id\": \"a\", \"start\": 20, \"end\": 22}\nexisting = [{\"id\": \"b2\", \"field_id\": \"a\", \"start\": 18, \"end\": 20}]\nprint(can_reschedule_booking(booking, target_slot, existing))\n"
+          },
+          "solutionCode": "def can_reschedule_booking(booking, target_slot, existing):\n    if booking.get(\"status\") != \"active\" or booking.get(\"hours_until_start\", 0) < 24:\n        return False\n    for row in existing:\n        if row.get(\"id\") == booking.get(\"id\"):\n            continue\n        if row.get(\"field_id\") != target_slot.get(\"field_id\"):\n            continue\n        if target_slot.get(\"start\") < row.get(\"end\") and row.get(\"start\") < target_slot.get(\"end\"):\n            return False\n    return True\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_booking_refund_policy",
+      "title": "Calculate a booking refund",
+      "summary": "Apply cancellation and venue-side exceptions to compute a booking refund amount.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "pricing",
+        "booking-calendar"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "refund",
+        "booking",
+        "pricing"
+      ],
+      "skillIds": [
+        "booking_refund_calculation"
+      ],
+      "problemStatement": "Return the refund amount for a cancelled booking. Give a full refund when weather_closed or venue_cancelled is true, 80% refund with at least 48 hours notice, 50% refund with at least 24 hours notice, and 0 otherwise.",
+      "acceptanceCriteria": [
+        "Venue-side cancellation always gets a full refund.",
+        "Uses the hours_until_start thresholds for player cancellations.",
+        "Returns a numeric refund amount from the booking total."
+      ],
+      "taskSteps": [
+        {
+          "id": "check_venue_exception",
+          "title": "Handle venue-side exceptions",
+          "description": "Return full refund immediately when the venue caused the cancellation."
+        },
+        {
+          "id": "apply_notice_bands",
+          "title": "Apply notice-based refund bands",
+          "description": "Use hours_until_start to decide whether refund is 80%, 50%, or 0."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Refund rules are simpler to audit when exceptional full-refund cases come first.",
+        "structure": "Check weather or venue cancellation first, then apply notice bands from highest to lowest.",
+        "pseudocode": "If venue-side cancellation => total; elif >=48 => total*0.8; elif >=24 => total*0.5; else 0.",
+        "lineHint": "Round at the end if you need consistent money formatting.",
+        "fullExplain": "Passing means each notice band maps to the correct refund amount."
+      },
+      "reflectionPrompts": [
+        "Why should venue-side issues bypass the normal notice-based policy?",
+        "What extra fields would matter for coupon-funded bookings?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines refund helper",
+          "pattern": "def\\s+refund_amount",
+          "feedback": "Define the refund helper."
+        },
+        {
+          "label": "Checks venue cancellation flags",
+          "pattern": "venue_cancelled|weather_closed",
+          "feedback": "Venue-side exceptions should produce a full refund."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def refund_amount(booking):\n    return 0\n",
+          "starterFiles": {
+            "main.py": "booking = {\"total\": 200, \"hours_until_start\": 30, \"weather_closed\": False, \"venue_cancelled\": False}\nprint(refund_amount(booking))\n"
+          },
+          "solutionCode": "def refund_amount(booking):\n    total = booking.get(\"total\", 0)\n    if booking.get(\"weather_closed\") or booking.get(\"venue_cancelled\"):\n        return total\n    hours = booking.get(\"hours_until_start\", 0)\n    if hours >= 48:\n        return round(total * 0.8, 2)\n    if hours >= 24:\n        return round(total * 0.5, 2)\n    return 0\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_trading_position_net_exposure",
+      "title": "Aggregate net trading exposure",
+      "summary": "Net open trading positions by symbol to produce a simple exposure snapshot.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "risk-management",
+        "sql"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "positions",
+        "exposure",
+        "trading"
+      ],
+      "skillIds": [
+        "position_netting_logic"
+      ],
+      "problemStatement": "Given open position rows, build a per-symbol net exposure summary where long quantity is positive, short quantity is negative, and rows in closed status are ignored.",
+      "acceptanceCriteria": [
+        "Ignores closed positions.",
+        "Aggregates quantity by symbol with side direction preserved.",
+        "Returns one summary row per symbol."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_open",
+          "title": "Keep open positions",
+          "description": "Ignore closed or cancelled position rows."
+        },
+        {
+          "id": "net_by_symbol",
+          "title": "Net exposure by symbol",
+          "description": "Add long quantity and subtract short quantity per symbol."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Netting is easier when you reduce every row to a signed quantity first.",
+        "structure": "Filter open rows, convert side into a sign, then accumulate by symbol.",
+        "pseudocode": "Use +quantity for buy/long and -quantity for sell/short rows.",
+        "lineHint": "A dict keyed by symbol is enough for the aggregation.",
+        "fullExplain": "Passing means one symbol cannot appear multiple times in the final summary."
+      },
+      "reflectionPrompts": [
+        "Why is signed net exposure useful for a risk dashboard?",
+        "What additional metric would you track alongside quantity in real trading systems?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines net exposure helper",
+          "pattern": "def\\s+net_exposure_by_symbol",
+          "feedback": "Define the net exposure helper."
+        },
+        {
+          "label": "Checks symbol field",
+          "pattern": "symbol",
+          "feedback": "Aggregate the summary per trading symbol."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def net_exposure_by_symbol(rows):\n    return {}\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"symbol\": \"BTCUSD\", \"status\": \"open\", \"side\": \"long\", \"quantity\": 2},\n    {\"symbol\": \"BTCUSD\", \"status\": \"open\", \"side\": \"short\", \"quantity\": 1},\n]\nprint(net_exposure_by_symbol(rows))\n"
+          },
+          "solutionCode": "def net_exposure_by_symbol(rows):\n    summary = {}\n    for row in rows:\n        if row.get(\"status\") != \"open\":\n            continue\n        sign = 1 if row.get(\"side\") in {\"long\", \"buy\"} else -1\n        symbol = row.get(\"symbol\")\n        summary[symbol] = summary.get(symbol, 0) + sign * row.get(\"quantity\", 0)\n    return summary\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_trading_stop_order_trigger",
+      "title": "Trigger active stop orders",
+      "summary": "Decide which stop orders should fire for a single market price tick.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "event-driven",
+        "risk-management"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "orders",
+        "stops",
+        "trading"
+      ],
+      "skillIds": [
+        "stop_order_trigger_rules"
+      ],
+      "problemStatement": "Given active stop orders and a market price tick, return the ids of orders that should trigger now. A sell stop triggers when price <= stop_price, a buy stop triggers when price >= stop_price, and inactive orders are ignored.",
+      "acceptanceCriteria": [
+        "Ignores inactive orders.",
+        "Applies the correct price comparison per order side.",
+        "Returns only the ids that should trigger on this tick."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_active",
+          "title": "Keep active stop orders",
+          "description": "Ignore orders that are cancelled, filled, or paused."
+        },
+        {
+          "id": "apply_side_logic",
+          "title": "Apply side-specific trigger logic",
+          "description": "Use the correct comparison for buy-stop and sell-stop orders."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Trigger logic is easiest to review when buy and sell branches are explicit.",
+        "structure": "Ignore inactive orders first, then branch by side for the price comparison.",
+        "pseudocode": "Sell stop => price <= stop_price, buy stop => price >= stop_price.",
+        "lineHint": "Return ids instead of full order rows to keep the helper focused.",
+        "fullExplain": "Passing means only truly triggered active orders are returned."
+      },
+      "reflectionPrompts": [
+        "Why is explicit side-based trigger logic safer than clever one-line math here?",
+        "What race exists between trigger detection and actual order placement?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines stop trigger helper",
+          "pattern": "def\\s+triggered_stop_orders",
+          "feedback": "Define the stop trigger helper."
+        },
+        {
+          "label": "Checks stop price",
+          "pattern": "stop_price",
+          "feedback": "Use each order's stop price in the trigger decision."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def triggered_stop_orders(orders, price):\n    return []\n",
+          "starterFiles": {
+            "main.py": "orders = [\n    {\"id\": \"o1\", \"status\": \"active\", \"side\": \"sell\", \"stop_price\": 95},\n    {\"id\": \"o2\", \"status\": \"active\", \"side\": \"buy\", \"stop_price\": 110},\n]\nprint(triggered_stop_orders(orders, 94))\n"
+          },
+          "solutionCode": "def triggered_stop_orders(orders, price):\n    triggered = []\n    for order in orders:\n        if order.get(\"status\") != \"active\":\n            continue\n        if order.get(\"side\") == \"sell\" and price <= order.get(\"stop_price\", 0):\n            triggered.append(order.get(\"id\"))\n        if order.get(\"side\") == \"buy\" and price >= order.get(\"stop_price\", 0):\n            triggered.append(order.get(\"id\"))\n    return triggered\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_rag_source_citations",
+      "title": "Attach citations to a grounded answer",
+      "summary": "Render answer sections with stable numeric citations from retrieved evidence ids.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "retrieval",
+        "agent-orchestration"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "citations",
+        "grounding",
+        "rag"
+      ],
+      "skillIds": [
+        "evidence_citation_mapping"
+      ],
+      "problemStatement": "Each answer section contains text and cited_chunk_ids. Render the answer into strings where citations appear as sorted numeric markers like [1][3], based on the order of chunks in the evidence list. Ignore missing chunk ids.",
+      "acceptanceCriteria": [
+        "Keeps the original answer text.",
+        "Maps cited chunk ids to stable numeric markers.",
+        "Ignores chunk ids not present in the evidence list."
+      ],
+      "taskSteps": [
+        {
+          "id": "build_index",
+          "title": "Index evidence ids",
+          "description": "Turn the ordered evidence list into a stable id-to-number mapping."
+        },
+        {
+          "id": "render_sections",
+          "title": "Render citation markers",
+          "description": "Append sorted numeric markers to each answer section."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Citation rendering is easier once evidence order is converted into a lookup table.",
+        "structure": "Build an id -> number map first, then render each section using the cited ids that exist.",
+        "pseudocode": "Join markers like [1][2] after the text in citation-number order.",
+        "lineHint": "Skip unknown chunk ids instead of failing the whole answer.",
+        "fullExplain": "Passing means the answer stays readable and grounded."
+      },
+      "reflectionPrompts": [
+        "Why should citation numbers come from evidence order instead of the raw chunk ids?",
+        "What UI change would make dense citations easier to scan?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines citation renderer",
+          "pattern": "def\\s+render_cited_answer",
+          "feedback": "Define the citation rendering helper."
+        },
+        {
+          "label": "Uses cited_chunk_ids",
+          "pattern": "cited_chunk_ids",
+          "feedback": "Read cited chunk ids from each answer section."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def render_cited_answer(sections, evidence):\n    return []\n",
+          "starterFiles": {
+            "main.py": "sections = [{\"text\": \"Pricing changed in 2025\", \"cited_chunk_ids\": [\"c2\", \"c1\"]}]\nevidence = [{\"id\": \"c1\"}, {\"id\": \"c2\"}]\nprint(render_cited_answer(sections, evidence))\n"
+          },
+          "solutionCode": "def render_cited_answer(sections, evidence):\n    index = {item.get(\"id\"): position + 1 for position, item in enumerate(evidence)}\n    rendered = []\n    for section in sections:\n        numbers = sorted({index[cid] for cid in section.get(\"cited_chunk_ids\", []) if cid in index})\n        markers = \"\".join(f\"[{number}]\" for number in numbers)\n        rendered.append(f\"{section.get('text', '')}{markers}\")\n    return rendered\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_rag_diversified_context",
+      "title": "Diversify a RAG context pack",
+      "summary": "Keep a high-quality context pack while avoiding too many chunks from one document.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "retrieval",
+        "vector-search"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "diversity",
+        "retrieval",
+        "rag"
+      ],
+      "skillIds": [
+        "retrieval_diversification"
+      ],
+      "problemStatement": "Candidate chunks are already sorted by score. Return the first top-k chunks while allowing at most one chunk per document_id so the context pack stays diverse.",
+      "acceptanceCriteria": [
+        "Preserves the original ranked order of accepted chunks.",
+        "Allows at most one chunk per document_id.",
+        "Returns no more than the requested limit."
+      ],
+      "taskSteps": [
+        {
+          "id": "track_docs",
+          "title": "Track chosen documents",
+          "description": "Remember which document ids are already represented."
+        },
+        {
+          "id": "collect_limit",
+          "title": "Collect the diversified pack",
+          "description": "Walk the ranked list in order and accept only the first chunk per document until limit is reached."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Diversity filters work best as a simple pass over an already ranked list.",
+        "structure": "Walk the ranked chunks in order and keep the first chunk whose document id is still unseen.",
+        "pseudocode": "Use a set for seen document ids and stop once the pack reaches limit.",
+        "lineHint": "Do not resort the data after filtering or you will lose the original ranking intent.",
+        "fullExplain": "Passing means your pack is both ranked and diversified."
+      },
+      "reflectionPrompts": [
+        "Why is diversity useful even when one document has many high-scoring chunks?",
+        "What tradeoff appears if you always enforce one chunk per document?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines diversification helper",
+          "pattern": "def\\s+diversified_context",
+          "feedback": "Define the diversification helper."
+        },
+        {
+          "label": "Uses document id",
+          "pattern": "document_id",
+          "feedback": "Limit the pack by document id."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def diversified_context(chunks, limit):\n    return []\n",
+          "starterFiles": {
+            "main.py": "chunks = [\n    {\"id\": \"c1\", \"document_id\": \"d1\", \"score\": 0.95},\n    {\"id\": \"c2\", \"document_id\": \"d1\", \"score\": 0.93},\n    {\"id\": \"c3\", \"document_id\": \"d2\", \"score\": 0.90},\n]\nprint(diversified_context(chunks, 2))\n"
+          },
+          "solutionCode": "def diversified_context(chunks, limit):\n    chosen = []\n    seen_docs = set()\n    for chunk in chunks:\n        document_id = chunk.get(\"document_id\")\n        if document_id in seen_docs:\n            continue\n        chosen.append(chunk)\n        seen_docs.add(document_id)\n        if len(chosen) == limit:\n            break\n    return chosen\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_review_outcome",
+      "title": "Schedule the next flashcard review",
+      "summary": "Map a review rating into the next interval and ease update for a flashcard.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": [
+        "spaced-repetition"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "review",
+        "schedule",
+        "flashcards"
+      ],
+      "skillIds": [
+        "review_scheduling_rules"
+      ],
+      "problemStatement": "A card has current interval and ease values. Return the next interval and ease after a review rating, where again resets interval to 1 and lowers ease, hard gives a smaller increase, good keeps standard growth, and easy gives the biggest increase.",
+      "acceptanceCriteria": [
+        "Resets interval to 1 for again.",
+        "Produces larger interval growth for easy than for good or hard.",
+        "Returns both next_interval and next_ease in one object."
+      ],
+      "taskSteps": [
+        {
+          "id": "handle_again",
+          "title": "Handle failed reviews",
+          "description": "Reset interval and lower ease when the learner presses again."
+        },
+        {
+          "id": "apply_success_bands",
+          "title": "Apply success growth bands",
+          "description": "Compute next interval and ease differently for hard, good, and easy reviews."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Spaced repetition logic becomes easier to test when each rating has an explicit branch.",
+        "structure": "Handle again first, then hard, good, and easy with increasing growth factors.",
+        "pseudocode": "Return a dict like {next_interval: ..., next_ease: ...} so later code stays clear.",
+        "lineHint": "Clamp ease if you do not want it to fall forever.",
+        "fullExplain": "Passing means ratings produce a sensible progression pattern."
+      },
+      "reflectionPrompts": [
+        "Why should the again path reset interval aggressively?",
+        "What product metric would tell you these growth factors are too optimistic?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines review outcome helper",
+          "pattern": "def\\s+review_outcome",
+          "feedback": "Define the review outcome helper."
+        },
+        {
+          "label": "Checks rating field",
+          "pattern": "rating",
+          "feedback": "Use the review rating to branch scheduling logic."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def review_outcome(card, rating):\n    return {}\n",
+          "starterFiles": {
+            "main.py": "card = {\"interval\": 4, \"ease\": 2.5}\nprint(review_outcome(card, \"good\"))\n"
+          },
+          "solutionCode": "def review_outcome(card, rating):\n    interval = card.get(\"interval\", 1)\n    ease = card.get(\"ease\", 2.5)\n    if rating == \"again\":\n        return {\"next_interval\": 1, \"next_ease\": round(max(1.3, ease - 0.2), 2)}\n    if rating == \"hard\":\n        return {\"next_interval\": max(2, int(interval * 1.2)), \"next_ease\": round(max(1.3, ease - 0.05), 2)}\n    if rating == \"easy\":\n        return {\"next_interval\": max(2, int(interval * ease * 1.3)), \"next_ease\": round(ease + 0.15, 2)}\n    return {\"next_interval\": max(2, int(interval * ease)), \"next_ease\": round(ease, 2)}\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_deck_overview",
+      "title": "Build a flashcard deck overview",
+      "summary": "Aggregate a deck summary with total, new, due, and suspended counts.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "spaced-repetition",
+        "sql"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "deck",
+        "stats",
+        "flashcards"
+      ],
+      "skillIds": [
+        "deck_stats_aggregation"
+      ],
+      "problemStatement": "Return a deck overview for one deck_id with counts for total cards, new cards, due cards, and suspended cards. A card is due when due_at is on or before today, and a card is new when reps is 0.",
+      "acceptanceCriteria": [
+        "Counts only cards from the requested deck.",
+        "Computes due, new, suspended, and total counts.",
+        "Uses today when determining due cards."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_deck",
+          "title": "Filter one deck",
+          "description": "Keep only cards from the requested deck id."
+        },
+        {
+          "id": "count_statuses",
+          "title": "Build overview counts",
+          "description": "Count total, due, new, and suspended cards from that filtered set."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Overview stats stay trustworthy when every count comes from the same filtered deck set.",
+        "structure": "Filter the deck first, then derive each counter from the same list.",
+        "pseudocode": "new means reps == 0, due means due_at <= today, suspended means suspended is True.",
+        "lineHint": "Return one dict so the UI gets a compact snapshot.",
+        "fullExplain": "Passing means deck counters line up with the same source rows."
+      },
+      "reflectionPrompts": [
+        "Why should new-card logic and due-card logic be counted separately?",
+        "What extra metric would you add for a study dashboard?"
+      ],
+      "requirements": [
+        {
+          "label": "Defines deck overview helper",
+          "pattern": "def\\s+deck_overview",
+          "feedback": "Define the deck overview helper."
+        },
+        {
+          "label": "Checks deck id",
+          "pattern": "deck_id",
+          "feedback": "Filter the summary by deck id."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def deck_overview(cards, deck_id, today):\n    return {}\n",
+          "starterFiles": {
+            "main.py": "cards = [\n    {\"deck_id\": \"d1\", \"reps\": 0, \"due_at\": 5, \"suspended\": False},\n    {\"deck_id\": \"d1\", \"reps\": 3, \"due_at\": 2, \"suspended\": False},\n]\nprint(deck_overview(cards, \"d1\", 3))\n"
+          },
+          "solutionCode": "def deck_overview(cards, deck_id, today):\n    rows = [card for card in cards if card.get(\"deck_id\") == deck_id]\n    return {\n        \"total\": len(rows),\n        \"new\": sum(1 for card in rows if card.get(\"reps\", 0) == 0),\n        \"due\": sum(1 for card in rows if card.get(\"due_at\", 0) <= today and not card.get(\"suspended\")),\n        \"suspended\": sum(1 for card in rows if card.get(\"suspended\")),\n    }\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
     }
   ],
   "tracks": [
@@ -688,10 +3091,22 @@
       "lane": "project",
       "contentKind": "project_track",
       "level": "foundation",
-      "topicIds": ["sql", "linq"],
-      "domainIds": ["document-management"],
-      "tags": ["list", "query", "projection"],
-      "skillIds": ["sql_list_queries", "linq_projection_basics"],
+      "topicIds": [
+        "sql",
+        "linq"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "list",
+        "query",
+        "projection"
+      ],
+      "skillIds": [
+        "sql_list_queries",
+        "linq_projection_basics"
+      ],
       "exerciseRefs": [
         {
           "exerciseId": "project_list_documents",
@@ -712,10 +3127,29 @@
       "lane": "project",
       "contentKind": "project_track",
       "level": "intermediate",
-      "topicIds": ["ddd", "concurrency", "race-condition", "sql"],
-      "domainIds": ["transaction-service", "messaging-system", "social-network"],
-      "tags": ["aggregate", "lock", "feed", "idempotency"],
-      "skillIds": ["ddd_aggregate_rules", "concurrency_locking", "race_condition_detection", "sql_list_queries"],
+      "topicIds": [
+        "ddd",
+        "concurrency",
+        "race-condition",
+        "sql"
+      ],
+      "domainIds": [
+        "transaction-service",
+        "messaging-system",
+        "social-network"
+      ],
+      "tags": [
+        "aggregate",
+        "lock",
+        "feed",
+        "idempotency"
+      ],
+      "skillIds": [
+        "ddd_aggregate_rules",
+        "concurrency_locking",
+        "race_condition_detection",
+        "sql_list_queries"
+      ],
       "exerciseRefs": [
         {
           "exerciseId": "project_transaction_aggregate",
@@ -743,8 +3177,14 @@
       "level": "foundation",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["map", "linked-list"],
-      "skillIds": ["hash_map_lookup", "linked_list_pointer_updates"],
+      "tags": [
+        "map",
+        "linked-list"
+      ],
+      "skillIds": [
+        "hash_map_lookup",
+        "linked_list_pointer_updates"
+      ],
       "exerciseRefs": [
         {
           "exerciseId": "dsa_frequency_counter",
@@ -765,8 +3205,14 @@
       "level": "intermediate",
       "topicIds": [],
       "domainIds": [],
-      "tags": ["interval", "greedy", "sort"],
-      "skillIds": ["interval_sorting_strategy"],
+      "tags": [
+        "interval",
+        "greedy",
+        "sort"
+      ],
+      "skillIds": [
+        "interval_sorting_strategy"
+      ],
       "exerciseRefs": [
         {
           "exerciseId": "lc_merge_intervals",
@@ -775,6 +3221,451 @@
         {
           "exerciseId": "lc_meeting_rooms",
           "title": "Minimum meeting rooms"
+        }
+      ]
+    },
+    {
+      "id": "project_marketplace_foundations",
+      "title": "Marketplace Foundations",
+      "summary": "Practice tenant-safe catalog queries and vendor payout logic for a SaaS marketplace.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "multi-tenant",
+        "billing",
+        "sql",
+        "idempotency"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "marketplace",
+        "tenant",
+        "payout"
+      ],
+      "skillIds": [
+        "tenant_isolation_queries",
+        "payout_reconciliation_rules"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_marketplace_scope_listings",
+          "title": "Scope marketplace listings by workspace",
+          "summary": "Keep listings isolated per tenant."
+        },
+        {
+          "exerciseId": "project_marketplace_vendor_payouts",
+          "title": "Build a vendor payout summary",
+          "summary": "Aggregate settled commerce rows into a payout statement."
+        }
+      ]
+    },
+    {
+      "id": "project_document_governance",
+      "title": "Document Governance",
+      "summary": "Cover document access rules and revision selection for a production document system.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "access-control",
+        "document-versioning",
+        "ddd",
+        "sql"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "documents",
+        "permissions",
+        "versions"
+      ],
+      "skillIds": [
+        "document_access_policy",
+        "document_version_selection"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_document_share_permissions",
+          "title": "Resolve document share permissions",
+          "summary": "Encode access grants without leaking archived files."
+        },
+        {
+          "exerciseId": "project_document_latest_version",
+          "title": "Pick the latest reviewable document version",
+          "summary": "Select the latest safe revision from a mixed timeline."
+        }
+      ]
+    },
+    {
+      "id": "project_soccer_booking_operations",
+      "title": "Soccer Booking Operations",
+      "summary": "Model conflict checks and pricing rules for a soccer field booking workflow.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "booking-calendar",
+        "pricing",
+        "concurrency"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "booking",
+        "calendar",
+        "pricing"
+      ],
+      "skillIds": [
+        "booking_conflict_detection",
+        "booking_quote_rules"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_booking_slot_conflicts",
+          "title": "Detect soccer field booking conflicts",
+          "summary": "Reject overlapping reservations on the same field."
+        },
+        {
+          "exerciseId": "project_booking_quote",
+          "title": "Quote a soccer field booking",
+          "summary": "Apply peak and weekend pricing rules."
+        }
+      ]
+    },
+    {
+      "id": "project_trading_automation_controls",
+      "title": "Trading Automation Controls",
+      "summary": "Practice idempotent signal handling and risk-limit validation for automated trading.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "idempotency",
+        "event-driven",
+        "risk-management",
+        "ddd"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "trading",
+        "signals",
+        "risk"
+      ],
+      "skillIds": [
+        "idempotent_order_execution",
+        "trading_risk_guardrails"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_trading_signal_dedup",
+          "title": "Deduplicate executable trading signals",
+          "summary": "Keep replayed events from creating duplicate orders."
+        },
+        {
+          "exerciseId": "project_trading_risk_limits",
+          "title": "Enforce trading risk limits",
+          "summary": "Block unsafe orders before they reach the exchange."
+        }
+      ]
+    },
+    {
+      "id": "project_agentic_rag_builder",
+      "title": "Agentic RAG Builder",
+      "summary": "Build retrieval and routing primitives for an agentic RAG workflow.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "retrieval",
+        "vector-search",
+        "agent-orchestration"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "rag",
+        "agent",
+        "retrieval"
+      ],
+      "skillIds": [
+        "retrieval_pipeline_design",
+        "agent_workflow_planning"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_rag_context_pack",
+          "title": "Select a grounded RAG context pack",
+          "summary": "Rank candidate chunks into a useful evidence pack."
+        },
+        {
+          "exerciseId": "project_rag_next_action",
+          "title": "Choose the next action in an agentic RAG loop",
+          "summary": "Route the agent toward clarify, retrieve, tool call, or answer."
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_retention_lab",
+      "title": "Flashcard Retention Lab",
+      "summary": "Shape note import and due-queue logic for an Anki-like flashcard product.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "spaced-repetition",
+        "content-normalization"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "flashcards",
+        "review",
+        "import"
+      ],
+      "skillIds": [
+        "spaced_repetition_scheduler",
+        "flashcard_import_normalization"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_flashcard_due_queue",
+          "title": "Build a flashcard due queue",
+          "summary": "Return a stable queue of due cards for review."
+        },
+        {
+          "exerciseId": "project_flashcard_normalize_notes",
+          "title": "Normalize imported flashcard notes",
+          "summary": "Clean and deduplicate notes before creating cards."
+        }
+      ]
+    },
+    {
+      "id": "project_marketplace_access_playbook",
+      "title": "Marketplace Access Playbook",
+      "summary": "Practice install gating and deterministic browse ranking for a SaaS marketplace.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "access-control",
+        "billing",
+        "sql",
+        "multi-tenant"
+      ],
+      "domainIds": [
+        "saas-marketplace"
+      ],
+      "tags": [
+        "marketplace",
+        "install",
+        "ranking"
+      ],
+      "skillIds": [
+        "marketplace_install_policy",
+        "marketplace_listing_ranking"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_marketplace_install_permissions",
+          "title": "Validate marketplace install permissions",
+          "summary": "Gate app installs by listing and workspace state."
+        },
+        {
+          "exerciseId": "project_marketplace_featured_ranking",
+          "title": "Rank featured marketplace listings",
+          "summary": "Build a deterministic browse ordering."
+        }
+      ]
+    },
+    {
+      "id": "project_document_operations_playbook",
+      "title": "Document Operations Playbook",
+      "summary": "Cover review queues and retention policy helpers for document operations teams.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "document-versioning",
+        "sql",
+        "ddd"
+      ],
+      "domainIds": [
+        "document-management"
+      ],
+      "tags": [
+        "documents",
+        "review",
+        "retention"
+      ],
+      "skillIds": [
+        "document_review_queue_ordering",
+        "document_retention_rules"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_document_review_queue",
+          "title": "Build a document review queue",
+          "summary": "Return pending review items in stable due order."
+        },
+        {
+          "exerciseId": "project_document_retention_candidates",
+          "title": "Select document retention candidates",
+          "summary": "Respect legal hold while finding archival candidates."
+        }
+      ]
+    },
+    {
+      "id": "project_soccer_booking_policies",
+      "title": "Soccer Booking Policies",
+      "summary": "Implement reschedule and refund policy logic for field bookings.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "booking-calendar",
+        "pricing"
+      ],
+      "domainIds": [
+        "soccer-field-booking"
+      ],
+      "tags": [
+        "booking",
+        "refund",
+        "reschedule"
+      ],
+      "skillIds": [
+        "booking_reschedule_rules",
+        "booking_refund_calculation"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_booking_reschedule_window",
+          "title": "Validate a booking reschedule window",
+          "summary": "Require notice and a conflict-free target slot."
+        },
+        {
+          "exerciseId": "project_booking_refund_policy",
+          "title": "Calculate a booking refund",
+          "summary": "Apply notice bands and venue-side exceptions."
+        }
+      ]
+    },
+    {
+      "id": "project_trading_execution_playbook",
+      "title": "Trading Execution Playbook",
+      "summary": "Practice net exposure aggregation and stop-order trigger logic for trading automation.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "risk-management",
+        "event-driven",
+        "sql"
+      ],
+      "domainIds": [
+        "automation-trading"
+      ],
+      "tags": [
+        "trading",
+        "exposure",
+        "orders"
+      ],
+      "skillIds": [
+        "position_netting_logic",
+        "stop_order_trigger_rules"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_trading_position_net_exposure",
+          "title": "Aggregate net trading exposure",
+          "summary": "Net open positions per symbol."
+        },
+        {
+          "exerciseId": "project_trading_stop_order_trigger",
+          "title": "Trigger active stop orders",
+          "summary": "Fire only the stop orders that cross on this tick."
+        }
+      ]
+    },
+    {
+      "id": "project_rag_answer_grounding",
+      "title": "RAG Answer Grounding",
+      "summary": "Add citation rendering and evidence diversification to an agentic RAG stack.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": [
+        "retrieval",
+        "agent-orchestration",
+        "vector-search"
+      ],
+      "domainIds": [
+        "agentic-ai-rag"
+      ],
+      "tags": [
+        "rag",
+        "citations",
+        "grounding"
+      ],
+      "skillIds": [
+        "evidence_citation_mapping",
+        "retrieval_diversification"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_rag_source_citations",
+          "title": "Attach citations to a grounded answer",
+          "summary": "Render stable citation markers from evidence ids."
+        },
+        {
+          "exerciseId": "project_rag_diversified_context",
+          "title": "Diversify a RAG context pack",
+          "summary": "Keep evidence varied across documents."
+        }
+      ]
+    },
+    {
+      "id": "project_flashcard_progression_playbook",
+      "title": "Flashcard Progression Playbook",
+      "summary": "Add review scheduling and deck-summary logic to a flashcard learning product.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "spaced-repetition",
+        "sql"
+      ],
+      "domainIds": [
+        "flashcard-learning"
+      ],
+      "tags": [
+        "flashcards",
+        "review",
+        "stats"
+      ],
+      "skillIds": [
+        "review_scheduling_rules",
+        "deck_stats_aggregation"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_flashcard_review_outcome",
+          "title": "Schedule the next flashcard review",
+          "summary": "Map ratings into next intervals and ease."
+        },
+        {
+          "exerciseId": "project_flashcard_deck_overview",
+          "title": "Build a flashcard deck overview",
+          "summary": "Aggregate total, due, new, and suspended counts."
         }
       ]
     }
