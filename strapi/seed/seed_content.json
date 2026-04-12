@@ -1,0 +1,782 @@
+{
+  "exportedAt": "2026-04-12T09:00:00.000Z",
+  "contentVersion": 2,
+  "topics": [
+    {
+      "id": "linq",
+      "title": "LINQ",
+      "summary": "Collection projection, filtering, grouping, and pipeline reasoning in C#."
+    },
+    {
+      "id": "sql",
+      "title": "SQL",
+      "summary": "Query construction, filtering, joins, pagination, and result shaping."
+    },
+    {
+      "id": "ddd",
+      "title": "DDD",
+      "summary": "Aggregate boundaries, invariants, value objects, and domain-focused workflows."
+    },
+    {
+      "id": "concurrency",
+      "title": "Concurrency",
+      "summary": "Coordinating work across multiple workers or requests safely."
+    },
+    {
+      "id": "race-condition",
+      "title": "Race Condition",
+      "summary": "Detecting and preventing shared-state timing bugs."
+    }
+  ],
+  "domains": [
+    {
+      "id": "transaction-service",
+      "title": "Transaction Service",
+      "summary": "Payments, ledger updates, and transactional workflows."
+    },
+    {
+      "id": "messaging-system",
+      "title": "Messaging System",
+      "summary": "Queues, delivery orchestration, retries, and async dispatch."
+    },
+    {
+      "id": "social-network",
+      "title": "Twitter-like Social",
+      "summary": "Feeds, timelines, notifications, and fan-out tradeoffs."
+    },
+    {
+      "id": "document-management",
+      "title": "Document Management",
+      "summary": "Listing, querying, and validating document metadata and storage flows."
+    }
+  ],
+  "skills": [
+    {
+      "id": "sql_list_queries",
+      "title": "List query shaping",
+      "category": "testingEdgeCases",
+      "description": "Shape filtered list queries without dropping sort, paging, or empty states.",
+      "reviewExerciseId": "project_list_documents"
+    },
+    {
+      "id": "linq_projection_basics",
+      "title": "LINQ projection basics",
+      "category": "languageSyntax",
+      "description": "Use LINQ to filter and project records into lightweight response shapes.",
+      "reviewExerciseId": "project_linq_document_cards"
+    },
+    {
+      "id": "ddd_aggregate_rules",
+      "title": "DDD aggregate rules",
+      "category": "oopClassDesign",
+      "description": "Protect aggregate invariants with explicit domain methods.",
+      "reviewExerciseId": "project_transaction_aggregate"
+    },
+    {
+      "id": "concurrency_locking",
+      "title": "Concurrency locking",
+      "category": "debugging",
+      "description": "Use the right coordination primitive when multiple workers touch shared state.",
+      "reviewExerciseId": "project_dispatch_inbox"
+    },
+    {
+      "id": "race_condition_detection",
+      "title": "Race condition detection",
+      "category": "debugging",
+      "description": "Spot timing windows and protect them with idempotent state transitions.",
+      "reviewExerciseId": "project_dispatch_inbox"
+    },
+    {
+      "id": "hash_map_lookup",
+      "title": "Hash map lookup fluency",
+      "category": "dataStructureFundamentals",
+      "description": "Use maps for complements, counts, and linear-time grouping.",
+      "reviewExerciseId": "dsa_frequency_counter"
+    },
+    {
+      "id": "linked_list_pointer_updates",
+      "title": "Linked list pointer updates",
+      "category": "dataStructureFundamentals",
+      "description": "Reason about node ownership and next-pointer rewiring without losing references.",
+      "reviewExerciseId": "dsa_linked_list_node"
+    },
+    {
+      "id": "interval_sorting_strategy",
+      "title": "Interval sorting strategy",
+      "category": "algorithmPatterns",
+      "description": "Sort and scan interval ranges while keeping the greedy invariant intact.",
+      "reviewExerciseId": "lc_merge_intervals"
+    }
+  ],
+  "exercises": [
+    {
+      "id": "project_list_documents",
+      "title": "List documents with filters",
+      "summary": "Build a list query that supports keyword search, owner filtering, and stable ordering.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": ["sql"],
+      "domainIds": ["document-management"],
+      "tags": ["list", "query", "pagination"],
+      "skillIds": ["sql_list_queries"],
+      "problemStatement": "Your document service needs a `list documents` endpoint. Return only active documents, support an optional owner filter, and preserve deterministic ordering so the mobile client can paginate safely.",
+      "acceptanceCriteria": [
+        "Only active documents are returned.",
+        "The optional owner filter narrows the result set.",
+        "Results are ordered by updated time descending."
+      ],
+      "taskSteps": [
+        {
+          "id": "select_active_rows",
+          "title": "Start from the base query",
+          "description": "Limit the source to active documents before adding optional filters."
+        },
+        {
+          "id": "apply_owner_filter",
+          "title": "Apply the optional owner filter",
+          "description": "Handle the filter only when a value is supplied."
+        },
+        {
+          "id": "stabilize_ordering",
+          "title": "Stabilize ordering",
+          "description": "Sort consistently so the same page request gives the same order."
+        }
+      ],
+      "supportedModes": ["guided", "standard"],
+      "hints": {
+        "concept": "This is a classic list endpoint: filter, sort, then project to a lightweight DTO.",
+        "structure": "Keep a base query, branch on the optional owner filter, then apply ordering before materializing.",
+        "pseudocode": "Start from documents where `IsArchived == false`, add `Where` for owner when needed, then `OrderByDescending` by update time.",
+        "lineHint": "In C#, think `var query = documents.Where(x => !x.IsArchived); if (!string.IsNullOrWhiteSpace(owner)) query = query.Where(...);`",
+        "fullExplain": "A passing solution needs filtering, deterministic sorting, and one projected list result."
+      },
+      "reflectionPrompts": [
+        "Why should ordering be explicit on list endpoints even when the data source looks stable?",
+        "How would you add cursor pagination later without rewriting the whole method?"
+      ],
+      "requirements": [
+        {
+          "label": "Filters archived rows",
+          "pattern": "archiv|IsArchived|is_archived",
+          "feedback": "Filter out archived rows before returning documents."
+        },
+        {
+          "label": "Applies owner filter",
+          "pattern": "owner",
+          "feedback": "Apply the owner filter when a value is provided."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": true,
+          "starterCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentQueries\n{\n    public static List<DocumentRow> ListActive(IEnumerable<DocumentRow> rows, string? owner)\n    {\n        return new List<DocumentRow>();\n    }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar rows = new List<DocumentRow>\n{\n    new(\"Architecture Notes\", \"Nina\", false, 1700),\n    new(\"Quarterly Report\", \"Nina\", false, 2000),\n    new(\"Retired Draft\", \"Nina\", true, 2100),\n    new(\"Spec\", \"Minh\", false, 1800),\n};\n\nforeach (var item in DocumentQueries.ListActive(rows, \"Nina\"))\n{\n    Console.WriteLine($\"{item.Title}:{item.UpdatedAt}\");\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived, int UpdatedAt);\n"
+          },
+          "solutionCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentQueries\n{\n    public static List<DocumentRow> ListActive(IEnumerable<DocumentRow> rows, string? owner)\n    {\n        var query = rows.Where(row => !row.IsArchived);\n        if (!string.IsNullOrWhiteSpace(owner))\n        {\n            query = query.Where(row => row.Owner == owner);\n        }\n\n        return query\n            .OrderByDescending(row => row.UpdatedAt)\n            .ToList();\n    }\n}\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "DocumentQueries.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": []
+        },
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": false,
+          "starterCode": "def list_active(rows, owner=None):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"title\": \"Architecture Notes\", \"owner\": \"Nina\", \"is_archived\": False, \"updated_at\": 1700},\n    {\"title\": \"Quarterly Report\", \"owner\": \"Nina\", \"is_archived\": False, \"updated_at\": 2000},\n    {\"title\": \"Retired Draft\", \"owner\": \"Nina\", \"is_archived\": True, \"updated_at\": 2100},\n    {\"title\": \"Spec\", \"owner\": \"Minh\", \"is_archived\": False, \"updated_at\": 1800},\n]\n\nfor item in list_active(rows, \"Nina\"):\n    print(f\"{item['title']}:{item['updated_at']}\")\n"
+          },
+          "solutionCode": "def list_active(rows, owner=None):\n    filtered = [row for row in rows if not row[\"is_archived\"]]\n    if owner:\n        filtered = [row for row in filtered if row[\"owner\"] == owner]\n    return sorted(filtered, key=lambda row: row[\"updated_at\"], reverse=True)\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "list_documents.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_linq_document_cards",
+      "title": "Project document cards with LINQ",
+      "summary": "Use LINQ to transform document rows into compact card DTOs for the mobile home screen.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": ["linq"],
+      "domainIds": ["document-management"],
+      "tags": ["list", "projection"],
+      "skillIds": ["linq_projection_basics"],
+      "problemStatement": "Convert raw document rows into light card objects that keep only the title, owner, and a concise status label. Use a single LINQ pipeline so the shape is easy to reason about.",
+      "acceptanceCriteria": [
+        "Uses LINQ for filtering or projection.",
+        "Projects into a lighter response shape.",
+        "Keeps the owner and status information."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard"],
+      "hints": {
+        "concept": "This is a projection problem: keep only the fields the UI needs.",
+        "structure": "Filter the active rows, then project to card DTOs with `Select`.",
+        "pseudocode": "Use `rows.Where(...).Select(row => new DocumentCard(...)).ToList()`.",
+        "lineHint": "Look for `Where` plus `Select` in the same chain.",
+        "fullExplain": "A compact LINQ projection is enough to pass."
+      },
+      "reflectionPrompts": [
+        "When should the API return a lighter DTO instead of the full entity?",
+        "What makes a LINQ pipeline easier to debug later?"
+      ],
+      "requirements": [
+        {
+          "label": "Uses Select",
+          "pattern": "Select",
+          "feedback": "Project rows into a card model with `Select`."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": true,
+          "starterCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentCards\n{\n    public static List<DocumentCard> Build(IEnumerable<DocumentRow> rows)\n    {\n        return new List<DocumentCard>();\n    }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar rows = new List<DocumentRow>\n{\n    new(\"Architecture Notes\", \"Nina\", false),\n    new(\"Retired Draft\", \"Minh\", true),\n};\n\nforeach (var card in DocumentCards.Build(rows))\n{\n    Console.WriteLine($\"{card.Title}:{card.Status}\");\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived);\npublic record DocumentCard(string Title, string Owner, string Status);\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "DocumentCards.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_transaction_aggregate",
+      "title": "Protect a transaction aggregate",
+      "summary": "Enforce aggregate invariants so a transfer cannot settle twice.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": ["ddd"],
+      "domainIds": ["transaction-service"],
+      "tags": ["aggregate", "idempotency"],
+      "skillIds": ["ddd_aggregate_rules"],
+      "problemStatement": "Your transaction service has a transfer aggregate that can be authorized, settled, and cancelled. Add domain methods so a settled transfer cannot be settled twice and a cancelled transfer cannot move forward again.",
+      "acceptanceCriteria": [
+        "Explicit domain methods gate state changes.",
+        "Invalid state transitions are blocked.",
+        "The aggregate owns the invariant."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard"],
+      "hints": {
+        "concept": "The aggregate should own its state machine instead of leaving it to controllers.",
+        "structure": "Add methods like `Authorize`, `Settle`, and `Cancel` with guard clauses.",
+        "pseudocode": "Before changing status, check the current status and throw for invalid transitions.",
+        "lineHint": "Guard clauses plus a `Status` enum are enough.",
+        "fullExplain": "Passing means the aggregate blocks double-settlement and post-cancel settlement."
+      },
+      "reflectionPrompts": [
+        "Why do aggregates own transition rules instead of letting handlers toggle fields directly?",
+        "How would you persist an audit trail without weakening the aggregate boundary?"
+      ],
+      "requirements": [
+        {
+          "label": "Has guard clause",
+          "pattern": "throw|InvalidOperationException|raise",
+          "feedback": "Reject invalid transitions explicitly."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": true,
+          "starterCode": "public enum TransferStatus { Pending, Authorized, Settled, Cancelled }\n\npublic class Transfer\n{\n    public TransferStatus Status { get; private set; } = TransferStatus.Pending;\n\n    public void Authorize() { }\n    public void Settle() { }\n    public void Cancel() { }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\n\nvar transfer = new Transfer();\ntransfer.Authorize();\ntransfer.Settle();\nConsole.WriteLine(transfer.Status);\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "Transfer.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_dispatch_inbox",
+      "title": "Protect the dispatch inbox from race conditions",
+      "summary": "Use synchronization to ensure two workers cannot claim the same message twice.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "advanced",
+      "topicIds": ["concurrency", "race-condition"],
+      "domainIds": ["messaging-system"],
+      "tags": ["lock", "queue", "idempotency"],
+      "skillIds": ["concurrency_locking", "race_condition_detection"],
+      "problemStatement": "Two background workers are competing to claim work from the same in-memory inbox. Add coordination so the same message cannot be claimed twice, even when both workers check at the same time.",
+      "acceptanceCriteria": [
+        "Shared state changes happen inside one critical section.",
+        "A claimed message cannot be claimed again.",
+        "The approach remains easy to explain to the next maintainer."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard"],
+      "hints": {
+        "concept": "This is a shared-state timing issue, so you need one small critical section around the claim step.",
+        "structure": "Check and update the inbox status while holding the same lock.",
+        "pseudocode": "Inside the lock: find pending message, mark it claimed, return it.",
+        "lineHint": "Think `lock (_gate) { ... }` or the Python equivalent.",
+        "fullExplain": "Passing means no second worker can observe the same message as still pending after the first one claims it."
+      },
+      "reflectionPrompts": [
+        "Why is idempotency still useful even after you add locking?",
+        "What would change if the inbox moved from memory into a database table?"
+      ],
+      "requirements": [
+        {
+          "label": "Uses locking",
+          "pattern": "lock|Monitor|threading\\.Lock",
+          "feedback": "Protect the claim path with an explicit synchronization primitive."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": true,
+          "starterCode": "using System.Collections.Generic;\n\npublic class Inbox\n{\n    private readonly object _gate = new();\n    private readonly Queue<string> _pending = new();\n\n    public string? ClaimNext()\n    {\n        return null;\n    }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\n\nvar inbox = new Inbox();\nConsole.WriteLine(inbox.ClaimNext() ?? \"none\");\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "Inbox.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": []
+        },
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": false,
+          "starterCode": "import threading\n\nclass Inbox:\n    def __init__(self):\n        self._lock = threading.Lock()\n        self._pending = []\n\n    def claim_next(self):\n        return None\n",
+          "starterFiles": {
+            "main.py": "from inbox import Inbox\n\ninbox = Inbox()\nprint(inbox.claim_next())\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "inbox.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_feed_timeline_window",
+      "title": "Window a social feed query",
+      "summary": "Build a timeline slice that returns only the newest posts for a specific author set.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "intermediate",
+      "topicIds": ["sql"],
+      "domainIds": ["social-network"],
+      "tags": ["feed", "query", "list"],
+      "skillIds": ["sql_list_queries"],
+      "problemStatement": "A Twitter-like feed page needs the latest posts from a chosen set of authors. Filter by author ids, sort descending by publish time, and cap the results to the requested page size.",
+      "acceptanceCriteria": [
+        "Filters by the requested author ids.",
+        "Orders newest first.",
+        "Caps the output to the requested size."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard"],
+      "hints": {
+        "concept": "Think timeline windowing: filter first, sort second, then limit.",
+        "structure": "Apply author filter, order by publish time descending, then take the page size.",
+        "pseudocode": "Where author in ids -> OrderByDescending publishedAt -> Take(limit).",
+        "lineHint": "A deterministic feed window is enough for this exercise.",
+        "fullExplain": "Passing means the result set respects filter, order, and limit."
+      },
+      "reflectionPrompts": [
+        "What breaks if feed ordering is not deterministic?",
+        "When would you move from offset paging to cursor paging?"
+      ],
+      "requirements": [],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def timeline_window(posts, author_ids, limit):\n    return []\n",
+          "starterFiles": {
+            "main.py": "posts = [\n    {\"id\": 1, \"author_id\": 10, \"published_at\": 300},\n    {\"id\": 2, \"author_id\": 11, \"published_at\": 500},\n    {\"id\": 3, \"author_id\": 10, \"published_at\": 700},\n]\nprint(timeline_window(posts, {10}, 2))\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "timeline.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "dsa_frequency_counter",
+      "title": "Build a frequency counter",
+      "summary": "Count repeated values with a single pass map.",
+      "lane": "dsa",
+      "contentKind": "dsa_exercise",
+      "level": "foundation",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["map", "count"],
+      "skillIds": ["hash_map_lookup"],
+      "problemStatement": "Write a helper that returns how many times each value appears in the input list.",
+      "acceptanceCriteria": [
+        "Uses a map or dictionary.",
+        "Counts each occurrence once.",
+        "Returns the final counts."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard", "timed"],
+      "hints": {
+        "concept": "This is the classic frequency counter pattern.",
+        "structure": "Initialize an empty map, then increment inside one loop.",
+        "pseudocode": "For each value: counts[value] = counts.get(value, 0) + 1",
+        "lineHint": "One pass and one map are enough.",
+        "fullExplain": "The checker only needs to see the counting pattern."
+      },
+      "reflectionPrompts": [
+        "When does a frequency map beat sorting first?",
+        "What would change if the input stream were too large for memory?"
+      ],
+      "requirements": [
+        {
+          "label": "Uses a map",
+          "pattern": "dict|\\{|Dictionary|Map",
+          "feedback": "Use a map structure to accumulate counts."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def build_counts(values):\n    return {}\n",
+          "starterFiles": {
+            "main.py": "print(build_counts([1, 2, 1, 3, 2, 1]))\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "frequency_counter.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "dsa_linked_list_node",
+      "title": "Append a node to a linked list",
+      "summary": "Practice pointer updates without losing the existing tail reference.",
+      "lane": "dsa",
+      "contentKind": "dsa_exercise",
+      "level": "foundation",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["linked-list", "pointer"],
+      "skillIds": ["linked_list_pointer_updates"],
+      "problemStatement": "Given the head of a singly linked list, append a new node to the end and return the original head.",
+      "acceptanceCriteria": [
+        "Handles an empty list.",
+        "Traverses to the tail.",
+        "Attaches a new node without breaking the chain."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard", "timed"],
+      "hints": {
+        "concept": "Walk until the tail, then set its next pointer.",
+        "structure": "Handle `None` first, otherwise traverse while `current.next` exists.",
+        "pseudocode": "if head is None return Node(value); walk to tail; tail.next = Node(value); return head",
+        "lineHint": "Keep the original head reference unchanged.",
+        "fullExplain": "Passing means the append logic handles both empty and non-empty lists."
+      },
+      "reflectionPrompts": [
+        "Why is returning the original head important for callers?",
+        "What tradeoff would a tail pointer remove here?"
+      ],
+      "requirements": [
+        {
+          "label": "Updates next pointer",
+          "pattern": "next",
+          "feedback": "Attach the new node through a next-pointer update."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "class Node:\n    def __init__(self, value, next=None):\n        self.value = value\n        self.next = next\n\n\ndef append(head, value):\n    return head\n",
+          "starterFiles": {
+            "main.py": "head = Node(1, Node(2))\nresult = append(head, 3)\nwhile result:\n    print(result.value)\n    result = result.next\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "linked_list.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "lc_merge_intervals",
+      "title": "Merge overlapping intervals",
+      "summary": "Sort the ranges and merge while the next start overlaps the current end.",
+      "lane": "leetcode",
+      "contentKind": "leetcode_exercise",
+      "level": "intermediate",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["interval", "sort", "greedy"],
+      "skillIds": ["interval_sorting_strategy"],
+      "problemStatement": "Given a list of intervals, merge all overlapping intervals and return a condensed list.",
+      "acceptanceCriteria": [
+        "Sorts intervals by start time.",
+        "Merges overlapping ranges.",
+        "Returns the condensed list."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard", "timed"],
+      "hints": {
+        "concept": "Sort first so overlaps appear next to each other.",
+        "structure": "Seed the result with the first interval, then merge or append while scanning.",
+        "pseudocode": "sort intervals; for each interval compare to the last merged interval end",
+        "lineHint": "Update the last merged end with `max(last_end, current_end)`.",
+        "fullExplain": "Passing means correct sort + merge behavior."
+      },
+      "reflectionPrompts": [
+        "Why does sorting by start time make the merge invariant work?",
+        "What would change if intervals were streamed and could not all be sorted first?"
+      ],
+      "requirements": [
+        {
+          "label": "Sorts intervals",
+          "pattern": "sort|sorted|OrderBy",
+          "feedback": "Sort by interval start before merging."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def merge(intervals):\n    return []\n",
+          "starterFiles": {
+            "main.py": "print(merge([[1, 3], [2, 6], [8, 10], [15, 18]]))\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": [
+            {
+              "id": "merge_intervals_primary",
+              "label": "Merges the standard overlap case",
+              "body": "print(merge([[1, 3], [2, 6], [8, 10], [15, 18]]))",
+              "expectedOutput": "[[1, 6], [8, 10], [15, 18]]"
+            }
+          ]
+        },
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": false,
+          "starterCode": "using System.Collections.Generic;\n\npublic static class Solution\n{\n    public static IList<int[]> Merge(IList<int[]> intervals)\n    {\n        return new List<int[]>();\n    }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar merged = Solution.Merge(new List<int[]> { new[] { 1, 3 }, new[] { 2, 6 }, new[] { 8, 10 }, new[] { 15, 18 } });\nforeach (var item in merged)\n{\n    Console.WriteLine($\"[{item[0]}, {item[1]}]\");\n}\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "Solution.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": [
+            {
+              "id": "merge_intervals_csharp",
+              "label": "Merges overlaps in C#",
+              "body": "var merged = Solution.Merge(new List<int[]> { new[] { 1, 3 }, new[] { 2, 6 }, new[] { 8, 10 }, new[] { 15, 18 } });\nforeach (var item in merged)\n{\n    Console.WriteLine($\"[{item[0]}, {item[1]}]\");\n}",
+              "expectedOutput": "[1, 6]\n[8, 10]\n[15, 18]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lc_meeting_rooms",
+      "title": "Minimum meeting rooms",
+      "summary": "Track overlap count while separate start and end times move forward.",
+      "lane": "leetcode",
+      "contentKind": "leetcode_exercise",
+      "level": "intermediate",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["interval", "heap", "greedy"],
+      "skillIds": ["interval_sorting_strategy"],
+      "problemStatement": "Given meeting intervals, return the minimum number of rooms required so that all meetings can happen without overlap conflicts.",
+      "acceptanceCriteria": [
+        "Accounts for overlapping meetings correctly.",
+        "Tracks room count efficiently.",
+        "Returns the minimum required room count."
+      ],
+      "taskSteps": [],
+      "supportedModes": ["guided", "standard", "timed"],
+      "hints": {
+        "concept": "You are counting maximum overlap, not building actual room objects.",
+        "structure": "Sort starts and ends separately, then walk both pointers.",
+        "pseudocode": "If next start is before next end, need another room; otherwise free one room.",
+        "lineHint": "Two sorted arrays and two indices are enough.",
+        "fullExplain": "Passing means computing peak overlap correctly."
+      },
+      "reflectionPrompts": [
+        "Why is peak overlap the same as minimum required rooms?",
+        "When would a min-heap be a clearer choice than two-pointer arrays?"
+      ],
+      "requirements": [],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def min_meeting_rooms(intervals):\n    return 0\n",
+          "starterFiles": {
+            "main.py": "print(min_meeting_rooms([[0, 30], [5, 10], [15, 20]]))\n"
+          },
+          "solutionCode": null,
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": [
+            {
+              "id": "meeting_rooms_primary",
+              "label": "Counts overlapping meetings",
+              "body": "print(min_meeting_rooms([[0, 30], [5, 10], [15, 20]]))",
+              "expectedOutput": "2"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "id": "project_document_platform",
+      "title": "Document Platform Foundations",
+      "summary": "Query, project, and refine document workflows across SQL and LINQ oriented tasks.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": ["sql", "linq"],
+      "domainIds": ["document-management"],
+      "tags": ["list", "query", "projection"],
+      "skillIds": ["sql_list_queries", "linq_projection_basics"],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_list_documents",
+          "title": "List documents with filters",
+          "summary": "Build the filtered query foundation."
+        },
+        {
+          "exerciseId": "project_linq_document_cards",
+          "title": "Project document cards with LINQ",
+          "summary": "Convert rows into a lean mobile DTO."
+        }
+      ]
+    },
+    {
+      "id": "project_reliability_playbook",
+      "title": "Reliability Playbook",
+      "summary": "Practice aggregate guards, async coordination, and feed-style query windows in real systems.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "intermediate",
+      "topicIds": ["ddd", "concurrency", "race-condition", "sql"],
+      "domainIds": ["transaction-service", "messaging-system", "social-network"],
+      "tags": ["aggregate", "lock", "feed", "idempotency"],
+      "skillIds": ["ddd_aggregate_rules", "concurrency_locking", "race_condition_detection", "sql_list_queries"],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_transaction_aggregate",
+          "title": "Protect a transaction aggregate",
+          "summary": "Encode domain transition rules."
+        },
+        {
+          "exerciseId": "project_dispatch_inbox",
+          "title": "Protect the dispatch inbox from race conditions",
+          "summary": "Claim shared work safely under concurrency."
+        },
+        {
+          "exerciseId": "project_feed_timeline_window",
+          "title": "Window a social feed query",
+          "summary": "Build a deterministic feed slice."
+        }
+      ]
+    },
+    {
+      "id": "dsa_core_patterns",
+      "title": "Core DSA Patterns",
+      "summary": "Warm up with linked-list traversal and frequency counting drills.",
+      "lane": "dsa",
+      "contentKind": "dsa_track",
+      "level": "foundation",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["map", "linked-list"],
+      "skillIds": ["hash_map_lookup", "linked_list_pointer_updates"],
+      "exerciseRefs": [
+        {
+          "exerciseId": "dsa_frequency_counter",
+          "title": "Build a frequency counter"
+        },
+        {
+          "exerciseId": "dsa_linked_list_node",
+          "title": "Append a node to a linked list"
+        }
+      ]
+    },
+    {
+      "id": "leetcode_interval_playbook",
+      "title": "LeetCode Interval Playbook",
+      "summary": "Train the sort-and-scan reasoning behind interval merging and room counting.",
+      "lane": "leetcode",
+      "contentKind": "leetcode_set",
+      "level": "intermediate",
+      "topicIds": [],
+      "domainIds": [],
+      "tags": ["interval", "greedy", "sort"],
+      "skillIds": ["interval_sorting_strategy"],
+      "exerciseRefs": [
+        {
+          "exerciseId": "lc_merge_intervals",
+          "title": "Merge overlapping intervals"
+        },
+        {
+          "exerciseId": "lc_meeting_rooms",
+          "title": "Minimum meeting rooms"
+        }
+      ]
+    }
+  ]
+}

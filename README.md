@@ -19,8 +19,9 @@ The app now bootstraps from repository-backed data instead of calling
 
 ### Run the learner-state API and admin
 
-Provide a catalog snapshot at `strapi/seed/seed_content.json` first.
-The repo includes:
+The repo now ships with demo seed content at `strapi/seed/seed_content.json`,
+so `app-api` can bootstrap a non-empty catalog on first run. The repo also
+includes:
 
 - `tool/export_seed_content.dart` to serialize the legacy seed curriculum
 - `strapi/importers/upsert-seed-content.mjs` to push that snapshot into Strapi

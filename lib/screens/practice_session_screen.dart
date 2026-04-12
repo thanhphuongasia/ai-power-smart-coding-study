@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
-import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:highlight/highlight_core.dart';
 import 'package:highlight/languages/cs.dart' as highlight_cs;
 import 'package:highlight/languages/dart.dart' as highlight_dart;
@@ -9,6 +9,7 @@ import 'package:highlight/languages/python.dart' as highlight_python;
 
 import '../app/app_state.dart';
 import '../models/learning_models.dart';
+import '../services/sandbox_api_service.dart';
 
 typedef SessionExecutionCallback = Future<ValidationResult> Function();
 typedef SessionFileChangedCallback = void Function(
@@ -70,6 +71,9 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
 
     final theme = Theme.of(context);
     final result = session.validationResult;
+    final isSandboxExecutionRunning =
+        result.status == ValidationStatus.running ||
+            widget.appState.isSandboxExecutionRunning;
 
     return Column(
       children: <Widget>[
@@ -88,7 +92,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                     Text(session.milestone.title,
                         style: theme.textTheme.titleLarge),
                     Text(
-                      '${session.track.title} · ${session.mode.label} · ${session.milestone.languageLabel}',
+                      '${session.track?.title ?? session.exercise.type.label} · ${session.mode.label} · ${session.milestone.languageLabel}',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],
@@ -141,6 +145,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                   _showTextSheet(validation.summary, validation.output);
                 },
                 onExplain: _showReflectionSheet,
+                isSandboxExecutionRunning: isSandboxExecutionRunning,
               ),
               const SizedBox(height: 12),
               _ValidationCard(
@@ -159,12 +164,32 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   void _openHint() {
-    final hint = widget.appState.revealNextHint();
+    _showHint();
+  }
+
+  void _showCurrentHint() {
+    _showHint(reuseCurrent: true);
+  }
+
+  void _showHint({bool reuseCurrent = false}) {
     final session = widget.appState.activeSession;
-    if (!mounted || session == null) {
+    if (session == null) {
       return;
     }
-    final level = session.revealedHintLevel?.label ?? 'Hint';
+
+    if (reuseCurrent && session.revealedHintLevel != null) {
+      final level = session.revealedHintLevel!;
+      final hint = session.milestone.hints[level] ?? 'No hint available.';
+      _showTextSheet(level.label, hint);
+      return;
+    }
+
+    final hint = widget.appState.revealNextHint();
+    final updatedSession = widget.appState.activeSession;
+    if (!mounted || updatedSession == null) {
+      return;
+    }
+    final level = updatedSession.revealedHintLevel?.label ?? 'Hint';
     _showTextSheet(level, hint);
   }
 
@@ -177,103 +202,154 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      showDragHandle: false,
       builder: (context) {
         final theme = Theme.of(context);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(session.milestone.objective,
-                      style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  Text(session.milestone.problemStatement,
-                      style: theme.textTheme.bodyLarge),
-                  const SizedBox(height: 18),
-                  Text('Acceptance criteria',
-                      style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  ...session.milestone.acceptanceCriteria.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.88),
+          height: 1.45,
+        );
+        final detailStyle = theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.84),
+          height: 1.45,
+        );
+        final solutionCode = session.milestone.solutionCode;
+
+        return _BottomSheetScaffold(
+          title: 'Prompt',
+          subtitle: session.milestone.languageLabel,
+          onClose: () => Navigator.of(context).pop(),
+          child: SelectionArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              children: <Widget>[
+                Text(
+                  session.milestone.objective,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.18,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(session.milestone.problemStatement, style: bodyStyle),
+                const SizedBox(height: 24),
+                _SheetSectionTitle(
+                  title: 'Acceptance criteria',
+                  theme: theme,
+                ),
+                const SizedBox(height: 10),
+                ...session.milestone.acceptanceCriteria.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(item, style: detailStyle)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SheetSectionTitle(
+                  title: 'Guided milestones',
+                  theme: theme,
+                ),
+                const SizedBox(height: 10),
+                ...session.milestone.taskSteps.map(
+                  (step) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _SheetInfoCard(
+                      theme: theme,
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          const Padding(
-                            padding: EdgeInsets.only(top: 5),
-                            child: Icon(Icons.check_circle_outline_rounded,
-                                size: 16),
+                          Text(
+                            step.title,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: theme.colorScheme.onSurface,
+                            ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(item)),
+                          const SizedBox(height: 6),
+                          Text(step.description, style: detailStyle),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text('Guided milestones', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  ...session.milestone.taskSteps.map(
-                    (step) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                        ),
+                ),
+                const SizedBox(height: 18),
+                _SheetSectionTitle(
+                  title: 'Sandbox test cases',
+                  theme: theme,
+                ),
+                const SizedBox(height: 10),
+                if (session.milestone.testCases.isEmpty) ...<Widget>[
+                  Text(
+                    'Input: ${session.milestone.exampleInput}',
+                    style: detailStyle,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Expected: ${session.milestone.exampleOutput}',
+                    style: detailStyle,
+                  ),
+                ] else
+                  ...session.milestone.testCases.map(
+                    (testCase) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _SheetInfoCard(
+                        theme: theme,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Text(step.title,
-                                style: theme.textTheme.titleMedium),
+                            Text(
+                              testCase.label,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
                             const SizedBox(height: 6),
-                            Text(step.description),
+                            SelectableText(
+                              testCase.expectedOutput,
+                              style: detailStyle,
+                            ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text('Sandbox test cases',
-                      style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  if (session.milestone.testCases.isEmpty) ...<Widget>[
-                    Text('Input: ${session.milestone.exampleInput}'),
-                    const SizedBox(height: 4),
-                    Text('Expected: ${session.milestone.exampleOutput}'),
-                  ] else
-                    ...session.milestone.testCases.map(
-                      (testCase) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            color: theme.colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(testCase.label,
-                                  style: theme.textTheme.titleMedium),
-                              const SizedBox(height: 6),
-                              SelectableText(
-                                testCase.expectedOutput,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        ),
+                if (solutionCode != null &&
+                    solutionCode.trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 18),
+                  _SheetSectionTitle(
+                    title: 'Solution',
+                    theme: theme,
+                    trailing: TextButton.icon(
+                      onPressed: () => _copyToClipboard(
+                        label: 'Solution',
+                        value: solutionCode,
                       ),
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: const Text('Copy'),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  _CodePreviewCard(
+                    theme: theme,
+                    code: solutionCode,
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         );
@@ -296,25 +372,46 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      showDragHandle: false,
       builder: (context) {
         final theme = Theme.of(context);
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.8,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: ListView(
-                children: <Widget>[
-                  Text(title, style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 14),
-                  SelectableText(content, style: theme.textTheme.bodyLarge),
-                ],
-              ),
+        return _BottomSheetScaffold(
+          title: title,
+          onClose: () => Navigator.of(context).pop(),
+          actions: <Widget>[
+            TextButton.icon(
+              onPressed: () => _copyToClipboard(label: title, value: content),
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copy'),
             ),
+          ],
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: <Widget>[
+              SelectableText(
+                content,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                  height: 1.5,
+                ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Future<void> _copyToClipboard({
+    required String label,
+    required String value,
+  }) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copied to clipboard')),
     );
   }
 
@@ -346,6 +443,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           files: session.milestone.relatedFiles,
           onBuild: widget.appState.buildSession,
           onRun: widget.appState.runSession,
+          onShowPrompt: _showProblemSheet,
+          onShowHint: _showCurrentHint,
           onChanged: (filePath, code) => widget.appState.updateSessionFileCode(
             filePath: filePath,
             code: code,
@@ -376,6 +475,161 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     if (selected != null) {
       widget.appState.selectSessionFile(selected);
     }
+  }
+}
+
+class _BottomSheetScaffold extends StatelessWidget {
+  const _BottomSheetScaffold({
+    required this.title,
+    required this.child,
+    required this.onClose,
+    this.subtitle,
+    this.actions = const <Widget>[],
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  final VoidCallback onClose;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.9,
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Row(
+                children: <Widget>[
+                  IconButton(
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close',
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle!,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  ...actions,
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7),
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetSectionTitle extends StatelessWidget {
+  const _SheetSectionTitle({
+    required this.title,
+    required this.theme,
+    this.trailing,
+  });
+
+  final String title;
+  final ThemeData theme;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            title,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
+  }
+}
+
+class _SheetInfoCard extends StatelessWidget {
+  const _SheetInfoCard({
+    required this.theme,
+    required this.child,
+  });
+
+  final ThemeData theme;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CodePreviewCard extends StatelessWidget {
+  const _CodePreviewCard({
+    required this.theme,
+    required this.code,
+  });
+
+  final ThemeData theme;
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color: const Color(0xFF111827),
+      ),
+      child: SelectableText(
+        code,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: const Color(0xFFF8FAFC),
+          height: 1.55,
+          fontFamily: 'monospace',
+        ),
+      ),
+    );
   }
 }
 
@@ -451,7 +705,8 @@ class _SessionBanner extends StatelessWidget {
             runSpacing: 8,
             children: <Widget>[
               Chip(
-                label: Text(session.track.type.label),
+                label: Text(
+                    session.track?.type.label ?? session.exercise.type.label),
                 backgroundColor: Colors.white.withValues(alpha: 0.15),
                 labelStyle: const TextStyle(color: Colors.white),
               ),
@@ -670,10 +925,10 @@ class _FileTreeNodeView extends StatelessWidget {
                     child: Text(
                       node.name,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight:
-                            isActive ? FontWeight.w700 : FontWeight.w500,
-                      ),
+                            color: Colors.white,
+                            fontWeight:
+                                isActive ? FontWeight.w700 : FontWeight.w500,
+                          ),
                     ),
                   ),
                   if (isActive)
@@ -692,8 +947,8 @@ class _FileTreeNodeView extends StatelessWidget {
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 8),
         childrenPadding: EdgeInsets.zero,
-        leading:
-            const Icon(Icons.folder_open_rounded, size: 20, color: Colors.white70),
+        leading: const Icon(Icons.folder_open_rounded,
+            size: 20, color: Colors.white70),
         iconColor: Colors.white70,
         collapsedIconColor: Colors.white70,
         title: Text(node.name, style: const TextStyle(color: Colors.white)),
@@ -738,6 +993,8 @@ class _FullscreenEditorPage extends StatefulWidget {
     required this.files,
     required this.onBuild,
     required this.onRun,
+    required this.onShowPrompt,
+    required this.onShowHint,
     required this.onFileSelected,
     required this.onChanged,
   });
@@ -749,6 +1006,8 @@ class _FullscreenEditorPage extends StatefulWidget {
   final List<String> files;
   final SessionExecutionCallback onBuild;
   final SessionExecutionCallback onRun;
+  final VoidCallback onShowPrompt;
+  final VoidCallback onShowHint;
   final ValueChanged<String> onFileSelected;
   final SessionFileChangedCallback onChanged;
 
@@ -761,6 +1020,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   final FocusNode _focusNode = FocusNode();
   late String _activeFile;
   late final Map<String, String> _fileContents;
+  SandboxExecutionAction? _activeSandboxAction;
 
   static const List<_EditorSnippet> _snippets = <_EditorSnippet>[
     _EditorSnippet(label: 'Space', value: '    '),
@@ -801,6 +1061,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isSandboxExecutionRunning = _activeSandboxAction != null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F1923),
@@ -843,8 +1104,12 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
           child: Column(
             children: <Widget>[
               _EditorActionToolbar(
+                onShowPrompt: widget.onShowPrompt,
+                onShowHint: widget.onShowHint,
                 onBuild: _handleBuild,
                 onRun: _handleRun,
+                isSandboxExecutionRunning: isSandboxExecutionRunning,
+                activeSandboxAction: _activeSandboxAction,
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -883,7 +1148,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: CodeTheme(
-                              data: CodeThemeData(styles: atomOneDarkTheme),
+                              data: CodeThemeData(styles: _editorThemeStyles),
                               child: CodeField(
                                 controller: _controller,
                                 focusNode: _focusNode,
@@ -912,19 +1177,20 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
                           ),
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _snippets
-                              .map(
-                                (snippet) => _AccessoryChip(
-                                  label: snippet.label,
-                                  onTap: () => _insertSnippet(snippet.value),
-                                ),
-                              )
-                              .toList(),
+                      SizedBox(
+                        height: 60,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _snippets.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final snippet = _snippets[index];
+                            return _AccessoryChip(
+                              label: snippet.label,
+                              onTap: () => _insertSnippet(snippet.value),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -977,19 +1243,41 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   }
 
   Future<void> _handleBuild() async {
-    final result = await widget.onBuild();
-    if (!mounted) {
+    if (_activeSandboxAction != null) {
       return;
     }
-    _showResultSheet(result);
+
+    setState(() => _activeSandboxAction = SandboxExecutionAction.build);
+    try {
+      final result = await widget.onBuild();
+      if (!mounted) {
+        return;
+      }
+      _showResultSheet(result);
+    } finally {
+      if (mounted) {
+        setState(() => _activeSandboxAction = null);
+      }
+    }
   }
 
   Future<void> _handleRun() async {
-    final result = await widget.onRun();
-    if (!mounted) {
+    if (_activeSandboxAction != null) {
       return;
     }
-    _showResultSheet(result);
+
+    setState(() => _activeSandboxAction = SandboxExecutionAction.run);
+    try {
+      final result = await widget.onRun();
+      if (!mounted) {
+        return;
+      }
+      _showResultSheet(result);
+    } finally {
+      if (mounted) {
+        setState(() => _activeSandboxAction = null);
+      }
+    }
   }
 
   void _showResultSheet(ValidationResult result) {
@@ -1099,32 +1387,102 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   }
 }
 
+final Map<String, TextStyle> _editorThemeStyles = <String, TextStyle>{
+  'root': const TextStyle(
+    color: Colors.white,
+    backgroundColor: Color(0xFF0F1923),
+  ),
+  'keyword': const TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w700,
+  ),
+  'title': const TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w700,
+  ),
+  'class': const TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w700,
+  ),
+  'type': const TextStyle(color: Colors.white),
+  'built_in': const TextStyle(color: Colors.white),
+  'literal': const TextStyle(color: Colors.white),
+  'string': const TextStyle(color: Colors.white),
+  'number': const TextStyle(color: Colors.white),
+  'params': const TextStyle(color: Colors.white),
+  'comment': const TextStyle(
+    color: Colors.white70,
+    fontStyle: FontStyle.italic,
+  ),
+};
+
 class _EditorActionToolbar extends StatelessWidget {
   const _EditorActionToolbar({
+    required this.onShowPrompt,
+    required this.onShowHint,
     required this.onBuild,
     required this.onRun,
+    required this.isSandboxExecutionRunning,
+    required this.activeSandboxAction,
   });
 
+  final VoidCallback onShowPrompt;
+  final VoidCallback onShowHint;
   final Future<void> Function() onBuild;
   final Future<void> Function() onRun;
+  final bool isSandboxExecutionRunning;
+  final SandboxExecutionAction? activeSandboxAction;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: <Widget>[
-        Expanded(
+        OutlinedButton.icon(
+          onPressed: onShowPrompt,
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('Prompt'),
+        ),
+        OutlinedButton.icon(
+          onPressed: onShowHint,
+          icon: const Icon(Icons.lightbulb_outline_rounded),
+          label: const Text('Hint'),
+        ),
+        SizedBox(
+          width: 160,
           child: FilledButton.tonalIcon(
-            onPressed: () => onBuild(),
-            icon: const Icon(Icons.build_circle_outlined),
-            label: const Text('Build'),
+            onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
+            icon: activeSandboxAction == SandboxExecutionAction.build
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.build_circle_outlined),
+            label: Text(
+              activeSandboxAction == SandboxExecutionAction.build
+                  ? 'Building...'
+                  : 'Build',
+            ),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
+        SizedBox(
+          width: 160,
           child: FilledButton.tonalIcon(
-            onPressed: () => onRun(),
-            icon: const Icon(Icons.play_circle_outline_rounded),
-            label: const Text('Run'),
+            onPressed: isSandboxExecutionRunning ? null : () => onRun(),
+            icon: activeSandboxAction == SandboxExecutionAction.run
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_circle_outline_rounded),
+            label: Text(
+              activeSandboxAction == SandboxExecutionAction.run
+                  ? 'Running...'
+                  : 'Run',
+            ),
           ),
         ),
       ],
@@ -1343,6 +1701,7 @@ class _QuickActionRow extends StatelessWidget {
     required this.onRun,
     required this.onCheck,
     required this.onExplain,
+    required this.isSandboxExecutionRunning,
   });
 
   final VoidCallback onHint;
@@ -1350,6 +1709,7 @@ class _QuickActionRow extends StatelessWidget {
   final Future<void> Function() onRun;
   final VoidCallback onCheck;
   final VoidCallback onExplain;
+  final bool isSandboxExecutionRunning;
 
   @override
   Widget build(BuildContext context) {
@@ -1363,14 +1723,26 @@ class _QuickActionRow extends StatelessWidget {
           label: const Text('Hint'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => onBuild(),
-          icon: const Icon(Icons.build_circle_outlined),
-          label: const Text('Build'),
+          onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
+          icon: isSandboxExecutionRunning
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.build_circle_outlined),
+          label: Text(isSandboxExecutionRunning ? 'Working...' : 'Build'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => onRun(),
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Run'),
+          onPressed: isSandboxExecutionRunning ? null : () => onRun(),
+          icon: isSandboxExecutionRunning
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_rounded),
+          label: Text(isSandboxExecutionRunning ? 'Working...' : 'Run'),
         ),
         FilledButton.tonalIcon(
           onPressed: onCheck,
@@ -1394,7 +1766,7 @@ class _ValidationCard extends StatelessWidget {
   });
 
   final ValidationResult result;
-  final Milestone milestone;
+  final SessionMilestoneView milestone;
 
   @override
   Widget build(BuildContext context) {
@@ -1530,6 +1902,12 @@ class _ExecutionResultSheet extends StatelessWidget {
     }
 
     final tabs = <ExecutionOutputSection>[
+      if (report.programResult != null)
+        const ExecutionOutputSection(
+          id: 'program',
+          title: 'Program',
+          content: '',
+        ),
       if (report.caseResults.isNotEmpty)
         ExecutionOutputSection(
           id: 'cases',
@@ -1584,6 +1962,12 @@ class _ExecutionResultSheet extends StatelessWidget {
                   Expanded(
                     child: TabBarView(
                       children: tabs.map((tab) {
+                        if (tab.id == 'program' &&
+                            report.programResult != null) {
+                          return _ExecutionProgramCard(
+                            programResult: report.programResult!,
+                          );
+                        }
                         if (tab.id == 'cases') {
                           return _ExecutionCasesList(
                             caseResults: report.caseResults,
@@ -1686,6 +2070,80 @@ class _ExecutionCasesList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ExecutionProgramCard extends StatelessWidget {
+  const _ExecutionProgramCard({
+    required this.programResult,
+  });
+
+  final ExecutionProgramResult programResult;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentColor = programResult.passed
+        ? theme.colorScheme.tertiary
+        : theme.colorScheme.secondary;
+
+    return ListView(
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: Colors.white,
+            border: Border.all(color: accentColor.withValues(alpha: 0.35)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(
+                    programResult.passed
+                        ? Icons.play_circle_rounded
+                        : Icons.error_outline_rounded,
+                    color: accentColor,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      programResult.label,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  Text(programResult.statusLabel),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text('Output', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              SelectableText(programResult.actualOutput),
+              if (programResult.stderr.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text('Stderr', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                SelectableText(programResult.stderr),
+              ],
+              if (programResult.compileOutput.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text('Compile output', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                SelectableText(programResult.compileOutput),
+              ],
+              if (programResult.message.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text('Message', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                SelectableText(programResult.message),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

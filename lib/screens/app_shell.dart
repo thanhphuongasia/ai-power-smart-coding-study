@@ -114,16 +114,16 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _startSession({
-    required LearningTrack track,
-    required LearningModule module,
-    required Milestone milestone,
+    LearningTrack? track,
+    required LearningExercise exercise,
     required PracticeMode mode,
+    String? languageId,
   }) {
     widget.appState.startSession(
       track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: mode,
+      languageId: languageId,
     );
     setState(() => _index = 3);
   }

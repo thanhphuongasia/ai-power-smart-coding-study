@@ -7,7 +7,9 @@ This service now owns both:
 
 ## Local development
 
-1. Optionally provide a bootstrap snapshot from the old seed curriculum.
+1. The repo already includes a demo snapshot at `../strapi/seed/seed_content.json`.
+   If you want to regenerate that snapshot from the Dart seed curriculum, you can
+   still do that:
 
 ```bash
 flutter pub run tool/export_seed_content.dart strapi/seed/seed_content.json

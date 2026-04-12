@@ -48,8 +48,9 @@ class AppApiService {
     final payload = await _get('/v1/catalog/manifest');
     return ContentManifest(
       contentVersion: payload['content_version'] as String? ?? '0',
-      publishedAt: DateTime.tryParse(payload['published_at'] as String? ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      publishedAt:
+          DateTime.tryParse(payload['published_at'] as String? ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0),
       checksum: payload['checksum'] as String? ?? '',
     );
   }
@@ -61,6 +62,22 @@ class AppApiService {
           .whereType<Map>()
           .map((item) => learningTrackFromJson(item.cast<String, dynamic>()))
           .toList(growable: false),
+      exercises: (payload['exercises'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => learningExerciseFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      topics: (payload['topics'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => topicDefinitionFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      domains: (payload['domains'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => domainDefinitionFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      tagSuggestions:
+          (payload['tagSuggestions'] as List<dynamic>? ?? const <dynamic>[])
+              .map((item) => item.toString())
+              .toList(growable: false),
       skillNodes: (payload['skills'] as List<dynamic>? ?? const <dynamic>[])
           .whereType<Map>()
           .map((item) => skillNodeFromJson(item.cast<String, dynamic>()))
@@ -89,7 +106,8 @@ class AppApiService {
     );
 
     final rawSkillMemory =
-        skillMemory['skill_memory'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        skillMemory['skill_memory'] as Map<String, dynamic>? ??
+            <String, dynamic>{};
 
     return RemoteLearnerStateSnapshot(
       dashboard: dashboardStatsFromJson(dashboard),
@@ -102,8 +120,9 @@ class AppApiService {
         for (final entry in rawSkillMemory.entries)
           entry.key: skillMasteryRecordFromJson(entry.value),
       },
-      completedMilestoneIds: Set<String>.from(
-        (progress['completed_milestone_ids'] as List<dynamic>? ??
+      completedExerciseIds: Set<String>.from(
+        (progress['completed_exercise_ids'] as List<dynamic>? ??
+                progress['completed_milestone_ids'] as List<dynamic>? ??
                 const <dynamic>[])
             .map((item) => item.toString()),
       ),
@@ -253,10 +272,18 @@ class AppApiSettings {
 class CatalogApiSnapshot {
   const CatalogApiSnapshot({
     required this.tracks,
+    required this.exercises,
+    required this.topics,
+    required this.domains,
+    required this.tagSuggestions,
     required this.skillNodes,
   });
 
   final List<LearningTrack> tracks;
+  final List<LearningExercise> exercises;
+  final List<TopicDefinition> topics;
+  final List<DomainDefinition> domains;
+  final List<String> tagSuggestions;
   final List<SkillNode> skillNodes;
 }
 
@@ -265,13 +292,13 @@ class RemoteLearnerStateSnapshot {
     required this.dashboard,
     required this.reviewQueue,
     required this.skillMemory,
-    required this.completedMilestoneIds,
+    required this.completedExerciseIds,
     required this.nextCursor,
   });
 
   final DashboardStats dashboard;
   final List<ReviewTask> reviewQueue;
   final Map<String, SkillMasteryRecord> skillMemory;
-  final Set<String> completedMilestoneIds;
+  final Set<String> completedExerciseIds;
   final int nextCursor;
 }

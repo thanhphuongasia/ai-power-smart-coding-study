@@ -2,6 +2,17 @@ import 'package:flutter/material.dart';
 
 enum LearningTrackType { project, dataStructure, leetcode }
 
+enum LearningLevel { foundation, intermediate, advanced }
+
+enum ContentKind {
+  projectTrack,
+  projectExercise,
+  dsaTrack,
+  dsaExercise,
+  leetcodeSet,
+  leetcodeExercise,
+}
+
 enum PracticeMode { guided, standard, timed }
 
 enum HintLevel { concept, structure, pseudocode, lineHint, fullExplain }
@@ -23,93 +34,166 @@ class LearningTrack {
     required this.title,
     required this.summary,
     required this.type,
-    required this.difficultyLabel,
-    required this.focusAreas,
-    required this.modules,
+    required this.contentKind,
+    required this.level,
+    required this.topicIds,
+    required this.domainIds,
+    required this.tags,
+    required this.skillIds,
+    required this.exerciseRefs,
   });
 
   final String id;
   final String title;
   final String summary;
   final LearningTrackType type;
-  final String difficultyLabel;
-  final List<String> focusAreas;
-  final List<LearningModule> modules;
+  final ContentKind contentKind;
+  final LearningLevel level;
+  final List<String> topicIds;
+  final List<String> domainIds;
+  final List<String> tags;
+  final List<String> skillIds;
+  final List<TrackExerciseRef> exerciseRefs;
 }
 
-class LearningModule {
-  const LearningModule({
+class TrackExerciseRef {
+  const TrackExerciseRef({
+    required this.exerciseId,
+    this.title,
+    this.summary,
+    this.milestoneLabel,
+  });
+
+  final String exerciseId;
+  final String? title;
+  final String? summary;
+  final String? milestoneLabel;
+}
+
+class LearningExercise {
+  const LearningExercise({
     required this.id,
     required this.title,
     required this.summary,
-    required this.estimatedMinutes,
-    required this.milestones,
+    required this.type,
+    required this.contentKind,
+    required this.level,
+    required this.topicIds,
+    required this.domainIds,
+    required this.tags,
+    required this.skillIds,
+    required this.problemStatement,
+    required this.acceptanceCriteria,
+    required this.taskSteps,
+    required this.supportedModes,
+    required this.hints,
+    required this.reflectionPrompts,
+    required this.requirements,
+    required this.languageVariants,
   });
 
   final String id;
   final String title;
   final String summary;
-  final int estimatedMinutes;
-  final List<Milestone> milestones;
-}
-
-class Milestone {
-  const Milestone({
-    required this.id,
-    required this.title,
-    required this.objective,
-    required this.problemStatement,
-    required this.languageLabel,
-    required this.relatedFiles,
-    required this.acceptanceCriteria,
-    required this.taskSteps,
-    required this.supportedModes,
-    required this.hints,
-    required this.starterCode,
-    this.starterFiles = const <String, String>{},
-    this.solutionCode,
-    required this.exampleInput,
-    required this.exampleOutput,
-    this.sandboxHarnessTemplate = defaultSandboxHarnessTemplate,
-    this.sandboxEntryFilePath,
-    this.demoFilePath,
-    this.testCases = const <ExecutionTestCase>[],
-    required this.reflectionPrompts,
-    required this.skillIds,
-    required this.requirements,
-    this.runCommand = 'python main.py',
-    this.reviewPrompt,
-  });
-
-  final String id;
-  final String title;
-  final String objective;
+  final LearningTrackType type;
+  final ContentKind contentKind;
+  final LearningLevel level;
+  final List<String> topicIds;
+  final List<String> domainIds;
+  final List<String> tags;
+  final List<String> skillIds;
   final String problemStatement;
-  final String languageLabel;
-  final List<String> relatedFiles;
   final List<String> acceptanceCriteria;
   final List<TaskStep> taskSteps;
   final List<PracticeMode> supportedModes;
   final Map<HintLevel, String> hints;
+  final List<String> reflectionPrompts;
+  final List<RequirementCheck> requirements;
+  final List<ExerciseLanguageVariant> languageVariants;
+
+  ExerciseLanguageVariant resolveVariant({
+    String? preferredLanguageId,
+    String? explicitLanguageId,
+  }) {
+    if (explicitLanguageId != null) {
+      for (final variant in languageVariants) {
+        if (variant.languageId == explicitLanguageId) {
+          return variant;
+        }
+      }
+    }
+    if (preferredLanguageId != null) {
+      for (final variant in languageVariants) {
+        if (variant.languageId == preferredLanguageId) {
+          return variant;
+        }
+      }
+    }
+    for (final variant in languageVariants) {
+      if (variant.isDefault) {
+        return variant;
+      }
+    }
+    return languageVariants.first;
+  }
+}
+
+class ExerciseLanguageVariant {
+  const ExerciseLanguageVariant({
+    required this.languageId,
+    required this.languageLabel,
+    required this.isDefault,
+    required this.starterCode,
+    this.starterFiles = const <String, String>{},
+    this.solutionCode,
+    this.sandboxHarnessTemplate =
+        ExerciseLanguageVariant.defaultSandboxHarnessTemplate,
+    required this.runCommand,
+    required this.entryFilePath,
+    this.demoFilePath,
+    this.testCases = const <ExecutionTestCase>[],
+  });
+
+  final String languageId;
+  final String languageLabel;
+  final bool isDefault;
   final String starterCode;
   final Map<String, String> starterFiles;
   final String? solutionCode;
-  final String exampleInput;
-  final String exampleOutput;
   final String sandboxHarnessTemplate;
-  final String? sandboxEntryFilePath;
+  final String runCommand;
+  final String entryFilePath;
   final String? demoFilePath;
   final List<ExecutionTestCase> testCases;
-  final List<String> reflectionPrompts;
-  final List<String> skillIds;
-  final List<RequirementCheck> requirements;
-  final String runCommand;
-  final String? reviewPrompt;
 
   static const String defaultSandboxHarnessTemplate = '''{{USER_CODE}}
 
 {{TEST_BODY}}
 ''';
+}
+
+class TopicDefinition {
+  const TopicDefinition({
+    required this.id,
+    required this.title,
+    required this.summary,
+  });
+
+  final String id;
+  final String title;
+  final String summary;
+}
+
+class DomainDefinition {
+  const DomainDefinition({
+    required this.id,
+    required this.title,
+    required this.summary,
+  });
+
+  final String id;
+  final String title;
+  final String summary;
 }
 
 class TaskStep {
@@ -156,14 +240,14 @@ class SkillNode {
     required this.title,
     required this.category,
     required this.description,
-    required this.reviewMilestoneId,
+    required this.reviewExerciseId,
   });
 
   final String id;
   final String title;
   final SkillCategory category;
   final String description;
-  final String reviewMilestoneId;
+  final String reviewExerciseId;
 }
 
 class SkillMasteryRecord {
@@ -204,10 +288,10 @@ class SkillMasteryRecord {
 class PracticeSession {
   const PracticeSession({
     required this.id,
-    required this.track,
-    required this.module,
-    required this.milestone,
+    required this.exercise,
+    required this.selectedVariant,
     required this.mode,
+    this.track,
     required this.fileContents,
     required this.activeFilePath,
     required this.revealedHintLevel,
@@ -217,10 +301,10 @@ class PracticeSession {
   });
 
   final String id;
-  final LearningTrack track;
-  final LearningModule module;
-  final Milestone milestone;
+  final LearningExercise exercise;
+  final ExerciseLanguageVariant selectedVariant;
   final PracticeMode mode;
+  final LearningTrack? track;
   final Map<String, String> fileContents;
   final String activeFilePath;
   final HintLevel? revealedHintLevel;
@@ -228,15 +312,19 @@ class PracticeSession {
   final List<String> sessionLog;
   final List<ExecutionAttempt> executionHistory;
 
-  String get primaryFilePath => milestone.relatedFiles.isEmpty
-      ? activeFilePath
-      : milestone.relatedFiles.first;
+  SessionMilestoneView get milestone =>
+      SessionMilestoneView(exercise: exercise, variant: selectedVariant);
+
+  String get primaryFilePath => selectedVariant.entryFilePath;
 
   String get code => fileContentFor(primaryFilePath);
+
+  List<String> get relatedFiles => fileContents.keys.toList(growable: false);
 
   String fileContentFor(String path) => fileContents[path] ?? '';
 
   PracticeSession copyWith({
+    ExerciseLanguageVariant? selectedVariant,
     Map<String, String>? fileContents,
     String? activeFilePath,
     HintLevel? revealedHintLevel,
@@ -247,10 +335,10 @@ class PracticeSession {
   }) {
     return PracticeSession(
       id: id,
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
+      selectedVariant: selectedVariant ?? this.selectedVariant,
       mode: mode,
+      track: track,
       fileContents: fileContents ?? this.fileContents,
       activeFilePath: activeFilePath ?? this.activeFilePath,
       revealedHintLevel:
@@ -260,6 +348,48 @@ class PracticeSession {
       executionHistory: executionHistory ?? this.executionHistory,
     );
   }
+}
+
+class SessionMilestoneView {
+  const SessionMilestoneView({
+    required this.exercise,
+    required this.variant,
+  });
+
+  final LearningExercise exercise;
+  final ExerciseLanguageVariant variant;
+
+  String get id => exercise.id;
+  String get title => exercise.title;
+  String get objective => exercise.summary;
+  String get problemStatement => exercise.problemStatement;
+  String get languageLabel => variant.languageLabel;
+  List<String> get relatedFiles {
+    final files = <String>{
+      variant.entryFilePath,
+      ...variant.starterFiles.keys,
+    };
+    return files.toList(growable: false);
+  }
+
+  List<String> get acceptanceCriteria => exercise.acceptanceCriteria;
+  List<TaskStep> get taskSteps => exercise.taskSteps;
+  List<PracticeMode> get supportedModes => exercise.supportedModes;
+  Map<HintLevel, String> get hints => exercise.hints;
+  String get starterCode => variant.starterCode;
+  Map<String, String> get starterFiles => variant.starterFiles;
+  String? get solutionCode => variant.solutionCode;
+  String get exampleInput => '';
+  String get exampleOutput => '';
+  String get sandboxHarnessTemplate => variant.sandboxHarnessTemplate;
+  String? get sandboxEntryFilePath => variant.entryFilePath;
+  String? get demoFilePath => variant.demoFilePath;
+  List<ExecutionTestCase> get testCases => variant.testCases;
+  List<String> get reflectionPrompts => exercise.reflectionPrompts;
+  List<String> get skillIds => exercise.skillIds;
+  List<RequirementCheck> get requirements => exercise.requirements;
+  String get runCommand => variant.runCommand;
+  String? get reviewPrompt => null;
 }
 
 class ExecutionAttempt {
@@ -398,7 +528,7 @@ class ReviewTask {
     required this.title,
     required this.description,
     required this.skillIds,
-    required this.milestoneId,
+    required this.exerciseId,
     required this.laneLabel,
   });
 
@@ -406,7 +536,7 @@ class ReviewTask {
   final String title;
   final String description;
   final List<String> skillIds;
-  final String milestoneId;
+  final String exerciseId;
   final String laneLabel;
 }
 
@@ -440,9 +570,20 @@ extension LearningTrackTypeCopy on LearningTrackType {
       case LearningTrackType.project:
         return 'Projects';
       case LearningTrackType.dataStructure:
-        return 'DS & Algo';
+        return 'DSA';
       case LearningTrackType.leetcode:
         return 'LeetCode';
+    }
+  }
+
+  String get wireValue {
+    switch (this) {
+      case LearningTrackType.project:
+        return 'project';
+      case LearningTrackType.dataStructure:
+        return 'dsa';
+      case LearningTrackType.leetcode:
+        return 'leetcode';
     }
   }
 
@@ -454,6 +595,34 @@ extension LearningTrackTypeCopy on LearningTrackType {
         return Icons.account_tree_rounded;
       case LearningTrackType.leetcode:
         return Icons.bolt_rounded;
+    }
+  }
+}
+
+extension LearningLevelCopy on LearningLevel {
+  String get label {
+    switch (this) {
+      case LearningLevel.foundation:
+        return 'Foundation';
+      case LearningLevel.intermediate:
+        return 'Intermediate';
+      case LearningLevel.advanced:
+        return 'Advanced';
+    }
+  }
+}
+
+extension ContentKindCopy on ContentKind {
+  bool get isTrack {
+    switch (this) {
+      case ContentKind.projectTrack:
+      case ContentKind.dsaTrack:
+      case ContentKind.leetcodeSet:
+        return true;
+      case ContentKind.projectExercise:
+      case ContentKind.dsaExercise:
+      case ContentKind.leetcodeExercise:
+        return false;
     }
   }
 }

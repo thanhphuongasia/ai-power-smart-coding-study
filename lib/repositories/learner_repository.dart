@@ -16,13 +16,17 @@ abstract class LearnerRepository {
 
   Future<DashboardStats?> readCachedDashboard();
 
-  Future<Set<String>> readCachedCompletedMilestoneIds();
+  Future<Set<String>> readCachedCompletedExerciseIds();
+
+  Future<String?> readCachedPreferredLanguageId();
+
+  Future<void> savePreferredLanguageId(String? languageId);
 
   Future<void> saveDerivedState({
     required Map<String, SkillMasteryRecord> skillMemory,
     required List<ReviewTask> reviewQueue,
     required DashboardStats dashboardStats,
-    required Set<String> completedMilestoneIds,
+    required Set<String> completedExerciseIds,
   });
 
   Future<bool> refreshLearnerState();
@@ -102,9 +106,26 @@ class AppApiLearnerRepository implements LearnerRepository {
   }
 
   @override
-  Future<Set<String>> readCachedCompletedMilestoneIds() async {
+  Future<Set<String>> readCachedCompletedExerciseIds() async {
     final document = await _localAppStore.read();
-    return document.completedMilestoneIds;
+    return document.completedExerciseIds;
+  }
+
+  @override
+  Future<String?> readCachedPreferredLanguageId() async {
+    final document = await _localAppStore.read();
+    return document.preferredLanguageId;
+  }
+
+  @override
+  Future<void> savePreferredLanguageId(String? languageId) async {
+    final document = await _localAppStore.read();
+    await _localAppStore.write(
+      document.copyWith(
+        preferredLanguageId: languageId,
+        clearPreferredLanguageId: languageId == null,
+      ),
+    );
   }
 
   @override
@@ -112,7 +133,7 @@ class AppApiLearnerRepository implements LearnerRepository {
     required Map<String, SkillMasteryRecord> skillMemory,
     required List<ReviewTask> reviewQueue,
     required DashboardStats dashboardStats,
-    required Set<String> completedMilestoneIds,
+    required Set<String> completedExerciseIds,
   }) async {
     final document = await _localAppStore.read();
     await _localAppStore.write(
@@ -120,7 +141,7 @@ class AppApiLearnerRepository implements LearnerRepository {
         skillMemory: skillMemory,
         reviewQueue: reviewQueue,
         dashboardStats: dashboardStats,
-        completedMilestoneIds: completedMilestoneIds,
+        completedExerciseIds: completedExerciseIds,
       ),
     );
   }
@@ -141,11 +162,12 @@ class AppApiLearnerRepository implements LearnerRepository {
         await _appApiService.fetchLearnerState(learnerProfile: learnerProfile);
     await _localAppStore.write(
       document.copyWith(
-        learnerProfile: learnerProfile.copyWith(syncCursor: remoteState.nextCursor),
+        learnerProfile:
+            learnerProfile.copyWith(syncCursor: remoteState.nextCursor),
         skillMemory: remoteState.skillMemory,
         reviewQueue: remoteState.reviewQueue,
         dashboardStats: remoteState.dashboard,
-        completedMilestoneIds: remoteState.completedMilestoneIds,
+        completedExerciseIds: remoteState.completedExerciseIds,
         lastSyncedAt: DateTime.now(),
       ),
     );
@@ -169,18 +191,21 @@ class MemoryLearnerRepository implements LearnerRepository {
         const <String, SkillMasteryRecord>{},
     List<ReviewTask> reviewQueue = const <ReviewTask>[],
     DashboardStats? dashboardStats,
-    Set<String> completedMilestoneIds = const <String>{},
+    Set<String> completedExerciseIds = const <String>{},
+    String? preferredLanguageId,
   })  : _learnerProfile = learnerProfile,
         _skillMemory = Map<String, SkillMasteryRecord>.from(skillMemory),
         _reviewQueue = List<ReviewTask>.from(reviewQueue),
         _dashboardStats = dashboardStats,
-        _completedMilestoneIds = Set<String>.from(completedMilestoneIds);
+        _completedExerciseIds = Set<String>.from(completedExerciseIds),
+        _preferredLanguageId = preferredLanguageId;
 
   final LearnerProfile _learnerProfile;
   Map<String, SkillMasteryRecord> _skillMemory;
   List<ReviewTask> _reviewQueue;
   DashboardStats? _dashboardStats;
-  Set<String> _completedMilestoneIds;
+  Set<String> _completedExerciseIds;
+  String? _preferredLanguageId;
 
   @override
   Future<LearnerProfile> bootstrapLearner() async => _learnerProfile;
@@ -199,20 +224,28 @@ class MemoryLearnerRepository implements LearnerRepository {
   Future<DashboardStats?> readCachedDashboard() async => _dashboardStats;
 
   @override
-  Future<Set<String>> readCachedCompletedMilestoneIds() async =>
-      _completedMilestoneIds;
+  Future<Set<String>> readCachedCompletedExerciseIds() async =>
+      _completedExerciseIds;
+
+  @override
+  Future<String?> readCachedPreferredLanguageId() async => _preferredLanguageId;
+
+  @override
+  Future<void> savePreferredLanguageId(String? languageId) async {
+    _preferredLanguageId = languageId;
+  }
 
   @override
   Future<void> saveDerivedState({
     required Map<String, SkillMasteryRecord> skillMemory,
     required List<ReviewTask> reviewQueue,
     required DashboardStats dashboardStats,
-    required Set<String> completedMilestoneIds,
+    required Set<String> completedExerciseIds,
   }) async {
     _skillMemory = Map<String, SkillMasteryRecord>.from(skillMemory);
     _reviewQueue = List<ReviewTask>.from(reviewQueue);
     _dashboardStats = dashboardStats;
-    _completedMilestoneIds = Set<String>.from(completedMilestoneIds);
+    _completedExerciseIds = Set<String>.from(completedExerciseIds);
   }
 
   @override

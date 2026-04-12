@@ -10,8 +10,10 @@ import {
   buildInitialProjection,
   deriveDashboard,
   deriveReviewQueue,
+  type ExerciseDefinition as ProjectionExerciseDefinition,
   type LearnerEventEnvelope,
-  type TrackDefinition,
+  type SkillDefinition as ProjectionSkillDefinition,
+  type TrackDefinition as ProjectionTrackDefinition,
 } from "./projections.js";
 
 type LearnerRecord = {
@@ -22,6 +24,8 @@ type LearnerRecord = {
   seenEventIds: Set<string>;
   events: LearnerEventEnvelope[];
 };
+
+type PlainObject = Record<string, unknown>;
 
 export function createApp({
   contentStoreRepository = new ContentStoreRepository({
@@ -48,8 +52,10 @@ export function createApp({
       ok: true,
       learners: learnersByInstallId.size,
       catalogTracks: catalog.tracks.length,
+      catalogExercises: catalog.exercises.length,
       catalogSkills: catalog.skills.length,
       adminEnabled: true,
+      schemaVersion: 2,
     });
   });
 
@@ -62,7 +68,6 @@ export function createApp({
 
     let learner = learnersByInstallId.get(installId);
     if (!learner) {
-      const catalog = await contentStoreRepository.listPublishedCatalog();
       learner = {
         learnerId: crypto.randomUUID(),
         installId,
@@ -73,13 +78,6 @@ export function createApp({
       };
       learnersByInstallId.set(installId, learner);
       learnersByToken.set(learner.accessToken, learner);
-
-      for (const skill of catalog.skills) {
-        if (!("id" in skill)) {
-          continue;
-        }
-        void skill;
-      }
     }
 
     response.json({
@@ -100,8 +98,7 @@ export function createApp({
   });
 
   app.get("/v1/catalog", async (_request, response) => {
-    const catalog = await contentStoreRepository.listPublishedCatalog();
-    response.json(catalog);
+    response.json(await contentStoreRepository.listPublishedCatalog());
   });
 
   app.post("/v1/sync/events", async (request, response) => {
@@ -111,14 +108,12 @@ export function createApp({
     }
 
     const catalog = await contentStoreRepository.listPublishedCatalog();
-    const skills = catalog.skills
-      .filter((skill) => typeof skill.id === "string")
-      .map((skill) => ({
-        id: String(skill.id),
-        title: String(skill.title ?? skill.id),
-        description: String(skill.description ?? ""),
-        reviewMilestoneId: String(skill.reviewMilestoneId ?? ""),
-      }));
+    const skills = catalog.skills.map((skill) => ({
+      id: String(skill.id),
+      title: String(skill.title ?? skill.id),
+      description: String(skill.description ?? ""),
+      reviewExerciseId: String(skill.reviewExerciseId ?? ""),
+    }));
 
     let projection = buildInitialProjection(skills);
     for (const event of learner.events) {
@@ -163,8 +158,10 @@ export function createApp({
     }
 
     const projection = await deriveLearnerProjection(contentStoreRepository, learner);
+    const completedExerciseIds = Array.from(projection.completedExerciseIds);
     response.json({
-      completed_milestone_ids: Array.from(projection.completedMilestoneIds),
+      completed_exercise_ids: completedExerciseIds,
+      completed_milestone_ids: completedExerciseIds,
       sync_cursor: learner.syncCursor,
     });
   });
@@ -178,7 +175,11 @@ export function createApp({
     const catalog = await contentStoreRepository.listPublishedCatalog();
     const projection = await deriveLearnerProjection(contentStoreRepository, learner);
     response.json(
-      deriveDashboard(projection, normalizeTracksForProjection(catalog.tracks)),
+      deriveDashboard(
+        projection,
+        normalizeTracksForProjection(catalog.tracks),
+        normalizeExercisesForProjection(catalog.exercises),
+      ),
     );
   });
 
@@ -194,6 +195,7 @@ export function createApp({
       review_queue: deriveReviewQueue(
         projection,
         normalizeTracksForProjection(catalog.tracks),
+        normalizeExercisesForProjection(catalog.exercises),
         normalizeSkillsForProjection(catalog.skills),
       ),
     });
@@ -215,6 +217,7 @@ export function createApp({
     response.json({
       ok: true,
       authMode: "x-admin-key",
+      schemaVersion: 2,
     });
   });
 
@@ -222,134 +225,46 @@ export function createApp({
     response.json(await contentStoreRepository.listAdminCatalog());
   });
 
-  app.post("/admin/api/tracks", withAdminAuth(adminApiKey), async (request, response) => {
-    try {
-      const entry = await contentStoreRepository.createTrack(request.body);
-      response.status(201).json(entry);
-    } catch (error) {
-      response.status(400).json({ error: toErrorMessage(error) });
-    }
+  bindAdminCrudRoutes(app, adminApiKey, "tracks", {
+    create: (payload) => contentStoreRepository.createTrack(payload),
+    update: (id, payload) => contentStoreRepository.updateTrack(id, payload),
+    remove: (id) => contentStoreRepository.deleteTrack(id),
+    publish: (id) => contentStoreRepository.publishTrack(id),
+    unpublish: (id) => contentStoreRepository.unpublishTrack(id),
+    label: "Track",
   });
-
-  app.put(
-    "/admin/api/tracks/:trackId",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      try {
-        const entry = await contentStoreRepository.updateTrack(
-          String(request.params.trackId),
-          request.body,
-        );
-        if (!entry) {
-          return response.status(404).json({ error: "Track not found" });
-        }
-        response.json(entry);
-      } catch (error) {
-        response.status(400).json({ error: toErrorMessage(error) });
-      }
-    },
-  );
-
-  app.delete(
-    "/admin/api/tracks/:trackId",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const trackId = String(request.params.trackId);
-      const deleted = await contentStoreRepository.deleteTrack(trackId);
-      if (!deleted) {
-        return response.status(404).json({ error: "Track not found" });
-      }
-      response.status(204).send();
-    },
-  );
-
-  app.post(
-    "/admin/api/tracks/:trackId/publish",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const entry = await contentStoreRepository.publishTrack(String(request.params.trackId));
-      if (!entry) {
-        return response.status(404).json({ error: "Track not found" });
-      }
-      response.json(entry);
-    },
-  );
-
-  app.post(
-    "/admin/api/tracks/:trackId/unpublish",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const entry = await contentStoreRepository.unpublishTrack(String(request.params.trackId));
-      if (!entry) {
-        return response.status(404).json({ error: "Track not found" });
-      }
-      response.json(entry);
-    },
-  );
-
-  app.post("/admin/api/skills", withAdminAuth(adminApiKey), async (request, response) => {
-    try {
-      const entry = await contentStoreRepository.createSkill(request.body);
-      response.status(201).json(entry);
-    } catch (error) {
-      response.status(400).json({ error: toErrorMessage(error) });
-    }
+  bindAdminCrudRoutes(app, adminApiKey, "exercises", {
+    create: (payload) => contentStoreRepository.createExercise(payload),
+    update: (id, payload) => contentStoreRepository.updateExercise(id, payload),
+    remove: (id) => contentStoreRepository.deleteExercise(id),
+    publish: (id) => contentStoreRepository.publishExercise(id),
+    unpublish: (id) => contentStoreRepository.unpublishExercise(id),
+    label: "Exercise",
   });
-
-  app.put(
-    "/admin/api/skills/:skillId",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      try {
-        const entry = await contentStoreRepository.updateSkill(
-          String(request.params.skillId),
-          request.body,
-        );
-        if (!entry) {
-          return response.status(404).json({ error: "Skill not found" });
-        }
-        response.json(entry);
-      } catch (error) {
-        response.status(400).json({ error: toErrorMessage(error) });
-      }
-    },
-  );
-
-  app.delete(
-    "/admin/api/skills/:skillId",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const deleted = await contentStoreRepository.deleteSkill(String(request.params.skillId));
-      if (!deleted) {
-        return response.status(404).json({ error: "Skill not found" });
-      }
-      response.status(204).send();
-    },
-  );
-
-  app.post(
-    "/admin/api/skills/:skillId/publish",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const entry = await contentStoreRepository.publishSkill(String(request.params.skillId));
-      if (!entry) {
-        return response.status(404).json({ error: "Skill not found" });
-      }
-      response.json(entry);
-    },
-  );
-
-  app.post(
-    "/admin/api/skills/:skillId/unpublish",
-    withAdminAuth(adminApiKey),
-    async (request, response) => {
-      const entry = await contentStoreRepository.unpublishSkill(String(request.params.skillId));
-      if (!entry) {
-        return response.status(404).json({ error: "Skill not found" });
-      }
-      response.json(entry);
-    },
-  );
+  bindAdminCrudRoutes(app, adminApiKey, "topics", {
+    create: (payload) => contentStoreRepository.createTopic(payload),
+    update: (id, payload) => contentStoreRepository.updateTopic(id, payload),
+    remove: (id) => contentStoreRepository.deleteTopic(id),
+    publish: (id) => contentStoreRepository.publishTopic(id),
+    unpublish: (id) => contentStoreRepository.unpublishTopic(id),
+    label: "Topic",
+  });
+  bindAdminCrudRoutes(app, adminApiKey, "domains", {
+    create: (payload) => contentStoreRepository.createDomain(payload),
+    update: (id, payload) => contentStoreRepository.updateDomain(id, payload),
+    remove: (id) => contentStoreRepository.deleteDomain(id),
+    publish: (id) => contentStoreRepository.publishDomain(id),
+    unpublish: (id) => contentStoreRepository.unpublishDomain(id),
+    label: "Domain",
+  });
+  bindAdminCrudRoutes(app, adminApiKey, "skills", {
+    create: (payload) => contentStoreRepository.createSkill(payload),
+    update: (id, payload) => contentStoreRepository.updateSkill(id, payload),
+    remove: (id) => contentStoreRepository.deleteSkill(id),
+    publish: (id) => contentStoreRepository.publishSkill(id),
+    unpublish: (id) => contentStoreRepository.unpublishSkill(id),
+    label: "Skill",
+  });
 
   return app;
 }
@@ -359,54 +274,87 @@ async function deriveLearnerProjection(
   learner: LearnerRecord,
 ) {
   const catalog = await contentStoreRepository.listPublishedCatalog();
-  const projection = buildInitialProjection(normalizeSkillsForProjection(catalog.skills));
-  return learner.events.reduce(
-    (nextProjection, event) => applyLearnerEvent(nextProjection, event),
-    projection,
-  );
+  const skills = normalizeSkillsForProjection(catalog.skills);
+  let projection = buildInitialProjection(skills);
+  for (const event of learner.events) {
+    projection = applyLearnerEvent(projection, event);
+  }
+  return projection;
 }
 
-function requireLearner(
-  learnersByToken: Map<string, LearnerRecord>,
-  authorizationHeader: string | undefined,
+function bindAdminCrudRoutes(
+  app: ReturnType<typeof express>,
+  adminApiKey: string,
+  collection: string,
+  handlers: {
+    create: (payload: PlainObject) => Promise<unknown>;
+    update: (id: string, payload: PlainObject) => Promise<unknown>;
+    remove: (id: string) => Promise<boolean>;
+    publish: (id: string) => Promise<unknown>;
+    unpublish: (id: string) => Promise<unknown>;
+    label: string;
+  },
 ) {
-  const token = authorizationHeader?.replace(/^Bearer\s+/i, "") || "";
-  return learnersByToken.get(token) || null;
-}
+  app.post(`/admin/api/${collection}`, withAdminAuth(adminApiKey), async (request, response) => {
+    try {
+      const entry = await handlers.create(request.body);
+      response.status(201).json(entry);
+    } catch (error) {
+      response.status(400).json({ error: toErrorMessage(error) });
+    }
+  });
 
-function normalizeTracksForProjection(tracks: Record<string, unknown>[]): TrackDefinition[] {
-  return tracks.map((track) => ({
-    id: String(track.id ?? ""),
-    type: normalizeTrackType(track.type),
-    modules: Array.isArray(track.modules)
-      ? track.modules.map((module) => ({
-          id: String((module as Record<string, unknown>).id ?? ""),
-          milestones: Array.isArray((module as Record<string, unknown>).milestones)
-            ? ((module as Record<string, unknown>).milestones as Record<string, unknown>[]).map(
-                (milestone) => ({
-                  id: String(milestone.id ?? ""),
-                  skillIds: Array.isArray(milestone.skillIds)
-                    ? milestone.skillIds.map((skillId) => String(skillId))
-                    : [],
-                }),
-              )
-            : [],
-        }))
-      : [],
-  }));
-}
+  app.put(
+    `/admin/api/${collection}/:entryId`,
+    withAdminAuth(adminApiKey),
+    async (request, response) => {
+      try {
+        const entry = await handlers.update(String(request.params.entryId), request.body);
+        if (!entry) {
+          return response.status(404).json({ error: `${handlers.label} not found` });
+        }
+        response.json(entry);
+      } catch (error) {
+        response.status(400).json({ error: toErrorMessage(error) });
+      }
+    },
+  );
 
-function normalizeSkillsForProjection(skills: Record<string, unknown>[]) {
-  return skills.map((skill) => ({
-    id: String(skill.id ?? ""),
-    title: String(skill.title ?? skill.id ?? ""),
-    description: String(skill.description ?? ""),
-    reviewMilestoneId: String(skill.reviewMilestoneId ?? ""),
-  }));
-}
+  app.delete(
+    `/admin/api/${collection}/:entryId`,
+    withAdminAuth(adminApiKey),
+    async (request, response) => {
+      const deleted = await handlers.remove(String(request.params.entryId));
+      if (!deleted) {
+        return response.status(404).json({ error: `${handlers.label} not found` });
+      }
+      response.status(204).send();
+    },
+  );
 
-function normalizeTrackType(value: unknown) {
-  return value === "dataStructure" || value === "leetcode" ? value : "project";
+  app.post(
+    `/admin/api/${collection}/:entryId/publish`,
+    withAdminAuth(adminApiKey),
+    async (request, response) => {
+      const entry = await handlers.publish(String(request.params.entryId));
+      if (!entry) {
+        return response.status(404).json({ error: `${handlers.label} not found` });
+      }
+      response.json(entry);
+    },
+  );
+
+  app.post(
+    `/admin/api/${collection}/:entryId/unpublish`,
+    withAdminAuth(adminApiKey),
+    async (request, response) => {
+      const entry = await handlers.unpublish(String(request.params.entryId));
+      if (!entry) {
+        return response.status(404).json({ error: `${handlers.label} not found` });
+      }
+      response.json(entry);
+    },
+  );
 }
 
 function withAdminAuth(adminApiKey: string) {
@@ -415,16 +363,78 @@ function withAdminAuth(adminApiKey: string) {
     response: express.Response,
     next: express.NextFunction,
   ) => {
-    const candidateKey =
-      request.headers["x-admin-key"] ||
-      request.headers.authorization?.replace(/^Bearer\s+/i, "");
-    if (candidateKey !== adminApiKey) {
-      return response.status(401).json({ error: "Invalid admin key" });
+    const provided = String(request.headers["x-admin-key"] || "");
+    if (!provided || provided !== adminApiKey) {
+      return response.status(401).json({ error: "Unauthorized" });
     }
     next();
   };
 }
 
+function requireLearner(
+  learnersByToken: Map<string, LearnerRecord>,
+  authorizationHeader: string | string[] | undefined,
+) {
+  const rawHeader = Array.isArray(authorizationHeader)
+    ? authorizationHeader[0]
+    : authorizationHeader;
+  const token = String(rawHeader || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    return null;
+  }
+  return learnersByToken.get(token) ?? null;
+}
+
+function normalizeTracksForProjection(
+  tracks: Array<Record<string, unknown>>,
+): ProjectionTrackDefinition[] {
+  return tracks.map((track) => ({
+    id: String(track.id ?? ""),
+    lane: normalizeLane(track.lane),
+    exerciseRefs: Array.isArray(track.exerciseRefs)
+      ? track.exerciseRefs
+          .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+          .map((item) => ({
+            exerciseId: String(item.exerciseId ?? ""),
+          }))
+      : [],
+  }));
+}
+
+function normalizeExercisesForProjection(
+  exercises: Array<Record<string, unknown>>,
+): ProjectionExerciseDefinition[] {
+  return exercises.map((exercise) => ({
+    id: String(exercise.id ?? ""),
+    lane: normalizeLane(exercise.lane),
+  }));
+}
+
+function normalizeSkillsForProjection(
+  skills: Array<Record<string, unknown>>,
+): ProjectionSkillDefinition[] {
+  return skills.map((skill) => ({
+    id: String(skill.id ?? ""),
+    title: String(skill.title ?? skill.id ?? ""),
+    description: String(skill.description ?? ""),
+    reviewExerciseId: String(skill.reviewExerciseId ?? skill.reviewMilestoneId ?? ""),
+  }));
+}
+
+function normalizeLane(value: unknown): "project" | "dsa" | "leetcode" {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "leetcode") {
+    return "leetcode";
+  }
+  if (normalized === "dsa" || normalized === "datastructure") {
+    return "dsa";
+  }
+  return "project";
+}
+
 function toErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }

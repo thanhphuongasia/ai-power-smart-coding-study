@@ -20,18 +20,28 @@ class AppState extends ChangeNotifier {
     required SandboxApiService sandboxApiService,
     required LearnerProfile learnerProfile,
     required List<LearningTrack> tracks,
+    required List<LearningExercise> exercises,
+    required List<TopicDefinition> topics,
+    required List<DomainDefinition> domains,
+    required List<String> tagSuggestions,
     required List<SkillNode> skillNodes,
     required Map<String, SkillMasteryRecord> skillMemory,
-    required Set<String> completedMilestones,
+    required Set<String> completedExercises,
+    required String? preferredLanguageId,
   })  : _catalogRepository = catalogRepository,
         _learnerRepository = learnerRepository,
         _syncRepository = syncRepository,
         _sandboxApiService = sandboxApiService,
         _learnerProfile = learnerProfile,
         _tracks = tracks,
+        _exercises = exercises,
+        _topics = topics,
+        _domains = domains,
+        _tagSuggestions = tagSuggestions,
         _skillNodes = skillNodes,
         _skillMemory = skillMemory,
-        _completedMilestones = completedMilestones;
+        _completedExercises = completedExercises,
+        _preferredLanguageId = preferredLanguageId;
 
   static Future<AppState> bootstrap({
     CatalogRepository? catalogRepository,
@@ -77,11 +87,18 @@ class AppState extends ChangeNotifier {
     }
 
     final tracks = await resolvedCatalogRepository.readCachedTracks();
+    final exercises = await resolvedCatalogRepository.readCachedExercises();
+    final topics = await resolvedCatalogRepository.readCachedTopics();
+    final domains = await resolvedCatalogRepository.readCachedDomains();
+    final tagSuggestions =
+        await resolvedCatalogRepository.readCachedTagSuggestions();
     final skillNodes = await resolvedCatalogRepository.readCachedSkillNodes();
     final cachedSkillMemory =
         await resolvedLearnerRepository.readCachedSkillMemory();
-    final completedMilestones =
-        await resolvedLearnerRepository.readCachedCompletedMilestoneIds();
+    final completedExercises =
+        await resolvedLearnerRepository.readCachedCompletedExerciseIds();
+    final preferredLanguageId =
+        await resolvedLearnerRepository.readCachedPreferredLanguageId();
 
     return AppState._(
       catalogRepository: resolvedCatalogRepository,
@@ -90,9 +107,14 @@ class AppState extends ChangeNotifier {
       sandboxApiService: sandboxApiService ?? SandboxApiService(),
       learnerProfile: learnerProfile,
       tracks: tracks,
+      exercises: exercises,
+      topics: topics,
+      domains: domains,
+      tagSuggestions: tagSuggestions,
       skillNodes: skillNodes,
       skillMemory: _normalizeSkillMemory(skillNodes, cachedSkillMemory),
-      completedMilestones: completedMilestones,
+      completedExercises: completedExercises,
+      preferredLanguageId: preferredLanguageId,
     );
   }
 
@@ -103,13 +125,25 @@ class AppState extends ChangeNotifier {
   LearnerProfile _learnerProfile;
 
   final List<LearningTrack> _tracks;
+  final List<LearningExercise> _exercises;
+  final List<TopicDefinition> _topics;
+  final List<DomainDefinition> _domains;
+  final List<String> _tagSuggestions;
   final List<SkillNode> _skillNodes;
   final Map<String, SkillMasteryRecord> _skillMemory;
-  final Set<String> _completedMilestones;
+  final Set<String> _completedExercises;
+  String? _preferredLanguageId;
   Future<ValidationResult>? _inFlightSandboxExecution;
   PracticeSession? _activeSession;
 
   List<LearningTrack> get tracks => List<LearningTrack>.unmodifiable(_tracks);
+  List<LearningExercise> get exercises =>
+      List<LearningExercise>.unmodifiable(_exercises);
+  List<TopicDefinition> get topics =>
+      List<TopicDefinition>.unmodifiable(_topics);
+  List<DomainDefinition> get domains =>
+      List<DomainDefinition>.unmodifiable(_domains);
+  List<String> get tagSuggestions => List<String>.unmodifiable(_tagSuggestions);
   List<SkillNode> get skillNodes => List<SkillNode>.unmodifiable(_skillNodes);
   PracticeSession? get activeSession => _activeSession;
   bool get isSandboxExecutionRunning =>
@@ -118,9 +152,45 @@ class AppState extends ChangeNotifier {
   Map<String, SkillMasteryRecord> get skillMemory =>
       Map<String, SkillMasteryRecord>.unmodifiable(_skillMemory);
   LearnerProfile get learnerProfile => _learnerProfile;
+  String? get preferredLanguageId => _preferredLanguageId;
 
   List<LearningTrack> tracksForType(LearningTrackType type) {
     return _tracks.where((track) => track.type == type).toList(growable: false);
+  }
+
+  List<LearningExercise> exercisesForType(LearningTrackType type) {
+    return _exercises
+        .where((exercise) => exercise.type == type)
+        .toList(growable: false);
+  }
+
+  List<String> languageIdsForType(LearningTrackType type) {
+    final values = <String>{};
+    for (final exercise in _exercises.where((item) => item.type == type)) {
+      for (final variant in exercise.languageVariants) {
+        values.add(variant.languageId);
+      }
+    }
+    final result = values.toList(growable: false)..sort();
+    return result;
+  }
+
+  String topicTitle(String topicId) {
+    for (final topic in _topics) {
+      if (topic.id == topicId) {
+        return topic.title;
+      }
+    }
+    return topicId;
+  }
+
+  String domainTitle(String domainId) {
+    for (final domain in _domains) {
+      if (domain.id == domainId) {
+        return domain.title;
+      }
+    }
+    return domainId;
   }
 
   DashboardStats get dashboardStats {
@@ -131,12 +201,11 @@ class AppState extends ChangeNotifier {
                 .map((record) => record.masteryScore)
                 .reduce((value, element) => value + element) /
             _skillMemory.length;
-    final completedProjectCount = _completedMilestones
-        .where((id) =>
-            _findMilestoneById(id)?.track.type == LearningTrackType.project)
+    final completedProjectCount = _completedExercises
+        .where((id) => _findExerciseById(id)?.type == LearningTrackType.project)
         .length;
     final completedAlgoCount =
-        _completedMilestones.length - completedProjectCount;
+        _completedExercises.length - completedProjectCount;
 
     return DashboardStats(
       completedProjects: completedProjectCount,
@@ -154,8 +223,8 @@ class AppState extends ChangeNotifier {
         continue;
       }
       if (record.masteryScore < 0.58 || record.failureCount >= 3) {
-        final milestoneInfo = _findMilestoneById(skill.reviewMilestoneId);
-        if (milestoneInfo == null) {
+        final exercise = _findExerciseById(skill.reviewExerciseId);
+        if (exercise == null) {
           continue;
         }
         tasks.add(
@@ -164,8 +233,8 @@ class AppState extends ChangeNotifier {
             title: 'Review ${skill.title}',
             description: '${skill.description} ${record.lastOutcome}',
             skillIds: <String>[skill.id],
-            milestoneId: skill.reviewMilestoneId,
-            laneLabel: milestoneInfo.track.type.label,
+            exerciseId: skill.reviewExerciseId,
+            laneLabel: exercise.type.label,
           ),
         );
       }
@@ -217,51 +286,86 @@ class AppState extends ChangeNotifier {
     }
 
     final latestTracks = await _catalogRepository.readCachedTracks();
+    final latestExercises = await _catalogRepository.readCachedExercises();
+    final latestTopics = await _catalogRepository.readCachedTopics();
+    final latestDomains = await _catalogRepository.readCachedDomains();
+    final latestTagSuggestions =
+        await _catalogRepository.readCachedTagSuggestions();
     final latestSkillNodes = await _catalogRepository.readCachedSkillNodes();
     final latestSkillMemory = await _learnerRepository.readCachedSkillMemory();
-    final latestCompletedMilestones =
-        await _learnerRepository.readCachedCompletedMilestoneIds();
+    final latestCompletedExercises =
+        await _learnerRepository.readCachedCompletedExerciseIds();
     final latestLearnerProfile =
         await _learnerRepository.readCachedLearnerProfile() ?? _learnerProfile;
+    final latestPreferredLanguageId =
+        await _learnerRepository.readCachedPreferredLanguageId();
 
     _tracks
       ..clear()
       ..addAll(latestTracks);
+    _exercises
+      ..clear()
+      ..addAll(latestExercises);
+    _topics
+      ..clear()
+      ..addAll(latestTopics);
+    _domains
+      ..clear()
+      ..addAll(latestDomains);
+    _tagSuggestions
+      ..clear()
+      ..addAll(latestTagSuggestions);
     _skillNodes
       ..clear()
       ..addAll(latestSkillNodes);
     _skillMemory
       ..clear()
       ..addAll(_normalizeSkillMemory(latestSkillNodes, latestSkillMemory));
-    _completedMilestones
+    _completedExercises
       ..clear()
-      ..addAll(latestCompletedMilestones);
+      ..addAll(latestCompletedExercises);
     _learnerProfile = latestLearnerProfile;
+    _preferredLanguageId = latestPreferredLanguageId;
+    notifyListeners();
+  }
+
+  Future<void> setPreferredLanguageId(String? languageId) async {
+    if (_preferredLanguageId == languageId) {
+      return;
+    }
+    _preferredLanguageId = languageId;
+    await _learnerRepository.savePreferredLanguageId(languageId);
     notifyListeners();
   }
 
   void startSession({
-    required LearningTrack track,
-    required LearningModule module,
-    required Milestone milestone,
+    required LearningExercise exercise,
+    LearningTrack? track,
     PracticeMode mode = PracticeMode.guided,
+    String? languageId,
   }) {
-    final fileContents = _initialFileContentsFor(milestone);
-    final activeFilePath = milestone.relatedFiles.isEmpty
-        ? 'solution.txt'
-        : milestone.relatedFiles.first;
+    final selectedVariant = exercise.resolveVariant(
+      preferredLanguageId: _preferredLanguageId,
+      explicitLanguageId: languageId,
+    );
+    if (_preferredLanguageId != selectedVariant.languageId) {
+      _preferredLanguageId = selectedVariant.languageId;
+      unawaited(
+          _learnerRepository.savePreferredLanguageId(_preferredLanguageId));
+    }
+    final fileContents = _initialFileContentsFor(selectedVariant);
     _activeSession = PracticeSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
+      selectedVariant: selectedVariant,
       mode: mode,
+      track: track,
       fileContents: fileContents,
-      activeFilePath: activeFilePath,
+      activeFilePath: selectedVariant.entryFilePath,
       revealedHintLevel: null,
       validationResult: ValidationResult.idle,
       sessionLog: <String>[
-        'Opened ${milestone.title} in ${mode.label} mode.',
+        'Opened ${exercise.title} in ${mode.label} mode.',
       ],
       executionHistory: const <ExecutionAttempt>[],
     );
@@ -270,24 +374,22 @@ class AppState extends ChangeNotifier {
       _recordEvent(
         LearnerSyncEventType.sessionStarted,
         <String, Object?>{
-          'track_id': track.id,
-          'module_id': module.id,
-          'milestone_id': milestone.id,
+          'track_id': track?.id,
+          'exercise_id': exercise.id,
           'mode': mode.name,
+          'language_id': selectedVariant.languageId,
         },
       ),
     );
   }
 
   bool startReviewTask(ReviewTask task) {
-    final milestoneInfo = _findMilestoneById(task.milestoneId);
-    if (milestoneInfo == null) {
+    final exercise = _findExerciseById(task.exerciseId);
+    if (exercise == null) {
       return false;
     }
     startSession(
-      track: milestoneInfo.track,
-      module: milestoneInfo.module,
-      milestone: milestoneInfo.milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
     return true;
@@ -359,7 +461,7 @@ class AppState extends ChangeNotifier {
         ? -1
         : levels.indexOf(session.revealedHintLevel!);
     final nextLevel = levels[min(currentIndex + 1, levels.length - 1)];
-    final hint = session.milestone.hints[nextLevel] ?? 'No hint available.';
+    final hint = session.exercise.hints[nextLevel] ?? 'No hint available.';
 
     _activeSession = session.copyWith(
       revealedHintLevel: nextLevel,
@@ -369,7 +471,7 @@ class AppState extends ChangeNotifier {
       ],
     );
 
-    for (final skillId in session.milestone.skillIds) {
+    for (final skillId in session.exercise.skillIds) {
       final record = _skillMemory[skillId];
       if (record == null) {
         continue;
@@ -385,9 +487,9 @@ class AppState extends ChangeNotifier {
       _persistDerivedStateAndSync(
         eventType: LearnerSyncEventType.hintRevealed,
         payload: <String, Object?>{
-          'milestone_id': session.milestone.id,
+          'exercise_id': session.exercise.id,
           'hint_level': nextLevel.name,
-          'skill_ids': session.milestone.skillIds,
+          'skill_ids': session.exercise.skillIds,
         },
       ),
     );
@@ -456,10 +558,10 @@ class AppState extends ChangeNotifier {
     try {
       final execution = await _sandboxApiService.execute(
         action: action,
-        milestone: session.milestone,
+        exercise: session.exercise,
+        variant: session.selectedVariant,
         fileContents: session.fileContents,
-        entryFilePath:
-            session.milestone.sandboxEntryFilePath ?? session.primaryFilePath,
+        entryFilePath: session.selectedVariant.entryFilePath,
       );
 
       final result = ValidationResult(
@@ -502,7 +604,8 @@ class AppState extends ChangeNotifier {
               ? LearnerSyncEventType.sandboxBuild
               : LearnerSyncEventType.sandboxRun,
           <String, Object?>{
-            'milestone_id': session.milestone.id,
+            'exercise_id': session.exercise.id,
+            'language_id': session.selectedVariant.languageId,
             'status': result.status.name,
             'summary': result.summary,
             'passed_case_count': result.executionReport?.passedCaseCount,
@@ -554,7 +657,7 @@ class AppState extends ChangeNotifier {
 
     final matched = <String>[];
     final missing = <String>[];
-    for (final requirement in session.milestone.requirements) {
+    for (final requirement in session.exercise.requirements) {
       final exp =
           RegExp(requirement.pattern, multiLine: true, caseSensitive: false);
       if (exp.hasMatch(session.code)) {
@@ -566,10 +669,10 @@ class AppState extends ChangeNotifier {
 
     final passed = missing.isEmpty;
     if (passed) {
-      _completedMilestones.add(session.milestone.id);
+      _completedExercises.add(session.exercise.id);
     }
 
-    for (final skillId in session.milestone.skillIds) {
+    for (final skillId in session.exercise.skillIds) {
       final record = _skillMemory[skillId];
       if (record == null) {
         continue;
@@ -579,14 +682,14 @@ class AppState extends ChangeNotifier {
           masteryScore: (record.masteryScore + 0.08).clamp(0.0, 1.0),
           confidenceScore: (record.confidenceScore + 0.07).clamp(0.0, 1.0),
           hintDependence: (record.hintDependence - 0.04).clamp(0.0, 1.0),
-          lastOutcome: 'Passed ${session.milestone.title}',
+          lastOutcome: 'Passed ${session.exercise.title}',
         );
       } else {
         _skillMemory[skillId] = record.copyWith(
           masteryScore: (record.masteryScore - 0.03).clamp(0.0, 1.0),
           confidenceScore: (record.confidenceScore - 0.02).clamp(0.0, 1.0),
           failureCount: record.failureCount + 1,
-          lastOutcome: 'Missed part of ${session.milestone.title}',
+          lastOutcome: 'Missed part of ${session.exercise.title}',
         );
       }
     }
@@ -594,15 +697,15 @@ class AppState extends ChangeNotifier {
     final result = ValidationResult(
       status: passed ? ValidationStatus.passed : ValidationStatus.needsWork,
       summary: passed
-          ? 'Nice work. This milestone meets the core acceptance checks.'
+          ? 'Nice work. This exercise meets the core acceptance checks.'
           : 'Close. Tighten the missing pieces below and run Check again.',
       output: passed
-          ? 'Core requirements matched.\n\nReflection prompts:\n- ${session.milestone.reflectionPrompts.join('\n- ')}'
+          ? 'Core requirements matched.\n\nReflection prompts:\n- ${session.exercise.reflectionPrompts.join('\n- ')}'
           : 'Missing focus areas:\n- ${missing.join('\n- ')}',
       executionReport: null,
       matchedRequirements: matched,
       missingRequirements: missing,
-      suggestedReviewSkillIds: passed ? <String>[] : session.milestone.skillIds,
+      suggestedReviewSkillIds: passed ? <String>[] : session.exercise.skillIds,
     );
 
     _activeSession = session.copyWith(
@@ -616,13 +719,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     unawaited(
       _persistDerivedStateAndSync(
-        eventType:
-            passed ? LearnerSyncEventType.checkPassed : LearnerSyncEventType.checkFailed,
+        eventType: passed
+            ? LearnerSyncEventType.checkPassed
+            : LearnerSyncEventType.checkFailed,
         payload: <String, Object?>{
-          'milestone_id': session.milestone.id,
+          'exercise_id': session.exercise.id,
           'matched_requirements': matched,
           'missing_requirements': missing,
-          'skill_ids': session.milestone.skillIds,
+          'skill_ids': session.exercise.skillIds,
+          'language_id': session.selectedVariant.languageId,
         },
       ),
     );
@@ -631,9 +736,8 @@ class AppState extends ChangeNotifier {
         _recordEvent(
           LearnerSyncEventType.milestoneCompleted,
           <String, Object?>{
-            'milestone_id': session.milestone.id,
-            'track_id': session.track.id,
-            'module_id': session.module.id,
+            'exercise_id': session.exercise.id,
+            'track_id': session.track?.id,
           },
         ),
       );
@@ -641,23 +745,17 @@ class AppState extends ChangeNotifier {
     return result;
   }
 
+  bool isExerciseCompleted(String exerciseId) =>
+      _completedExercises.contains(exerciseId);
+
   bool isMilestoneCompleted(String milestoneId) =>
-      _completedMilestones.contains(milestoneId);
+      isExerciseCompleted(milestoneId);
 
-  Map<String, String> _initialFileContentsFor(Milestone milestone) {
-    if (milestone.relatedFiles.isEmpty) {
-      return <String, String>{
-        'solution.txt':
-            milestone.starterFiles['solution.txt'] ?? milestone.starterCode,
-      };
-    }
-
-    final fileContents = <String, String>{};
-    for (var i = 0; i < milestone.relatedFiles.length; i += 1) {
-      final path = milestone.relatedFiles[i];
-      fileContents[path] =
-          milestone.starterFiles[path] ?? (i == 0 ? milestone.starterCode : '');
-    }
+  Map<String, String> _initialFileContentsFor(ExerciseLanguageVariant variant) {
+    final fileContents = <String, String>{
+      ...variant.starterFiles,
+    };
+    fileContents.putIfAbsent(variant.entryFilePath, () => variant.starterCode);
     return fileContents;
   }
 
@@ -684,35 +782,13 @@ class AppState extends ChangeNotifier {
   }
 
   double completionForTrack(LearningTrack track) {
-    final total = track.modules
-        .fold<int>(0, (sum, module) => sum + module.milestones.length);
-    if (total == 0) {
+    if (track.exerciseRefs.isEmpty) {
       return 0;
     }
-    final completed = track.modules.fold<int>(
-      0,
-      (sum, module) =>
-          sum +
-          module.milestones.where((m) => isMilestoneCompleted(m.id)).length,
-    );
-    return completed / total;
-  }
-
-  MilestoneBundle? _findMilestoneById(String milestoneId) {
-    for (final track in _tracks) {
-      for (final module in track.modules) {
-        for (final milestone in module.milestones) {
-          if (milestone.id == milestoneId) {
-            return MilestoneBundle(
-              track: track,
-              module: module,
-              milestone: milestone,
-            );
-          }
-        }
-      }
-    }
-    return null;
+    final completed = track.exerciseRefs
+        .where((ref) => isExerciseCompleted(ref.exerciseId))
+        .length;
+    return completed / track.exerciseRefs.length;
   }
 
   Future<void> _persistDerivedStateAndSync({
@@ -723,7 +799,7 @@ class AppState extends ChangeNotifier {
       skillMemory: _skillMemory,
       reviewQueue: reviewQueue,
       dashboardStats: dashboardStats,
-      completedMilestoneIds: _completedMilestones,
+      completedExerciseIds: _completedExercises,
     );
     await _recordEvent(eventType, payload);
   }
@@ -749,11 +825,20 @@ class AppState extends ChangeNotifier {
       if (flushed) {
         await _learnerRepository.refreshLearnerState();
       }
-      _learnerProfile =
-          await _learnerRepository.readCachedLearnerProfile() ?? _learnerProfile;
+      _learnerProfile = await _learnerRepository.readCachedLearnerProfile() ??
+          _learnerProfile;
     } catch (_) {
       // Keep pending events queued for the next retry.
     }
+  }
+
+  LearningExercise? _findExerciseById(String exerciseId) {
+    for (final exercise in _exercises) {
+      if (exercise.id == exerciseId) {
+        return exercise;
+      }
+    }
+    return null;
   }
 
   static Map<String, SkillMasteryRecord> _normalizeSkillMemory(
@@ -781,16 +866,4 @@ class AppState extends ChangeNotifier {
       lastOutcome: 'Waiting for your first real attempt.',
     );
   }
-}
-
-class MilestoneBundle {
-  const MilestoneBundle({
-    required this.track,
-    required this.module,
-    required this.milestone,
-  });
-
-  final LearningTrack track;
-  final LearningModule module;
-  final Milestone milestone;
 }

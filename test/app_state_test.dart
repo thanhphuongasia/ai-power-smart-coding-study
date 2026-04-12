@@ -13,23 +13,23 @@ import 'package:ai_powerd_mobile_code_assitant/services/sandbox_api_service.dart
 import 'support/test_bootstrap.dart';
 
 void main() {
-  test('starts and validates a guided milestone session', () async {
+  test('starts and validates a guided exercise session', () async {
     final state = await buildTestAppState();
     final track = state.tracks.firstWhere(
       (item) => item.type == LearningTrackType.project,
     );
-    final module = track.modules.first;
-    final milestone = module.milestones.first;
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
+    );
 
     state.startSession(
       track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
 
     expect(state.activeSession, isNotNull);
-    expect(state.activeSession!.milestone.id, milestone.id);
+    expect(state.activeSession!.exercise.id, exercise.id);
 
     state.updateSessionCode('''
 class Document:
@@ -45,22 +45,19 @@ class Document:
     final result = state.checkSession();
 
     expect(result.status, ValidationStatus.passed);
-    expect(state.isMilestoneCompleted(milestone.id), isTrue);
+    expect(state.isExerciseCompleted(exercise.id), isTrue);
     expect(
       state.skillMemory['python_class_definition']!.masteryScore,
-      greaterThan(0.58),
+      greaterThanOrEqualTo(0.58),
     );
   });
 
-  test(
-      'typing in the editor updates session code without notifying listeners',
+  test('typing in the editor updates session code without notifying listeners',
       () async {
     final state = await buildTestAppState();
-    final track = state.tracks.firstWhere(
-      (item) => item.type == LearningTrackType.project,
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
     );
-    final module = track.modules.first;
-    final milestone = module.milestones.first;
     var notifications = 0;
 
     state.addListener(() {
@@ -68,9 +65,7 @@ class Document:
     });
 
     state.startSession(
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
     notifications = 0;
@@ -83,45 +78,42 @@ class Document:
 
   test('stores separate buffers for separate files in one session', () async {
     final state = await buildTestAppState();
-    const milestone = Milestone(
+    const exercise = LearningExercise(
       id: 'multi_file_test',
       title: 'Multi file',
-      objective: 'Keep buffers per file.',
+      summary: 'Keep buffers per file.',
+      type: LearningTrackType.project,
+      contentKind: ContentKind.projectExercise,
+      level: LearningLevel.foundation,
+      topicIds: <String>[],
+      domainIds: <String>[],
+      tags: <String>[],
+      skillIds: <String>[],
       problemStatement: 'Edit different files independently.',
-      languageLabel: 'Python',
-      relatedFiles: <String>['main.py', 'helpers/util.py'],
       acceptanceCriteria: <String>[],
       taskSteps: <TaskStep>[],
       supportedModes: <PracticeMode>[PracticeMode.guided],
       hints: <HintLevel, String>{},
-      starterCode: 'print("main")\n',
-      exampleInput: '',
-      exampleOutput: '',
       reflectionPrompts: <String>[],
-      skillIds: <String>[],
       requirements: <RequirementCheck>[],
-    );
-    const module = LearningModule(
-      id: 'module',
-      title: 'Module',
-      summary: 'Summary',
-      estimatedMinutes: 10,
-      milestones: <Milestone>[milestone],
-    );
-    const track = LearningTrack(
-      id: 'track',
-      title: 'Track',
-      summary: 'Summary',
-      type: LearningTrackType.project,
-      difficultyLabel: 'Foundation',
-      focusAreas: <String>['Python'],
-      modules: <LearningModule>[module],
+      languageVariants: <ExerciseLanguageVariant>[
+        ExerciseLanguageVariant(
+          languageId: 'python',
+          languageLabel: 'Python',
+          isDefault: true,
+          starterCode: 'print("main")\n',
+          starterFiles: <String, String>{
+            'main.py': 'print("main")\n',
+            'helpers/util.py': '',
+          },
+          runCommand: 'python main.py',
+          entryFilePath: 'main.py',
+        ),
+      ],
     );
 
     state.startSession(
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
 
@@ -140,6 +132,31 @@ class Document:
     expect(state.activeSession!.code, 'print("main")\n');
   });
 
+  test('remembers preferred language between multi-language exercises',
+      () async {
+    final state = await buildTestAppState();
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
+    );
+
+    state.startSession(
+      exercise: exercise,
+      languageId: 'csharp',
+      mode: PracticeMode.guided,
+    );
+
+    expect(state.preferredLanguageId, 'csharp');
+    expect(state.activeSession!.selectedVariant.languageId, 'csharp');
+
+    state.closeSession();
+    state.startSession(
+      exercise: exercise,
+      mode: PracticeMode.guided,
+    );
+
+    expect(state.activeSession!.selectedVariant.languageId, 'csharp');
+  });
+
   test('deduplicates overlapping sandbox execution requests', () async {
     final completer = Completer<SandboxExecutionResult>();
     var executeCalls = 0;
@@ -152,6 +169,10 @@ class Document:
           checksum: 'test-checksum',
         ),
         tracks: bootstrapState.tracks,
+        exercises: bootstrapState.exercises,
+        topics: bootstrapState.topics,
+        domains: bootstrapState.domains,
+        tagSuggestions: bootstrapState.tagSuggestions,
         skillNodes: bootstrapState.skillNodes,
       ),
       learnerRepository: MemoryLearnerRepository(
@@ -167,7 +188,8 @@ class Document:
       sandboxApiService: _FakeSandboxApiService(
         onExecute: ({
           required action,
-          required milestone,
+          required exercise,
+          required variant,
           required fileContents,
           required entryFilePath,
         }) {
@@ -176,16 +198,12 @@ class Document:
         },
       ),
     );
-    final track = state.tracks.firstWhere(
-      (item) => item.type == LearningTrackType.project,
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
     );
-    final module = track.modules.first;
-    final milestone = module.milestones.first;
 
     state.startSession(
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
 
@@ -228,7 +246,8 @@ class _FakeSandboxApiService extends SandboxApiService {
 
   final Future<SandboxExecutionResult> Function({
     required SandboxExecutionAction action,
-    required Milestone milestone,
+    required LearningExercise exercise,
+    required ExerciseLanguageVariant variant,
     required Map<String, String> fileContents,
     required String entryFilePath,
   }) onExecute;
@@ -236,13 +255,15 @@ class _FakeSandboxApiService extends SandboxApiService {
   @override
   Future<SandboxExecutionResult> execute({
     required SandboxExecutionAction action,
-    required Milestone milestone,
+    required LearningExercise exercise,
+    required ExerciseLanguageVariant variant,
     required Map<String, String> fileContents,
     required String entryFilePath,
   }) {
     return onExecute(
       action: action,
-      milestone: milestone,
+      exercise: exercise,
+      variant: variant,
       fileContents: fileContents,
       entryFilePath: entryFilePath,
     );

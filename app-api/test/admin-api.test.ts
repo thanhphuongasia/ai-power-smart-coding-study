@@ -24,10 +24,64 @@ test("admin workflow keeps draft changes private until publish", async () => {
             id: "project_documents",
             title: "Documents",
             summary: "Published summary",
-            type: "project",
-            difficultyLabel: "Foundation",
-            focusAreas: ["Python"],
-            modules: [],
+            lane: "project",
+            contentKind: "project_track",
+            level: "foundation",
+            topicIds: [],
+            domainIds: ["document-management"],
+            tags: ["list"],
+            skillIds: [],
+            exerciseRefs: [{ exerciseId: "project_list_documents" }],
+          },
+        ],
+        exercises: [
+          {
+            id: "project_list_documents",
+            title: "List documents",
+            summary: "Published exercise summary",
+            lane: "project",
+            contentKind: "project_exercise",
+            level: "foundation",
+            topicIds: ["sql"],
+            domainIds: ["document-management"],
+            tags: ["list"],
+            skillIds: [],
+            problemStatement: "Build a list endpoint.",
+            acceptanceCriteria: [],
+            taskSteps: [],
+            supportedModes: ["guided"],
+            hints: {},
+            reflectionPrompts: [],
+            requirements: [],
+            languageVariants: [
+              {
+                languageId: "python",
+                languageLabel: "Python",
+                isDefault: true,
+                starterCode: "def list_documents(rows):\n    return rows\n",
+                starterFiles: {},
+                solutionCode: null,
+                sandboxHarnessTemplate: "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+                runCommand: "python main.py",
+                entryFilePath: "solution.py",
+                demoFilePath: null,
+                testCases: [],
+              },
+            ],
+          },
+        ],
+        topics: [
+          {
+            id: "sql",
+            title: "SQL",
+            summary: "Query building",
+          },
+        ],
+        domains: [
+          {
+            id: "document-management",
+            title: "Document Management",
+            summary: "Document workflows",
           },
         ],
         skills: [],
@@ -54,11 +108,13 @@ test("admin workflow keeps draft changes private until publish", async () => {
     const catalogResponse = await fetch(`${baseUrl}/v1/catalog`);
     const catalogPayload = (await catalogResponse.json()) as {
       tracks: Array<{ summary: string }>;
+      exercises: Array<{ summary: string }>;
     };
     assert.equal(catalogPayload.tracks[0].summary, "Published summary");
+    assert.equal(catalogPayload.exercises[0].summary, "Published exercise summary");
 
     const draftUpdateResponse = await fetch(
-      `${baseUrl}/admin/api/tracks/project_documents`,
+      `${baseUrl}/admin/api/exercises/project_list_documents`,
       {
         method: "PUT",
         headers: {
@@ -66,13 +122,38 @@ test("admin workflow keeps draft changes private until publish", async () => {
           "x-admin-key": "test-admin-key",
         },
         body: JSON.stringify({
-          id: "project_documents",
-          title: "Documents",
+          id: "project_list_documents",
+          title: "List documents",
           summary: "Draft summary only",
-          type: "project",
-          difficultyLabel: "Foundation",
-          focusAreas: ["Python"],
-          modules: [],
+          lane: "project",
+          contentKind: "project_exercise",
+          level: "foundation",
+          topicIds: ["sql"],
+          domainIds: ["document-management"],
+          tags: ["list", "query"],
+          skillIds: [],
+          problemStatement: "Build a list endpoint.",
+          acceptanceCriteria: [],
+          taskSteps: [],
+          supportedModes: ["guided"],
+          hints: {},
+          reflectionPrompts: [],
+          requirements: [],
+          languageVariants: [
+            {
+              languageId: "python",
+              languageLabel: "Python",
+              isDefault: true,
+              starterCode: "def list_documents(rows):\n    return rows\n",
+              starterFiles: {},
+              solutionCode: null,
+              sandboxHarnessTemplate: "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+              runCommand: "python main.py",
+              entryFilePath: "solution.py",
+              demoFilePath: null,
+              testCases: [],
+            },
+          ],
         }),
       },
     );
@@ -80,12 +161,12 @@ test("admin workflow keeps draft changes private until publish", async () => {
 
     const beforePublishResponse = await fetch(`${baseUrl}/v1/catalog`);
     const beforePublishPayload = (await beforePublishResponse.json()) as {
-      tracks: Array<{ summary: string }>;
+      exercises: Array<{ summary: string }>;
     };
-    assert.equal(beforePublishPayload.tracks[0].summary, "Published summary");
+    assert.equal(beforePublishPayload.exercises[0].summary, "Published exercise summary");
 
     const publishResponse = await fetch(
-      `${baseUrl}/admin/api/tracks/project_documents/publish`,
+      `${baseUrl}/admin/api/exercises/project_list_documents/publish`,
       {
         method: "POST",
         headers: {
@@ -97,9 +178,11 @@ test("admin workflow keeps draft changes private until publish", async () => {
 
     const afterPublishResponse = await fetch(`${baseUrl}/v1/catalog`);
     const afterPublishPayload = (await afterPublishResponse.json()) as {
-      tracks: Array<{ summary: string }>;
+      exercises: Array<{ summary: string }>;
+      tagSuggestions: string[];
     };
-    assert.equal(afterPublishPayload.tracks[0].summary, "Draft summary only");
+    assert.equal(afterPublishPayload.exercises[0].summary, "Draft summary only");
+    assert.deepEqual(afterPublishPayload.tagSuggestions, ["list", "query"]);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

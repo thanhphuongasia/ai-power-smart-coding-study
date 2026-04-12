@@ -8,7 +8,7 @@ export type SkillRecord = {
 };
 
 export type LearnerProjection = {
-  completedMilestoneIds: Set<string>;
+  completedExerciseIds: Set<string>;
   skillMemory: Map<string, SkillRecord>;
 };
 
@@ -30,24 +30,25 @@ export type SkillDefinition = {
   id: string;
   title: string;
   description: string;
-  reviewMilestoneId: string;
+  reviewExerciseId: string;
 };
 
 export type TrackDefinition = {
   id: string;
-  type: "project" | "dataStructure" | "leetcode";
-  modules: Array<{
-    id: string;
-    milestones: Array<{
-      id: string;
-      skillIds: string[];
-    }>;
+  lane: "project" | "dsa" | "leetcode";
+  exerciseRefs: Array<{
+    exerciseId: string;
   }>;
+};
+
+export type ExerciseDefinition = {
+  id: string;
+  lane: "project" | "dsa" | "leetcode";
 };
 
 export function buildInitialProjection(skills: SkillDefinition[]): LearnerProjection {
   return {
-    completedMilestoneIds: new Set<string>(),
+    completedExerciseIds: new Set<string>(),
     skillMemory: new Map<string, SkillRecord>(
       skills.map((skill) => [
         skill.id,
@@ -69,7 +70,7 @@ export function applyLearnerEvent(
   event: LearnerEventEnvelope,
 ): LearnerProjection {
   const next: LearnerProjection = {
-    completedMilestoneIds: new Set(projection.completedMilestoneIds),
+    completedExerciseIds: new Set(projection.completedExerciseIds),
     skillMemory: new Map(
       Array.from(projection.skillMemory.entries()).map(([skillId, record]) => [
         skillId,
@@ -92,9 +93,9 @@ export function applyLearnerEvent(
   }
 
   if (event.type === "checkPassed") {
-    const milestoneId = String(event.payload["milestone_id"] || "");
-    if (milestoneId) {
-      next.completedMilestoneIds.add(milestoneId);
+    const exerciseId = readExerciseId(event.payload);
+    if (exerciseId) {
+      next.completedExerciseIds.add(exerciseId);
     }
     for (const skillId of skillIds) {
       const record = next.skillMemory.get(skillId);
@@ -104,13 +105,13 @@ export function applyLearnerEvent(
       record.masteryScore = clamp(record.masteryScore + 0.08);
       record.confidenceScore = clamp(record.confidenceScore + 0.07);
       record.hintDependence = clamp(record.hintDependence - 0.04);
-      record.lastOutcome = `Passed ${milestoneId}`;
+      record.lastOutcome = `Passed ${exerciseId}`;
     }
     return next;
   }
 
   if (event.type === "checkFailed") {
-    const milestoneId = String(event.payload["milestone_id"] || "");
+    const exerciseId = readExerciseId(event.payload);
     for (const skillId of skillIds) {
       const record = next.skillMemory.get(skillId);
       if (!record) {
@@ -119,14 +120,14 @@ export function applyLearnerEvent(
       record.masteryScore = clamp(record.masteryScore - 0.03);
       record.confidenceScore = clamp(record.confidenceScore - 0.02);
       record.failureCount += 1;
-      record.lastOutcome = `Missed part of ${milestoneId}`;
+      record.lastOutcome = `Missed part of ${exerciseId}`;
     }
   }
 
   if (event.type === "milestoneCompleted") {
-    const milestoneId = String(event.payload["milestone_id"] || "");
-    if (milestoneId) {
-      next.completedMilestoneIds.add(milestoneId);
+    const exerciseId = readExerciseId(event.payload);
+    if (exerciseId) {
+      next.completedExerciseIds.add(exerciseId);
     }
   }
 
@@ -136,6 +137,7 @@ export function applyLearnerEvent(
 export function deriveDashboard(
   projection: LearnerProjection,
   tracks: TrackDefinition[],
+  exercises: ExerciseDefinition[],
 ) {
   const averageMastery =
     projection.skillMemory.size === 0
@@ -145,29 +147,20 @@ export function deriveDashboard(
           0,
         ) / projection.skillMemory.size;
 
-  const projectMilestones = new Set<string>();
-  for (const track of tracks) {
-    if (track.type !== "project") {
-      continue;
-    }
-    for (const module of track.modules) {
-      for (const milestone of module.milestones) {
-        projectMilestones.add(milestone.id);
-      }
-    }
-  }
-
+  const exerciseLane = new Map(exercises.map((exercise) => [exercise.id, exercise.lane]));
   let completedProjects = 0;
-  for (const milestoneId of projection.completedMilestoneIds) {
-    if (projectMilestones.has(milestoneId)) {
+  for (const exerciseId of projection.completedExerciseIds) {
+    if (exerciseLane.get(exerciseId) === "project") {
       completedProjects += 1;
     }
   }
 
+  void tracks;
+
   return {
     completedProjects,
-    completedDsAlgo: projection.completedMilestoneIds.size - completedProjects,
-    reviewQueueCount: deriveReviewQueue(projection, tracks).length,
+    completedDsAlgo: projection.completedExerciseIds.size - completedProjects,
+    reviewQueueCount: deriveReviewQueue(projection, tracks, exercises).length,
     averageMastery,
   };
 }
@@ -175,16 +168,11 @@ export function deriveDashboard(
 export function deriveReviewQueue(
   projection: LearnerProjection,
   tracks: TrackDefinition[],
+  exercises: ExerciseDefinition[],
   skills: SkillDefinition[] = [],
 ) {
-  const milestoneLane = new Map<string, string>();
-  for (const track of tracks) {
-    for (const module of track.modules) {
-      for (const milestone of module.milestones) {
-        milestoneLane.set(milestone.id, track.type);
-      }
-    }
-  }
+  const exerciseLane = new Map(exercises.map((exercise) => [exercise.id, exercise.lane]));
+  void tracks;
 
   return skills
     .map((skill) => {
@@ -200,8 +188,8 @@ export function deriveReviewQueue(
         title: `Review ${skill.title}`,
         description: `${skill.description} ${record.lastOutcome}`,
         skillIds: [skill.id],
-        milestoneId: skill.reviewMilestoneId,
-        laneLabel: milestoneLane.get(skill.reviewMilestoneId) || "project",
+        exerciseId: skill.reviewExerciseId,
+        laneLabel: exerciseLane.get(skill.reviewExerciseId) || "project",
       };
     })
     .filter(Boolean);
@@ -213,4 +201,8 @@ function clamp(value: number) {
 
 function readStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)) : [];
+}
+
+function readExerciseId(payload: Record<string, unknown>) {
+  return String(payload["exercise_id"] || payload["milestone_id"] || "");
 }

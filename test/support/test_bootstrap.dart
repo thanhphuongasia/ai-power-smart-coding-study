@@ -17,6 +17,10 @@ Future<AppState> buildTestAppState({
         checksum: 'test-checksum',
       ),
       tracks: SeedData.tracks(),
+      exercises: SeedData.exercises(),
+      topics: SeedData.topics(),
+      domains: SeedData.domains(),
+      tagSuggestions: SeedData.tagSuggestions(),
       skillNodes: SeedData.skills(),
     ),
     learnerRepository: MemoryLearnerRepository(

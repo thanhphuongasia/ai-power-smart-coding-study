@@ -7,12 +7,17 @@ class AppCacheDocument {
     required this.installId,
     required this.contentManifest,
     required this.tracks,
+    required this.exercises,
+    required this.topics,
+    required this.domains,
+    required this.tagSuggestions,
     required this.skillNodes,
     required this.learnerProfile,
     required this.skillMemory,
     required this.reviewQueue,
     required this.dashboardStats,
-    required this.completedMilestoneIds,
+    required this.completedExerciseIds,
+    required this.preferredLanguageId,
     required this.pendingEvents,
     required this.lastSyncedAt,
   });
@@ -21,24 +26,34 @@ class AppCacheDocument {
       : installId = null,
         contentManifest = null,
         tracks = const <LearningTrack>[],
+        exercises = const <LearningExercise>[],
+        topics = const <TopicDefinition>[],
+        domains = const <DomainDefinition>[],
+        tagSuggestions = const <String>[],
         skillNodes = const <SkillNode>[],
         learnerProfile = null,
         skillMemory = const <String, SkillMasteryRecord>{},
         reviewQueue = const <ReviewTask>[],
         dashboardStats = null,
-        completedMilestoneIds = const <String>{},
+        completedExerciseIds = const <String>{},
+        preferredLanguageId = null,
         pendingEvents = const <PendingSyncEvent>[],
         lastSyncedAt = null;
 
   final String? installId;
   final ContentManifest? contentManifest;
   final List<LearningTrack> tracks;
+  final List<LearningExercise> exercises;
+  final List<TopicDefinition> topics;
+  final List<DomainDefinition> domains;
+  final List<String> tagSuggestions;
   final List<SkillNode> skillNodes;
   final LearnerProfile? learnerProfile;
   final Map<String, SkillMasteryRecord> skillMemory;
   final List<ReviewTask> reviewQueue;
   final DashboardStats? dashboardStats;
-  final Set<String> completedMilestoneIds;
+  final Set<String> completedExerciseIds;
+  final String? preferredLanguageId;
   final List<PendingSyncEvent> pendingEvents;
   final DateTime? lastSyncedAt;
 
@@ -47,6 +62,10 @@ class AppCacheDocument {
     ContentManifest? contentManifest,
     bool clearContentManifest = false,
     List<LearningTrack>? tracks,
+    List<LearningExercise>? exercises,
+    List<TopicDefinition>? topics,
+    List<DomainDefinition>? domains,
+    List<String>? tagSuggestions,
     List<SkillNode>? skillNodes,
     LearnerProfile? learnerProfile,
     bool clearLearnerProfile = false,
@@ -54,7 +73,9 @@ class AppCacheDocument {
     List<ReviewTask>? reviewQueue,
     DashboardStats? dashboardStats,
     bool clearDashboardStats = false,
-    Set<String>? completedMilestoneIds,
+    Set<String>? completedExerciseIds,
+    String? preferredLanguageId,
+    bool clearPreferredLanguageId = false,
     List<PendingSyncEvent>? pendingEvents,
     DateTime? lastSyncedAt,
     bool clearLastSyncedAt = false,
@@ -65,17 +86,21 @@ class AppCacheDocument {
           ? null
           : (contentManifest ?? this.contentManifest),
       tracks: tracks ?? this.tracks,
+      exercises: exercises ?? this.exercises,
+      topics: topics ?? this.topics,
+      domains: domains ?? this.domains,
+      tagSuggestions: tagSuggestions ?? this.tagSuggestions,
       skillNodes: skillNodes ?? this.skillNodes,
-      learnerProfile: clearLearnerProfile
-          ? null
-          : (learnerProfile ?? this.learnerProfile),
+      learnerProfile:
+          clearLearnerProfile ? null : (learnerProfile ?? this.learnerProfile),
       skillMemory: skillMemory ?? this.skillMemory,
       reviewQueue: reviewQueue ?? this.reviewQueue,
-      dashboardStats: clearDashboardStats
+      dashboardStats:
+          clearDashboardStats ? null : (dashboardStats ?? this.dashboardStats),
+      completedExerciseIds: completedExerciseIds ?? this.completedExerciseIds,
+      preferredLanguageId: clearPreferredLanguageId
           ? null
-          : (dashboardStats ?? this.dashboardStats),
-      completedMilestoneIds:
-          completedMilestoneIds ?? this.completedMilestoneIds,
+          : (preferredLanguageId ?? this.preferredLanguageId),
       pendingEvents: pendingEvents ?? this.pendingEvents,
       lastSyncedAt:
           clearLastSyncedAt ? null : (lastSyncedAt ?? this.lastSyncedAt),
@@ -93,6 +118,11 @@ class AppCacheDocument {
               'checksum': contentManifest!.checksum,
             },
       'tracks': tracks.map(learningTrackToJson).toList(growable: false),
+      'exercises':
+          exercises.map(learningExerciseToJson).toList(growable: false),
+      'topics': topics.map(topicDefinitionToJson).toList(growable: false),
+      'domains': domains.map(domainDefinitionToJson).toList(growable: false),
+      'tagSuggestions': tagSuggestions,
       'skillNodes': skillNodes.map(skillNodeToJson).toList(growable: false),
       'learnerProfile': learnerProfile == null
           ? null
@@ -107,11 +137,11 @@ class AppCacheDocument {
         for (final entry in skillMemory.entries)
           entry.key: skillMasteryRecordToJson(entry.value),
       },
-      'reviewQueue':
-          reviewQueue.map(reviewTaskToJson).toList(growable: false),
+      'reviewQueue': reviewQueue.map(reviewTaskToJson).toList(growable: false),
       'dashboardStats':
           dashboardStats == null ? null : dashboardStatsToJson(dashboardStats!),
-      'completedMilestoneIds': completedMilestoneIds.toList(growable: false),
+      'completedExerciseIds': completedExerciseIds.toList(growable: false),
+      'preferredLanguageId': preferredLanguageId,
       'pendingEvents': pendingEvents
           .map((event) => <String, Object?>{
                 'clientEventId': event.clientEventId,
@@ -142,6 +172,9 @@ class AppCacheDocument {
     final rawManifest = json['contentManifest'];
     final rawLearnerProfile = json['learnerProfile'];
     final rawPendingEvents = json['pendingEvents'];
+    final completedExerciseIds =
+        (json['completedExerciseIds'] as List<dynamic>?) ??
+            (json['completedMilestoneIds'] as List<dynamic>?);
 
     return AppCacheDocument(
       installId: json['installId'] as String?,
@@ -159,6 +192,22 @@ class AppCacheDocument {
           .whereType<Map>()
           .map((item) => learningTrackFromJson(item.cast<String, dynamic>()))
           .toList(growable: false),
+      exercises: (json['exercises'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => learningExerciseFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      topics: (json['topics'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => topicDefinitionFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      domains: (json['domains'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => domainDefinitionFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false),
+      tagSuggestions:
+          ((json['tagSuggestions'] as List<dynamic>?) ?? const <dynamic>[])
+              .map((item) => item.toString())
+              .toList(growable: false),
       skillNodes: (json['skillNodes'] as List<dynamic>? ?? const <dynamic>[])
           .whereType<Map>()
           .map((item) => skillNodeFromJson(item.cast<String, dynamic>()))
@@ -182,10 +231,11 @@ class AppCacheDocument {
               (json['dashboardStats'] as Map).cast<String, dynamic>(),
             )
           : null,
-      completedMilestoneIds: Set<String>.from(
-        (json['completedMilestoneIds'] as List<dynamic>? ?? const <dynamic>[])
+      completedExerciseIds: Set<String>.from(
+        (completedExerciseIds ?? const <dynamic>[])
             .map((item) => item.toString()),
       ),
+      preferredLanguageId: json['preferredLanguageId'] as String?,
       pendingEvents: rawPendingEvents is List
           ? rawPendingEvents
               .whereType<Map>()
@@ -200,8 +250,9 @@ class AppCacheDocument {
                         item['occurredAt'] as String? ?? '',
                       ) ??
                       DateTime.fromMillisecondsSinceEpoch(0),
-                  payload: ((item['payload'] as Map?) ?? const <String, Object?>{})
-                      .cast<String, Object?>(),
+                  payload:
+                      ((item['payload'] as Map?) ?? const <String, Object?>{})
+                          .cast<String, Object?>(),
                 ),
               )
               .toList(growable: false)

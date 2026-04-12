@@ -45,11 +45,19 @@ function createApp(options = {}) {
     try {
       const payload = request.body || {};
       const action = payload.action;
-      const languageLabel = payload.languageLabel;
-      const entryFilePath = payload.entryFilePath;
+      const languageVariant = payload.languageVariant && typeof payload.languageVariant === 'object'
+        ? payload.languageVariant
+        : {};
+      const languageLabel = languageVariant.languageLabel || payload.languageLabel;
+      const entryFilePath = languageVariant.entryFilePath || payload.entryFilePath;
+      const demoFilePath = languageVariant.demoFilePath || payload.demoFilePath;
       const fileContents = payload.fileContents;
-      const harnessTemplate = payload.harnessTemplate;
-      const testCases = Array.isArray(payload.testCases) ? payload.testCases : [];
+      const harnessTemplate = languageVariant.harnessTemplate || payload.harnessTemplate;
+      const testCases = Array.isArray(languageVariant.testCases)
+        ? languageVariant.testCases
+        : Array.isArray(payload.testCases)
+          ? payload.testCases
+          : [];
 
       if (action !== 'build' && action !== 'run') {
         return response.status(400).json({ error: 'action must be "build" or "run"' });
@@ -72,6 +80,17 @@ function createApp(options = {}) {
         entryFilePath,
         fileContents,
       });
+      const demoSourceCode =
+        typeof demoFilePath === 'string' && demoFilePath.trim().length > 0
+          ? String(fileContents[demoFilePath] || '')
+          : '';
+      const demoAdditionalFiles =
+        typeof demoFilePath === 'string' && demoFilePath.trim().length > 0
+          ? await encodeAdditionalFiles({
+              entryFilePath: demoFilePath,
+              fileContents,
+            })
+          : '';
 
       const languageId = await resolveLanguageId(languageLabel);
 
@@ -82,15 +101,18 @@ function createApp(options = {}) {
           body: '',
           expectedOutput: '',
         };
-        const buildSource = composeSource({
-          harnessTemplate,
-          sourceCode: entrySourceCode,
-          testBody: buildCase.body || '',
-        });
+        const buildSource =
+          demoSourceCode.length > 0
+            ? demoSourceCode
+            : composeSource({
+                harnessTemplate,
+                sourceCode: entrySourceCode,
+                testBody: buildCase.body || '',
+              });
         const buildSubmission = await executeJudge0Submission({
           languageId,
           sourceCode: buildSource,
-          additionalFiles,
+          additionalFiles: demoSourceCode.length > 0 ? demoAdditionalFiles : additionalFiles,
         });
         const success = buildSubmission.statusDescription === 'Accepted';
         const report = {
@@ -98,6 +120,7 @@ function createApp(options = {}) {
           statusLabel: buildSubmission.statusDescription,
           passedCaseCount: 0,
           totalCaseCount: 0,
+          programResult: null,
           sections: buildSectionsFromSubmissions([buildSubmission]),
           caseResults: [],
         };
@@ -113,6 +136,25 @@ function createApp(options = {}) {
 
       if (testCases.length === 0) {
         return response.status(400).json({ error: 'At least one test case is required for run.' });
+      }
+
+      let programResult = null;
+      if (demoSourceCode.length > 0) {
+        const submission = await executeJudge0Submission({
+          languageId,
+          sourceCode: demoSourceCode,
+          additionalFiles: demoAdditionalFiles,
+        });
+        programResult = {
+          label: 'Program run',
+          passed: submission.statusDescription === 'Accepted',
+          statusLabel: submission.statusDescription,
+          actualOutput: actualOutputForSubmission(submission),
+          stdout: submission.stdout,
+          stderr: submission.stderr,
+          compileOutput: submission.compileOutput,
+          message: submission.message,
+        };
       }
 
       const caseResults = [];
@@ -143,21 +185,28 @@ function createApp(options = {}) {
       }
 
       const passedCaseCount = caseResults.filter((item) => item.passed).length;
+      const programPassed = programResult == null || programResult.passed;
+      const allCasesPassed = passedCaseCount === caseResults.length;
       const report = {
         engineLabel: 'Judge0 via sandbox proxy',
-        statusLabel: passedCaseCount === caseResults.length ? 'Accepted' : 'Needs work',
+        statusLabel: programPassed && allCasesPassed ? 'Accepted' : 'Needs work',
         passedCaseCount,
         totalCaseCount: caseResults.length,
+        programResult,
         sections: buildSectionsFromCaseResults(caseResults),
         caseResults,
       };
 
       response.json({
-        success: passedCaseCount === caseResults.length,
+        success: programPassed && allCasesPassed,
         summary:
-          passedCaseCount === caseResults.length
-            ? `All ${caseResults.length} sandbox test cases passed.`
-            : `Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`,
+          programResult != null && !programPassed
+            ? `Program run reported issues. Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`
+            : programResult != null && allCasesPassed
+              ? `Program run completed and all ${caseResults.length} sandbox test cases passed.`
+              : allCasesPassed
+                ? `All ${caseResults.length} sandbox test cases passed.`
+              : `Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`,
         output: buildPlainTextOutput(report),
         report,
       });
@@ -383,6 +432,12 @@ function actualOutputForSubmission(submission) {
 
 function buildPlainTextOutput(report) {
   const lines = [`${report.engineLabel} · ${report.statusLabel}`];
+  if (report.programResult) {
+    lines.push(`${report.programResult.label}: ${report.programResult.statusLabel}`);
+    if (report.programResult.actualOutput) {
+      lines.push(report.programResult.actualOutput);
+    }
+  }
   if (report.totalCaseCount > 0) {
     lines.push(`Passed ${report.passedCaseCount}/${report.totalCaseCount} test cases`);
   }

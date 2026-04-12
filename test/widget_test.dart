@@ -37,21 +37,19 @@ void main() {
 
     expect(find.text('Practice library'), findsOneWidget);
     expect(find.text('Document Management Service'), findsOneWidget);
+    expect(find.text('Tracks'), findsOneWidget);
+    expect(find.text('Exercises'), findsOneWidget);
   });
 
   testWidgets('session editor accepts code input and can validate it',
       (WidgetTester tester) async {
     final state = await buildTestAppState();
-    final track = state.tracks.firstWhere(
-      (item) => item.type == LearningTrackType.project,
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
     );
-    final module = track.modules.first;
-    final milestone = module.milestones.first;
 
     state.startSession(
-      track: track,
-      module: module,
-      milestone: milestone,
+      exercise: exercise,
       mode: PracticeMode.guided,
     );
 

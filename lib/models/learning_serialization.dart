@@ -5,10 +5,15 @@ Map<String, Object?> learningTrackToJson(LearningTrack track) {
     'id': track.id,
     'title': track.title,
     'summary': track.summary,
-    'type': track.type.name,
-    'difficultyLabel': track.difficultyLabel,
-    'focusAreas': track.focusAreas,
-    'modules': track.modules.map(learningModuleToJson).toList(growable: false),
+    'lane': track.type.wireValue,
+    'contentKind': _contentKindName(track.contentKind),
+    'level': track.level.name,
+    'topicIds': track.topicIds,
+    'domainIds': track.domainIds,
+    'tags': track.tags,
+    'skillIds': track.skillIds,
+    'exerciseRefs':
+        track.exerciseRefs.map(trackExerciseRefToJson).toList(growable: false),
   };
 }
 
@@ -17,69 +22,68 @@ LearningTrack learningTrackFromJson(Map<String, dynamic> json) {
     id: json['id'] as String? ?? '',
     title: json['title'] as String? ?? '',
     summary: json['summary'] as String? ?? '',
-    type: _trackTypeFromName(json['type'] as String?),
-    difficultyLabel: json['difficultyLabel'] as String? ?? '',
-    focusAreas: _readStringList(json['focusAreas']),
-    modules: _readObjectList(json['modules'], learningModuleFromJson),
+    type: _trackTypeFromLane(json['lane'] ?? json['type']),
+    contentKind: _contentKindFromName(json['contentKind'] as String?),
+    level: _learningLevelFromName(json['level'] as String?),
+    topicIds: _readStringList(json['topicIds']),
+    domainIds: _readStringList(json['domainIds']),
+    tags: _readStringList(json['tags']),
+    skillIds: _readStringList(json['skillIds']),
+    exerciseRefs:
+        _readObjectList(json['exerciseRefs'], trackExerciseRefFromJson),
   );
 }
 
-Map<String, Object?> learningModuleToJson(LearningModule module) {
+Map<String, Object?> trackExerciseRefToJson(TrackExerciseRef ref) {
   return <String, Object?>{
-    'id': module.id,
-    'title': module.title,
-    'summary': module.summary,
-    'estimatedMinutes': module.estimatedMinutes,
-    'milestones':
-        module.milestones.map(milestoneToJson).toList(growable: false),
+    'exerciseId': ref.exerciseId,
+    'title': ref.title,
+    'summary': ref.summary,
+    'milestoneLabel': ref.milestoneLabel,
   };
 }
 
-LearningModule learningModuleFromJson(Map<String, dynamic> json) {
-  return LearningModule(
-    id: json['id'] as String? ?? '',
-    title: json['title'] as String? ?? '',
-    summary: json['summary'] as String? ?? '',
-    estimatedMinutes: json['estimatedMinutes'] as int? ?? 0,
-    milestones: _readObjectList(json['milestones'], milestoneFromJson),
+TrackExerciseRef trackExerciseRefFromJson(Map<String, dynamic> json) {
+  return TrackExerciseRef(
+    exerciseId: json['exerciseId'] as String? ?? '',
+    title: json['title'] as String?,
+    summary: json['summary'] as String?,
+    milestoneLabel: json['milestoneLabel'] as String?,
   );
 }
 
-Map<String, Object?> milestoneToJson(Milestone milestone) {
+Map<String, Object?> learningExerciseToJson(LearningExercise exercise) {
   return <String, Object?>{
-    'id': milestone.id,
-    'title': milestone.title,
-    'objective': milestone.objective,
-    'problemStatement': milestone.problemStatement,
-    'languageLabel': milestone.languageLabel,
-    'relatedFiles': milestone.relatedFiles,
-    'acceptanceCriteria': milestone.acceptanceCriteria,
-    'taskSteps': milestone.taskSteps.map(taskStepToJson).toList(growable: false),
-    'supportedModes':
-        milestone.supportedModes.map((mode) => mode.name).toList(growable: false),
+    'id': exercise.id,
+    'title': exercise.title,
+    'summary': exercise.summary,
+    'lane': exercise.type.wireValue,
+    'contentKind': _contentKindName(exercise.contentKind),
+    'level': exercise.level.name,
+    'topicIds': exercise.topicIds,
+    'domainIds': exercise.domainIds,
+    'tags': exercise.tags,
+    'skillIds': exercise.skillIds,
+    'problemStatement': exercise.problemStatement,
+    'acceptanceCriteria': exercise.acceptanceCriteria,
+    'taskSteps': exercise.taskSteps.map(taskStepToJson).toList(growable: false),
+    'supportedModes': exercise.supportedModes
+        .map((mode) => mode.name)
+        .toList(growable: false),
     'hints': <String, String>{
-      for (final entry in milestone.hints.entries) entry.key.name: entry.value,
+      for (final entry in exercise.hints.entries) entry.key.name: entry.value,
     },
-    'starterCode': milestone.starterCode,
-    'starterFiles': milestone.starterFiles,
-    'solutionCode': milestone.solutionCode,
-    'exampleInput': milestone.exampleInput,
-    'exampleOutput': milestone.exampleOutput,
-    'sandboxHarnessTemplate': milestone.sandboxHarnessTemplate,
-    'sandboxEntryFilePath': milestone.sandboxEntryFilePath,
-    'demoFilePath': milestone.demoFilePath,
-    'testCases':
-        milestone.testCases.map(executionTestCaseToJson).toList(growable: false),
-    'reflectionPrompts': milestone.reflectionPrompts,
-    'skillIds': milestone.skillIds,
-    'requirements':
-        milestone.requirements.map(requirementCheckToJson).toList(growable: false),
-    'runCommand': milestone.runCommand,
-    'reviewPrompt': milestone.reviewPrompt,
+    'reflectionPrompts': exercise.reflectionPrompts,
+    'requirements': exercise.requirements
+        .map(requirementCheckToJson)
+        .toList(growable: false),
+    'languageVariants': exercise.languageVariants
+        .map(exerciseLanguageVariantToJson)
+        .toList(growable: false),
   };
 }
 
-Milestone milestoneFromJson(Map<String, dynamic> json) {
+LearningExercise learningExerciseFromJson(Map<String, dynamic> json) {
   final rawHints = json['hints'];
   final hints = <HintLevel, String>{};
   if (rawHints is Map) {
@@ -92,37 +96,101 @@ Milestone milestoneFromJson(Map<String, dynamic> json) {
     }
   }
 
-  return Milestone(
+  return LearningExercise(
     id: json['id'] as String? ?? '',
     title: json['title'] as String? ?? '',
-    objective: json['objective'] as String? ?? '',
+    summary: json['summary'] as String? ?? '',
+    type: _trackTypeFromLane(json['lane'] ?? json['type']),
+    contentKind: _contentKindFromName(json['contentKind'] as String?),
+    level: _learningLevelFromName(json['level'] as String?),
+    topicIds: _readStringList(json['topicIds']),
+    domainIds: _readStringList(json['domainIds']),
+    tags: _readStringList(json['tags']),
+    skillIds: _readStringList(json['skillIds']),
     problemStatement: json['problemStatement'] as String? ?? '',
-    languageLabel: json['languageLabel'] as String? ?? '',
-    relatedFiles: _readStringList(json['relatedFiles']),
     acceptanceCriteria: _readStringList(json['acceptanceCriteria']),
     taskSteps: _readObjectList(json['taskSteps'], taskStepFromJson),
     supportedModes: _readList(json['supportedModes'])
         .map((item) => _practiceModeFromName(item as String?))
         .toList(growable: false),
     hints: hints,
+    reflectionPrompts: _readStringList(json['reflectionPrompts']),
+    requirements:
+        _readObjectList(json['requirements'], requirementCheckFromJson),
+    languageVariants: _readObjectList(
+      json['languageVariants'],
+      exerciseLanguageVariantFromJson,
+    ),
+  );
+}
+
+Map<String, Object?> exerciseLanguageVariantToJson(
+  ExerciseLanguageVariant variant,
+) {
+  return <String, Object?>{
+    'languageId': variant.languageId,
+    'languageLabel': variant.languageLabel,
+    'isDefault': variant.isDefault,
+    'starterCode': variant.starterCode,
+    'starterFiles': variant.starterFiles,
+    'solutionCode': variant.solutionCode,
+    'sandboxHarnessTemplate': variant.sandboxHarnessTemplate,
+    'runCommand': variant.runCommand,
+    'entryFilePath': variant.entryFilePath,
+    'demoFilePath': variant.demoFilePath,
+    'testCases':
+        variant.testCases.map(executionTestCaseToJson).toList(growable: false),
+  };
+}
+
+ExerciseLanguageVariant exerciseLanguageVariantFromJson(
+  Map<String, dynamic> json,
+) {
+  return ExerciseLanguageVariant(
+    languageId: json['languageId'] as String? ?? '',
+    languageLabel: json['languageLabel'] as String? ?? '',
+    isDefault: json['isDefault'] == true,
     starterCode: json['starterCode'] as String? ?? '',
     starterFiles: _readStringMap(json['starterFiles']),
     solutionCode: json['solutionCode'] as String?,
-    exampleInput: json['exampleInput'] as String? ?? '',
-    exampleOutput: json['exampleOutput'] as String? ?? '',
-    sandboxHarnessTemplate:
-        json['sandboxHarnessTemplate'] as String? ??
-            Milestone.defaultSandboxHarnessTemplate,
-    sandboxEntryFilePath: json['sandboxEntryFilePath'] as String?,
+    sandboxHarnessTemplate: json['sandboxHarnessTemplate'] as String? ??
+        ExerciseLanguageVariant.defaultSandboxHarnessTemplate,
+    runCommand: json['runCommand'] as String? ?? '',
+    entryFilePath: json['entryFilePath'] as String? ?? 'main.py',
     demoFilePath: json['demoFilePath'] as String?,
-    testCases:
-        _readObjectList(json['testCases'], executionTestCaseFromJson),
-    reflectionPrompts: _readStringList(json['reflectionPrompts']),
-    skillIds: _readStringList(json['skillIds']),
-    requirements:
-        _readObjectList(json['requirements'], requirementCheckFromJson),
-    runCommand: json['runCommand'] as String? ?? 'python main.py',
-    reviewPrompt: json['reviewPrompt'] as String?,
+    testCases: _readObjectList(json['testCases'], executionTestCaseFromJson),
+  );
+}
+
+Map<String, Object?> topicDefinitionToJson(TopicDefinition topic) {
+  return <String, Object?>{
+    'id': topic.id,
+    'title': topic.title,
+    'summary': topic.summary,
+  };
+}
+
+TopicDefinition topicDefinitionFromJson(Map<String, dynamic> json) {
+  return TopicDefinition(
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    summary: json['summary'] as String? ?? '',
+  );
+}
+
+Map<String, Object?> domainDefinitionToJson(DomainDefinition domain) {
+  return <String, Object?>{
+    'id': domain.id,
+    'title': domain.title,
+    'summary': domain.summary,
+  };
+}
+
+DomainDefinition domainDefinitionFromJson(Map<String, dynamic> json) {
+  return DomainDefinition(
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    summary: json['summary'] as String? ?? '',
   );
 }
 
@@ -182,7 +250,7 @@ Map<String, Object?> skillNodeToJson(SkillNode skillNode) {
     'title': skillNode.title,
     'category': skillNode.category.name,
     'description': skillNode.description,
-    'reviewMilestoneId': skillNode.reviewMilestoneId,
+    'reviewExerciseId': skillNode.reviewExerciseId,
   };
 }
 
@@ -192,7 +260,9 @@ SkillNode skillNodeFromJson(Map<String, dynamic> json) {
     title: json['title'] as String? ?? '',
     category: _skillCategoryFromName(json['category'] as String?),
     description: json['description'] as String? ?? '',
-    reviewMilestoneId: json['reviewMilestoneId'] as String? ?? '',
+    reviewExerciseId: json['reviewExerciseId'] as String? ??
+        json['reviewMilestoneId'] as String? ??
+        '',
   );
 }
 
@@ -224,7 +294,7 @@ Map<String, Object?> reviewTaskToJson(ReviewTask task) {
     'title': task.title,
     'description': task.description,
     'skillIds': task.skillIds,
-    'milestoneId': task.milestoneId,
+    'exerciseId': task.exerciseId,
     'laneLabel': task.laneLabel,
   };
 }
@@ -235,7 +305,8 @@ ReviewTask reviewTaskFromJson(Map<String, dynamic> json) {
     title: json['title'] as String? ?? '',
     description: json['description'] as String? ?? '',
     skillIds: _readStringList(json['skillIds']),
-    milestoneId: json['milestoneId'] as String? ?? '',
+    exerciseId:
+        json['exerciseId'] as String? ?? json['milestoneId'] as String? ?? '',
     laneLabel: json['laneLabel'] as String? ?? '',
   );
 }
@@ -266,7 +337,9 @@ List<dynamic> _readList(Object? value) {
 }
 
 List<String> _readStringList(Object? value) {
-  return _readList(value).map((item) => item.toString()).toList(growable: false);
+  return _readList(value)
+      .map((item) => item.toString())
+      .toList(growable: false);
 }
 
 Map<String, String> _readStringMap(Object? value) {
@@ -275,7 +348,8 @@ Map<String, String> _readStringMap(Object? value) {
   }
 
   return <String, String>{
-    for (final entry in value.entries) entry.key.toString(): entry.value.toString(),
+    for (final entry in value.entries)
+      entry.key.toString(): entry.value.toString(),
   };
 }
 
@@ -293,11 +367,60 @@ List<T> _readObjectList<T>(
       .toList(growable: false);
 }
 
-LearningTrackType _trackTypeFromName(String? name) {
-  return LearningTrackType.values.firstWhere(
+LearningTrackType _trackTypeFromLane(Object? value) {
+  final name = value?.toString().toLowerCase();
+  switch (name) {
+    case 'dsa':
+    case 'datastructure':
+      return LearningTrackType.dataStructure;
+    case 'leetcode':
+      return LearningTrackType.leetcode;
+    default:
+      return LearningTrackType.project;
+  }
+}
+
+LearningLevel _learningLevelFromName(String? name) {
+  return LearningLevel.values.firstWhere(
     (value) => value.name == name,
-    orElse: () => LearningTrackType.project,
+    orElse: () => LearningLevel.foundation,
   );
+}
+
+ContentKind _contentKindFromName(String? name) {
+  switch (name) {
+    case 'project_track':
+      return ContentKind.projectTrack;
+    case 'project_exercise':
+      return ContentKind.projectExercise;
+    case 'dsa_track':
+      return ContentKind.dsaTrack;
+    case 'dsa_exercise':
+      return ContentKind.dsaExercise;
+    case 'leetcode_set':
+      return ContentKind.leetcodeSet;
+    case 'leetcode_exercise':
+      return ContentKind.leetcodeExercise;
+    default:
+      return ContentKind.projectExercise;
+  }
+}
+
+String _contentKindName(ContentKind value) {
+  switch (value) {
+    case ContentKind.projectTrack:
+      return 'project_track';
+    case ContentKind.projectExercise:
+      return 'project_exercise';
+    case ContentKind.dsaTrack:
+      return 'dsa_track';
+    case ContentKind.dsaExercise:
+      return 'dsa_exercise';
+    case ContentKind.leetcodeSet:
+      return 'leetcode_set';
+    case ContentKind.leetcodeExercise:
+      return 'leetcode_exercise';
+  }
 }
 
 PracticeMode _practiceModeFromName(String? name) {

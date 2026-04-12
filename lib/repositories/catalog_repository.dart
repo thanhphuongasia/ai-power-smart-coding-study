@@ -8,6 +8,14 @@ abstract class CatalogRepository {
 
   Future<List<LearningTrack>> readCachedTracks();
 
+  Future<List<LearningExercise>> readCachedExercises();
+
+  Future<List<TopicDefinition>> readCachedTopics();
+
+  Future<List<DomainDefinition>> readCachedDomains();
+
+  Future<List<String>> readCachedTagSuggestions();
+
   Future<List<SkillNode>> readCachedSkillNodes();
 
   Future<bool> refreshCatalogIfNeeded({
@@ -38,6 +46,30 @@ class AppApiCatalogRepository implements CatalogRepository {
   }
 
   @override
+  Future<List<LearningExercise>> readCachedExercises() async {
+    final document = await _localAppStore.read();
+    return document.exercises;
+  }
+
+  @override
+  Future<List<TopicDefinition>> readCachedTopics() async {
+    final document = await _localAppStore.read();
+    return document.topics;
+  }
+
+  @override
+  Future<List<DomainDefinition>> readCachedDomains() async {
+    final document = await _localAppStore.read();
+    return document.domains;
+  }
+
+  @override
+  Future<List<String>> readCachedTagSuggestions() async {
+    final document = await _localAppStore.read();
+    return document.tagSuggestions;
+  }
+
+  @override
   Future<List<SkillNode>> readCachedSkillNodes() async {
     final document = await _localAppStore.read();
     return document.skillNodes;
@@ -56,7 +88,8 @@ class AppApiCatalogRepository implements CatalogRepository {
     final shouldRefresh = force ||
         document.contentManifest == null ||
         document.contentManifest!.checksum != remoteManifest.checksum ||
-        document.contentManifest!.contentVersion != remoteManifest.contentVersion;
+        document.contentManifest!.contentVersion !=
+            remoteManifest.contentVersion;
 
     if (!shouldRefresh) {
       return false;
@@ -67,6 +100,10 @@ class AppApiCatalogRepository implements CatalogRepository {
       document.copyWith(
         contentManifest: remoteManifest,
         tracks: remoteCatalog.tracks,
+        exercises: remoteCatalog.exercises,
+        topics: remoteCatalog.topics,
+        domains: remoteCatalog.domains,
+        tagSuggestions: remoteCatalog.tagSuggestions,
         skillNodes: remoteCatalog.skillNodes,
       ),
     );
@@ -78,11 +115,19 @@ class MemoryCatalogRepository implements CatalogRepository {
   MemoryCatalogRepository({
     this.manifest,
     required this.tracks,
+    required this.exercises,
+    this.topics = const <TopicDefinition>[],
+    this.domains = const <DomainDefinition>[],
+    this.tagSuggestions = const <String>[],
     required this.skillNodes,
   });
 
   final ContentManifest? manifest;
   final List<LearningTrack> tracks;
+  final List<LearningExercise> exercises;
+  final List<TopicDefinition> topics;
+  final List<DomainDefinition> domains;
+  final List<String> tagSuggestions;
   final List<SkillNode> skillNodes;
 
   @override
@@ -90,6 +135,18 @@ class MemoryCatalogRepository implements CatalogRepository {
 
   @override
   Future<List<LearningTrack>> readCachedTracks() async => tracks;
+
+  @override
+  Future<List<LearningExercise>> readCachedExercises() async => exercises;
+
+  @override
+  Future<List<TopicDefinition>> readCachedTopics() async => topics;
+
+  @override
+  Future<List<DomainDefinition>> readCachedDomains() async => domains;
+
+  @override
+  Future<List<String>> readCachedTagSuggestions() async => tagSuggestions;
 
   @override
   Future<List<SkillNode>> readCachedSkillNodes() async => skillNodes;
