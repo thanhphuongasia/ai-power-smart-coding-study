@@ -67,8 +67,11 @@ class SandboxApiService {
     } catch (error) {
       throw StateError(
         'Could not reach the sandbox API at ${_settings.baseUrl}. '
-        'Start the local proxy with "cd server && npm start" '
-        'or override SANDBOX_API_BASE_URL. Original error: $error',
+        'Start the local proxy with "make sandbox" (or "cd server && npm start") '
+        'or override SANDBOX_API_BASE_URL. '
+        'If you are running on a real device, 127.0.0.1 points at the phone/emulator, '
+        'so use your laptop/host IP instead. '
+        'Original error: $error',
       );
     }
 
