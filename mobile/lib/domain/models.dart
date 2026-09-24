@@ -102,3 +102,52 @@ class Block {
   /// Từ gợi ý riêng cho block, vd ['range', 'len', 'append'].
   final List<String> vocab;
 }
+
+/// Loại nội dung do Claude (qua MCP) sinh ra, chờ admin duyệt.
+enum ContentKind { exercise, theme }
+
+enum ApprovalStatus { pending, approved, rejected }
+
+class PendingContent {
+  const PendingContent({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.target,
+    required this.description,
+    required this.tags,
+    required this.size,
+    this.hintPreview,
+    this.status = ApprovalStatus.pending,
+  });
+
+  final String id;
+  final ContentKind kind;
+  final String title;
+
+  /// Theme đích (với exercise) hoặc 'Theme mới'.
+  final String target;
+  final String description;
+  final List<String> tags;
+
+  /// Vd: '5 block' hoặc '6 bài tập'.
+  final String size;
+
+  /// Hint mức 1 để admin kiểm tra độ "mờ" trước khi duyệt.
+  final String? hintPreview;
+  final ApprovalStatus status;
+
+  PendingContent copyWith({ApprovalStatus? status}) {
+    return PendingContent(
+      id: id,
+      kind: kind,
+      title: title,
+      target: target,
+      description: description,
+      tags: tags,
+      size: size,
+      hintPreview: hintPreview,
+      status: status ?? this.status,
+    );
+  }
+}

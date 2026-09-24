@@ -19,12 +19,12 @@ class SurfaceCard extends StatelessWidget {
       button: onTap != null,
       enabled: onTap != null,
       child: Material(
-        color: AppColors.surfaceRaised,
+        color: context.palette.surfaceRaised,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           side: BorderSide(
-            color: highlighted ? AppColors.primary : AppColors.outline,
+            color: highlighted ? context.palette.primary : context.palette.outline,
             width: 1,
           ),
         ),
@@ -52,16 +52,16 @@ class TagChip extends StatelessWidget {
         vertical: AppSpace.s1,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+        color: context.palette.surfaceRaised,
         border: Border.all(
-          color: AppColors.outline,
+          color: context.palette.outline,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         label,
-        style: AppText.caption.copyWith(color: AppColors.ink),
+        style: AppText.caption.copyWith(color: context.palette.ink),
       ),
     );
   }
@@ -76,7 +76,7 @@ class ResultBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = passed ? 'Đúng' : 'Chưa đúng';
     final icon = passed ? Icons.check_circle : Icons.cancel;
-    final color = passed ? AppColors.primary : AppColors.danger;
+    final color = passed ? context.palette.primary : context.palette.danger;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -84,7 +84,7 @@ class ResultBadge extends StatelessWidget {
         vertical: AppSpace.s1,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+        color: context.palette.surfaceRaised,
         border: Border.all(
           color: color,
           width: 1,
@@ -128,9 +128,9 @@ class TimerPill extends StatelessWidget {
         vertical: AppSpace.s2,
       ),
       decoration: BoxDecoration(
-        color: warning ? AppColors.danger.withValues(alpha: 0.2) : AppColors.surfaceRaised,
+        color: warning ? context.palette.danger.withValues(alpha: 0.2) : context.palette.surfaceRaised,
         border: Border.all(
-          color: warning ? AppColors.danger : AppColors.outline,
+          color: warning ? context.palette.danger : context.palette.outline,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -138,7 +138,7 @@ class TimerPill extends StatelessWidget {
       child: Text(
         text,
         style: AppText.code.copyWith(
-          color: warning ? AppColors.danger : AppColors.ink,
+          color: warning ? context.palette.danger : context.palette.ink,
         ),
       ),
     );
@@ -160,14 +160,15 @@ class ThinProgressBar extends StatelessWidget {
     return Container(
       height: 2,
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+        color: context.palette.outline.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(1),
       ),
       child: FractionallySizedBox(
+        alignment: Alignment.centerLeft,
         widthFactor: value.clamp(0.0, 1.0),
         child: Container(
           decoration: BoxDecoration(
-            color: color ?? AppColors.primary,
+            color: color ?? context.palette.primary,
             borderRadius: BorderRadius.circular(1),
           ),
         ),
@@ -198,10 +199,10 @@ class ScreenHeader extends StatelessWidget {
         vertical: AppSpace.s4,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.palette.surface,
         border: Border(
           bottom: BorderSide(
-            color: AppColors.outline,
+            color: context.palette.outline,
             width: 1,
           ),
         ),
@@ -229,7 +230,7 @@ class ScreenHeader extends StatelessWidget {
                   const SizedBox(height: AppSpace.s1),
                   Text(
                     subtitle!,
-                    style: AppText.body.copyWith(color: AppColors.inkMuted),
+                    style: AppText.body.copyWith(color: context.palette.inkMuted),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -258,7 +259,7 @@ class SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpace.s2),
       child: Text(
         text,
-        style: AppText.label.copyWith(color: AppColors.inkMuted),
+        style: AppText.label.copyWith(color: context.palette.inkMuted),
       ),
     );
   }
@@ -284,8 +285,8 @@ class PrimaryButton extends StatelessWidget {
       label: Text(label),
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: context.palette.primary,
+        foregroundColor: context.palette.onPrimary,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpace.s4,
           vertical: AppSpace.s2,
@@ -313,9 +314,9 @@ class GhostButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.ink,
-        side: const BorderSide(
-          color: AppColors.outline,
+        foregroundColor: context.palette.ink,
+        side: BorderSide(
+          color: context.palette.outline,
           width: 1,
         ),
         padding: const EdgeInsets.symmetric(
@@ -354,8 +355,8 @@ class HintButton extends StatelessWidget {
       label: Text(label),
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: AppColors.accent,
-        foregroundColor: AppColors.onAccent,
+        backgroundColor: context.palette.accent,
+        foregroundColor: context.palette.onAccent,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpace.s4,
           vertical: AppSpace.s2,

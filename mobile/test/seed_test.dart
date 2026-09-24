@@ -97,6 +97,7 @@ void main() {
     final allBlocks = <Block>[];
     final allExercises = <Exercise>[];
     final allIds = <String>[];
+    final sharedExercises = Set<Exercise>.identity();
 
     setUpAll(() {
       for (final theme in seedThemes) {
@@ -106,6 +107,9 @@ void main() {
           for (final file in topic.files) {
             allIds.add(file.id);
             for (final exercise in file.exercises) {
+              // Exercise dùng chung giữa nhiều file (cross-cut) là cùng một
+              // instance — chỉ đếm id của nó một lần.
+              if (!sharedExercises.add(exercise)) continue;
               allIds.add(exercise.id);
               allExercises.add(exercise);
               for (final block in exercise.blocks) {

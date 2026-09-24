@@ -72,7 +72,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
     ref.read(sessionProvider(widget.exerciseId).notifier).activity();
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surfaceRaised,
+      backgroundColor: context.palette.surfaceRaised,
       builder: (sheetContext) {
         return Consumer(builder: (context, ref, _) {
           final progress = ref.watch(progressProvider)[widget.exerciseId];
@@ -87,13 +87,13 @@ class _CellScreenState extends ConsumerState<CellScreen> {
               children: [
                 Text(
                   'Gợi ý',
-                  style: AppText.title.copyWith(color: AppColors.accent),
+                  style: AppText.title.copyWith(color: context.palette.accent),
                 ),
                 const SizedBox(height: AppSpace.s4),
                 if (used == 0)
                   Text(
                     'Chưa mở gợi ý nào.',
-                    style: AppText.body.copyWith(color: AppColors.inkMuted),
+                    style: AppText.body.copyWith(color: context.palette.inkMuted),
                   ),
                 for (var i = 0; i < used && i < _block.hints.length; i++)
                   Container(
@@ -101,7 +101,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                     margin: const EdgeInsets.only(bottom: AppSpace.s2),
                     padding: const EdgeInsets.all(AppSpace.s2),
                     decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.accent),
+                      border: Border.all(color: context.palette.accent),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Column(
@@ -109,12 +109,12 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                       children: [
                         Text(
                           levelLabels[i],
-                          style: AppText.label.copyWith(color: AppColors.accent),
+                          style: AppText.label.copyWith(color: context.palette.accent),
                         ),
                         const SizedBox(height: AppSpace.s1),
                         Text(
                           _block.hints[i],
-                          style: AppText.body.copyWith(color: AppColors.accent),
+                          style: AppText.body.copyWith(color: context.palette.accent),
                         ),
                       ],
                     ),
@@ -122,7 +122,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                 const SizedBox(height: AppSpace.s2),
                 Text(
                   'Còn ${3 - used} lần',
-                  style: AppText.caption.copyWith(color: AppColors.inkMuted),
+                  style: AppText.caption.copyWith(color: context.palette.inkMuted),
                 ),
                 const SizedBox(height: AppSpace.s4),
                 if (used < 3)
@@ -169,7 +169,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                 Text(
                   'Tự thoát sau ${session.idleCountdownSeconds}s',
                   key: const Key('idle-countdown'),
-                  style: AppText.caption.copyWith(color: AppColors.danger),
+                  style: AppText.caption.copyWith(color: context.palette.danger),
                 ),
               ],
             ),
@@ -374,7 +374,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                     Text(
                       _result!.output,
                       style: AppText.code.copyWith(
-                        color: passed ? AppColors.ink : AppColors.danger,
+                        color: passed ? context.palette.ink : context.palette.danger,
                       ),
                     ),
                   ],
@@ -440,7 +440,7 @@ class _CompactHeader extends StatelessWidget {
               '$title · $subtitle',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppText.label.copyWith(color: AppColors.inkMuted),
+              style: AppText.label.copyWith(color: context.palette.inkMuted),
             ),
           ),
         ],
@@ -467,12 +467,12 @@ class _DoneBlockPreview extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle, size: 16, color: AppColors.primary),
+          Icon(Icons.check_circle, size: 16, color: context.palette.primary),
           const SizedBox(width: AppSpace.s2),
           Expanded(
             child: Text(
               indented,
-              style: AppText.code.copyWith(color: AppColors.inkMuted),
+              style: AppText.code.copyWith(color: context.palette.inkMuted),
             ),
           ),
         ],

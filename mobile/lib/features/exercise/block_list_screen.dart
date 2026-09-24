@@ -109,13 +109,13 @@ class _StepChip extends StatelessWidget {
     switch (status) {
       case BlockStatus.done:
         icon = Icons.check_circle;
-        color = AppColors.primary;
+        color = context.palette.primary;
       case BlockStatus.active:
         icon = Icons.play_circle_fill;
-        color = AppColors.ink;
+        color = context.palette.ink;
       case BlockStatus.locked:
         icon = Icons.lock;
-        color = AppColors.inkMuted;
+        color = context.palette.inkMuted;
     }
 
     return Container(
@@ -126,7 +126,7 @@ class _StepChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         border: Border.all(
-          color: status == BlockStatus.active ? AppColors.primary : color,
+          color: status == BlockStatus.active ? context.palette.primary : color,
         ),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
@@ -159,7 +159,7 @@ class _ContinueBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 'Bạn đang làm dở Block ${blockIndex + 1}',
-                style: AppText.body.copyWith(color: AppColors.ink),
+                style: AppText.body.copyWith(color: context.palette.ink),
               ),
             ),
             const SizedBox(width: AppSpace.s4),
@@ -207,12 +207,12 @@ class _BlockCard extends StatelessWidget {
         content = Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.check_circle, size: 16, color: AppColors.primary),
+            Icon(Icons.check_circle, size: 16, color: context.palette.primary),
             const SizedBox(width: AppSpace.s2),
             Expanded(
               child: Text(
                 indented,
-                style: AppText.code.copyWith(color: AppColors.inkMuted),
+                style: AppText.code.copyWith(color: context.palette.inkMuted),
               ),
             ),
           ],
@@ -221,12 +221,12 @@ class _BlockCard extends StatelessWidget {
         content = Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.play_circle_fill, size: 16, color: AppColors.ink),
+            Icon(Icons.play_circle_fill, size: 16, color: context.palette.ink),
             const SizedBox(width: AppSpace.s2),
             Expanded(
               child: Text(
                 block.prompt,
-                style: AppText.body.copyWith(color: AppColors.ink),
+                style: AppText.body.copyWith(color: context.palette.ink),
               ),
             ),
           ],
@@ -234,12 +234,12 @@ class _BlockCard extends StatelessWidget {
       case BlockStatus.locked:
         content = Row(
           children: [
-            const Icon(Icons.lock, size: 16, color: AppColors.inkMuted),
+            Icon(Icons.lock, size: 16, color: context.palette.inkMuted),
             const SizedBox(width: AppSpace.s2),
             Expanded(
               child: Text(
                 'Mở khoá sau Block $index',
-                style: AppText.body.copyWith(color: AppColors.inkMuted),
+                style: AppText.body.copyWith(color: context.palette.inkMuted),
               ),
             ),
           ],
@@ -256,7 +256,7 @@ class _BlockCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpace.s4),
         child: Row(
           children: [
-            Text('B${index + 1}', style: AppText.label.copyWith(color: AppColors.inkMuted)),
+            Text('B${index + 1}', style: AppText.label.copyWith(color: context.palette.inkMuted)),
             const SizedBox(width: AppSpace.s2),
             Expanded(child: content),
           ],
