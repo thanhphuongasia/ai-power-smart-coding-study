@@ -155,9 +155,23 @@ class SessionController extends Notifier<SessionState> {
     );
   }
 
-  /// Bắt đầu (hoặc khởi động lại) phiên: reset mốc thời gian, chạy
-  /// `Timer.periodic` 1s.
+  /// Bắt đầu phiên: reset mốc thời gian, chạy `Timer.periodic` 1s.
+  ///
+  /// Idempotent: nếu timer đang chạy (_timer != null && _timer!.isActive)
+  /// và chưa timedOut, chỉ gọi activity() để đánh dấu có hoạt động (thoát idle
+  /// nếu đang), KHÔNG reset elapsed về 0. Chỉ khi chưa có timer hoặc đã
+  /// timedOut mới khởi động lại toàn bộ phiên từ đầu.
+  ///
+  /// Điều này cho phép gọi start() lặp lại từ initState của màn block mà
+  /// không làm đồng hồ nhảy về 00:00 mỗi lần.
   void start() {
+    // Nếu timer đang chạy và chưa timedOut → chỉ đánh dấu activity
+    if (_timer != null && _timer!.isActive && state.phase != SessionPhase.timedOut) {
+      activity();
+      return;
+    }
+
+    // Khởi động lại toàn bộ phiên từ đầu
     final now = _clock();
     _sessionStart = now;
     _lastActivity = now;

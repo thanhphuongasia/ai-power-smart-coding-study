@@ -292,6 +292,59 @@ void main() {
         expect(async.pendingTimers.length, 0);
       });
     });
+
+    test(
+      'start() idempotent: gọi lại khi timer đang chạy → elapsed không reset',
+      () {
+        _withFakeSession((async, container, listen) {
+          listen('split-chunks');
+          final controller = container.read(
+            sessionProvider('split-chunks').notifier,
+          );
+          controller.start();
+
+          // Đếm giờ được 30 giây.
+          async.elapse(const Duration(seconds: 30));
+          var state = container.read(sessionProvider('split-chunks'));
+          expect(state.elapsed, const Duration(seconds: 30));
+          expect(state.phase, SessionPhase.active);
+
+          // Gọi start() lần thứ 2 — phải idempotent, elapsed vẫn ≥30s.
+          controller.start();
+          state = container.read(sessionProvider('split-chunks'));
+          expect(state.elapsed, greaterThanOrEqualTo(const Duration(seconds: 30)));
+          expect(state.phase, SessionPhase.active);
+          // Vẫn chỉ 1 timer, không tạo cái mới.
+          expect(async.pendingTimers.length, 1);
+        });
+      },
+    );
+
+    test(
+      'start() sau timedOut → reset elapsed về 0, khởi động lại phiên',
+      () {
+        _withFakeSession((async, container, listen) {
+          listen('split-chunks');
+          final controller = container.read(
+            sessionProvider('split-chunks').notifier,
+          );
+          controller.start();
+
+          // Đếm quá maxSessionDuration để trigger timedOut.
+          async.elapse(maxSessionDuration);
+          var state = container.read(sessionProvider('split-chunks'));
+          expect(state.phase, SessionPhase.timedOut);
+
+          // Gọi start() lúc timedOut → reset, khởi động lại.
+          controller.start();
+          state = container.read(sessionProvider('split-chunks'));
+          expect(state.elapsed, const Duration(seconds: 0));
+          expect(state.phase, SessionPhase.active);
+          // Có timer chạy lại.
+          expect(async.pendingTimers.length, 1);
+        });
+      },
+    );
   });
 
   group('SessionController.run', () {
