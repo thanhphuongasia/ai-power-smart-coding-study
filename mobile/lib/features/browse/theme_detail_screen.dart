@@ -84,12 +84,12 @@ class _TopicCard extends StatelessWidget {
             const SizedBox(height: AppSpace.s1),
             Text(
               topic.description,
-              style: AppText.body.copyWith(color: AppColors.inkMuted),
+              style: AppText.body.copyWith(color: context.palette.inkMuted),
             ),
             const SizedBox(height: AppSpace.s2),
             Text(
               '${exercises.length} bài tập',
-              style: AppText.caption.copyWith(color: AppColors.inkMuted),
+              style: AppText.caption.copyWith(color: context.palette.inkMuted),
             ),
             const SizedBox(height: AppSpace.s2),
             ThinProgressBar(

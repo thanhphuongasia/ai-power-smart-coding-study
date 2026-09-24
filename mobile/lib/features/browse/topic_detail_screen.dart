@@ -9,8 +9,8 @@ import '../../app/theme.dart';
 import '../../data/seed.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
-import '../exercise/session_controller.dart';
 import '../exercise/session_providers.dart';
+import 'exercise_row.dart';
 
 class TopicDetailScreen extends ConsumerWidget {
   const TopicDetailScreen(this.topicId, {super.key});
@@ -38,13 +38,10 @@ class TopicDetailScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(AppSpace.s4),
                 children: [
                   for (final file in topic.files) ...[
-                    Text(
-                      file.name,
-                      style: AppText.code.copyWith(color: AppColors.ink),
-                    ),
+                    _FileHeader(file: file),
                     const SizedBox(height: AppSpace.s2),
                     for (final exercise in file.exercises) ...[
-                      _ExerciseRow(
+                      ExerciseRow(
                         exercise: exercise,
                         progress: progress[exercise.id],
                       ),
@@ -73,76 +70,46 @@ class TopicDetailScreen extends ConsumerWidget {
   throw StateError('Không tìm thấy topic với id: $topicId');
 }
 
-class _ExerciseRow extends StatelessWidget {
-  const _ExerciseRow({required this.exercise, required this.progress});
+/// Tên file; nếu file còn được dùng ở theme khác thì hiện nhãn "Dùng ở N
+/// theme" và chạm để mở màn File cross-cut.
+class _FileHeader extends StatelessWidget {
+  const _FileHeader({required this.file});
 
-  final Exercise exercise;
-  final ExerciseProgress? progress;
+  final CodeFile file;
 
   @override
   Widget build(BuildContext context) {
-    final completed = progress?.completedBlocks ?? 0;
-    final total = exercise.blocks.length;
-    final isDone = total > 0 && completed >= total;
-    final isStarted = completed > 0 && !isDone;
+    final p = context.palette;
+    final themeCount =
+        locateFilesNamed(file.name).map((u) => u.theme.id).toSet().length;
+    final name = Text(file.name, style: AppText.code.copyWith(color: p.ink));
+    if (themeCount < 2) return name;
 
-    final String statusText;
-    final IconData statusIcon;
-    final Color statusColor;
-    if (isDone) {
-      statusText = 'Đã xong';
-      statusIcon = Icons.check_circle;
-      statusColor = AppColors.primary;
-    } else if (isStarted) {
-      statusText = 'Đang dở';
-      statusIcon = Icons.timelapse;
-      statusColor = AppColors.ink;
-    } else {
-      statusText = 'Mới';
-      statusIcon = Icons.circle_outlined;
-      statusColor = AppColors.inkMuted;
-    }
-
-    return SurfaceCard(
-      key: Key('exercise-${exercise.id}'),
-      onTap: () => context.push('/exercise/${exercise.id}'),
+    return InkWell(
+      key: Key('file-${file.id}'),
+      onTap: () => context.push('/file/${Uri.encodeComponent(file.name)}'),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s4),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s1),
         child: Row(
           children: [
-            Icon(statusIcon, size: 18, color: statusColor),
-            const SizedBox(width: AppSpace.s2),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${exercise.functionName}()',
-                    style: AppText.code.copyWith(color: AppColors.ink),
-                  ),
-                  const SizedBox(height: AppSpace.s1),
-                  Text(
-                    exercise.title,
-                    style: AppText.body.copyWith(color: AppColors.inkMuted),
-                  ),
-                ],
+            Expanded(child: name),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.s2,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                border: Border.all(color: p.primary),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                'Dùng ở $themeCount theme',
+                style: AppText.caption.copyWith(color: p.primary),
               ),
             ),
-            const SizedBox(width: AppSpace.s4),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  statusText,
-                  style: AppText.label.copyWith(color: statusColor),
-                ),
-                const SizedBox(height: AppSpace.s1),
-                Text(
-                  '$completed/$total block',
-                  style: AppText.caption.copyWith(color: AppColors.inkMuted),
-                ),
-              ],
-            ),
+            const SizedBox(width: AppSpace.s1),
+            Icon(Icons.chevron_right, size: 18, color: p.inkMuted),
           ],
         ),
       ),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../app/theme_mode.dart';
 import '../../data/seed.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
@@ -26,7 +27,20 @@ class HomeScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.s4),
           children: [
-            const Text('Luyện tập hôm nay', style: AppText.display),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Luyện tập hôm nay', style: AppText.display),
+                ),
+                IconButton(
+                  key: const Key('admin-button'),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  tooltip: 'Duyệt nội dung',
+                  onPressed: () => context.push('/admin'),
+                ),
+                const ThemeModeButton(),
+              ],
+            ),
             const SizedBox(height: AppSpace.s6),
             if (inProgress != null) ...[
               _ContinueCard(exercise: inProgress, progress: progress),
@@ -77,7 +91,7 @@ class _ContinueCard extends StatelessWidget {
                   const SizedBox(height: AppSpace.s1),
                   Text(
                     'Đã xong $completed/$total',
-                    style: AppText.body.copyWith(color: AppColors.inkMuted),
+                    style: AppText.body.copyWith(color: context.palette.inkMuted),
                   ),
                   const SizedBox(height: AppSpace.s2),
                   ThinProgressBar(value: total == 0 ? 0 : completed / total),
@@ -85,7 +99,7 @@ class _ContinueCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpace.s4),
-            const Icon(Icons.arrow_forward, color: AppColors.ink),
+            Icon(Icons.arrow_forward, color: context.palette.ink),
           ],
         ),
       ),
@@ -138,7 +152,7 @@ class _ThemeCard extends StatelessWidget {
             const SizedBox(height: AppSpace.s1),
             Text(
               theme.description,
-              style: AppText.body.copyWith(color: AppColors.inkMuted),
+              style: AppText.body.copyWith(color: context.palette.inkMuted),
             ),
             const SizedBox(height: AppSpace.s2),
             Wrap(
@@ -155,7 +169,7 @@ class _ThemeCard extends StatelessWidget {
                 const SizedBox(width: AppSpace.s2),
                 Text(
                   '$done/$total block',
-                  style: AppText.caption.copyWith(color: AppColors.inkMuted),
+                  style: AppText.caption.copyWith(color: context.palette.inkMuted),
                 ),
               ],
             ),

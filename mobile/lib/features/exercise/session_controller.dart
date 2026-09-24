@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/seed.dart';
 import '../../domain/answer_checker.dart';
 import '../../domain/models.dart';
+import '../stats/activity.dart';
 import 'session_providers.dart';
 
 /// Trạng thái một block so với tiến trình hiện tại của người học.
@@ -82,6 +83,7 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
   void markBlockPassed(String exerciseId, int blockIndex) {
     final current = _progressOf(exerciseId);
     if (blockIndex != current.completedBlocks) return;
+    ref.read(activityProvider.notifier).record();
     state = {
       ...state,
       exerciseId: current.copyWith(
