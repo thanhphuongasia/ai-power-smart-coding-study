@@ -15,18 +15,25 @@ class SurfaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceRaised,
-          border: Border.all(
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      child: Material(
+        color: AppColors.surfaceRaised,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: BorderSide(
             color: highlighted ? AppColors.primary : AppColors.outline,
             width: 1,
           ),
-          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: child,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: child,
+        ),
       ),
     );
   }
@@ -202,21 +209,29 @@ class ScreenHeader extends StatelessWidget {
       child: Row(
         children: [
           if (onBack != null)
-            GestureDetector(
-              onTap: onBack,
-              child: const Icon(Icons.arrow_back, size: 24),
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Quay lại',
+              onPressed: onBack,
             ),
-          if (onBack != null) const SizedBox(width: AppSpace.s4),
+          if (onBack != null) const SizedBox(width: AppSpace.s2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppText.title),
+                Text(
+                  title,
+                  style: AppText.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (subtitle != null) ...[
                   const SizedBox(height: AppSpace.s1),
                   Text(
                     subtitle!,
                     style: AppText.body.copyWith(color: AppColors.inkMuted),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],

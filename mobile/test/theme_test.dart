@@ -354,11 +354,10 @@ void main() {
           ),
         ),
       );
-      final container = tester.widget<Container>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      final material = tester.widget<Material>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
       );
-      final decoration = container.decoration as BoxDecoration;
-      expect(decoration.color, AppColors.surfaceRaised);
+      expect(material.color, AppColors.surfaceRaised);
     });
 
     testWidgets('SurfaceCard default has outline border', (WidgetTester tester) async {
@@ -372,13 +371,12 @@ void main() {
           ),
         ),
       );
-      final container = tester.widget<Container>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      final material = tester.widget<Material>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
       );
-      final decoration = container.decoration as BoxDecoration;
-      final border = decoration.border as Border;
-      expect(border.top.color, AppColors.outline);
-      expect(border.top.width, 1);
+      final shape = material.shape as RoundedRectangleBorder;
+      expect(shape.side.color, AppColors.outline);
+      expect(shape.side.width, 1);
     });
 
     testWidgets('SurfaceCard highlighted has primary border', (WidgetTester tester) async {
@@ -393,13 +391,156 @@ void main() {
           ),
         ),
       );
-      final container = tester.widget<Container>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      final material = tester.widget<Material>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
       );
-      final decoration = container.decoration as BoxDecoration;
-      final border = decoration.border as Border;
-      expect(border.top.color, AppColors.primary);
-      expect(border.top.width, 1);
+      final shape = material.shape as RoundedRectangleBorder;
+      expect(shape.side.color, AppColors.primary);
+      expect(shape.side.width, 1);
+    });
+
+    testWidgets('SurfaceCard Material has elevation 0', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final material = tester.widget<Material>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
+      );
+      expect(material.elevation, 0);
+    });
+
+    testWidgets('SurfaceCard with onTap has InkWell with proper Material wrapper', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              onTap: () {},
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(InkWell), findsOneWidget);
+      expect(find.byType(Material), findsWidgets);
+    });
+
+    testWidgets('SurfaceCard with onTap triggers callback on tap', (WidgetTester tester) async {
+      bool tapped = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              onTap: () {
+                tapped = true;
+              },
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(SurfaceCard));
+      expect(tapped, isTrue);
+    });
+
+    testWidgets('SurfaceCard with onTap wraps Semantics with button flag', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              onTap: () {},
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final handle = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(find.text('Test')),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+      handle.dispose();
+      expect(find.byType(InkWell), findsOneWidget);
+    });
+
+    testWidgets('SurfaceCard without onTap has Semantics with no button flag', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final handle = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(find.text('Test')),
+        isSemantics(isButton: false, hasTapAction: false),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('ScreenHeader back button has tooltip', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: ScreenHeader(
+              title: 'Test',
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      final iconButton = tester.widget<IconButton>(find.byType(IconButton));
+      expect(iconButton.tooltip, 'Quay lại');
+    });
+
+    testWidgets('ScreenHeader back button has accessible tap size', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: ScreenHeader(
+              title: 'Test',
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(IconButton), findsOneWidget);
+      // IconButton default size is 48x48 (Material Design standard)
+      final size = tester.getSize(find.byType(IconButton));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+      // Verify tooltip exists
+      final iconButton = tester.widget<IconButton>(find.byType(IconButton));
+      expect(iconButton.tooltip, 'Quay lại');
+    });
+
+    testWidgets('SurfaceCard without onTap still renders InkWell', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(InkWell), findsOneWidget);
     });
   });
 
