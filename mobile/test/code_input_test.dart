@@ -469,6 +469,77 @@ void main() {
     await _teardown(tester, h);
   });
 
+  group('placeholder "Nhập code"', () {
+    testWidgets('shows on empty, hides once a char is typed', (tester) async {
+      final h = await _pump(tester);
+      expect(find.text('Nhập code'), findsOneWidget);
+      await _type(tester, 'a');
+      expect(find.text('Nhập code'), findsNothing);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('reappears after deleting all text', (tester) async {
+      final h = await _pump(tester, initialCode: 'x');
+      expect(find.text('Nhập code'), findsNothing);
+      await _backspace(tester);
+      expect(_ctrl(tester).text, isEmpty);
+      expect(find.text('Nhập code'), findsOneWidget);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('never reaches the controller text or onChanged',
+        (tester) async {
+      final h = await _pump(tester);
+      await _type(tester, 'ab');
+      await _backspace(tester);
+      await _backspace(tester);
+      expect(find.text('Nhập code'), findsOneWidget);
+      expect(_ctrl(tester).text, isNot(contains('Nhập code')));
+      expect(h.changes.any((c) => c.contains('Nhập code')), isFalse);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('tapping the placeholder area still focuses the editor',
+        (tester) async {
+      final h = await _pump(tester);
+      h.focus.unfocus();
+      await tester.pump();
+      expect(h.focus.hasFocus, isFalse);
+      // IgnorePointer chủ ý làm placeholder "trong suốt" với hit-test — tap
+      // rơi xuyên qua, chạm đúng editor bên dưới thay vì chính chữ này.
+      await tester.tap(find.text('Nhập code'), warnIfMissed: false);
+      await tester.pump();
+      expect(h.focus.hasFocus, isTrue);
+      await _teardown(tester, h);
+    });
+  });
+
+  group('editor border reacts to focus', () {
+    BoxDecoration border(WidgetTester tester) => tester
+        .widget<Container>(find.byKey(const Key('code-input-border')))
+        .decoration as BoxDecoration;
+
+    testWidgets('2px primary when focused, 1px outline when blurred',
+        (tester) async {
+      final h = await _pump(tester);
+      final scheme =
+          Theme.of(tester.element(find.byKey(_field))).colorScheme;
+
+      // _pump() gọi showKeyboard() → editor đã focus sẵn.
+      expect(h.focus.hasFocus, isTrue);
+      var deco = border(tester);
+      expect(deco.border!.top.width, 2);
+      expect(deco.border!.top.color, scheme.primary);
+
+      h.focus.unfocus();
+      await tester.pump();
+      deco = border(tester);
+      expect(deco.border!.top.width, 1);
+      expect(deco.border!.top.color, scheme.outline);
+      await _teardown(tester, h);
+    });
+  });
+
   testWidgets('works inside unbounded-height parent', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: ThemeData.dark(),

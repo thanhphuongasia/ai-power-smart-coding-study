@@ -9,6 +9,8 @@ const _mono = 'JetBrains Mono';
 const _barHeight = 48.0;
 const _keyHeight = 40.0;
 const _tab = '    ';
+const _borderRadius = 12.0;
+const _placeholder = 'Nhập code';
 
 /// Phím ký hiệu, theo thứ tự hay dùng. Tab tách riêng vì chèn 4 space.
 const List<String> _symbols = ['(', ')', '[', ']', ':', '=', '.', ',', '"'];
@@ -175,7 +177,7 @@ class _CodeInputState extends State<CodeInput> {
 
     return LayoutBuilder(builder: (context, constraints) {
       final bounded = constraints.maxHeight.isFinite;
-      final field = CodeTheme(
+      final codeField = CodeTheme(
         data: CodeThemeData(styles: _codeStyles(scheme)),
         child: CodeField(
           key: const Key('code-input-field'),
@@ -189,6 +191,52 @@ class _CodeInputState extends State<CodeInput> {
           textStyle:
               const TextStyle(fontFamily: _mono, fontSize: 16, height: 1.5),
         ),
+      );
+
+      // Lớp hiển thị thuần tuý, không đụng controller (INV-04) — chỉ đọc
+      // text để quyết định hiện/ẩn, không bao giờ ghi lại.
+      final showPlaceholder = _controller.text.isEmpty;
+      final stacked = Stack(
+        children: [
+          codeField,
+          if (showPlaceholder)
+            IgnorePointer(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+                child: Text(
+                  _placeholder,
+                  style: TextStyle(
+                    fontFamily: _mono,
+                    fontSize: 16,
+                    height: 1.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+
+      // Viền phản ứng theo focus; Container tự bù padding bằng đúng độ dày
+      // viền (1↔2px) nên kích thước tổng thể không đổi khi focus/blur.
+      final field = AnimatedBuilder(
+        animation: _focus,
+        child: stacked,
+        builder: (context, child) {
+          final focused = _focus.hasFocus;
+          return Container(
+            key: const Key('code-input-border'),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: focused ? scheme.primary : scheme.outline,
+                width: focused ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(_borderRadius),
+            ),
+            child: child,
+          );
+        },
       );
 
       return Column(
