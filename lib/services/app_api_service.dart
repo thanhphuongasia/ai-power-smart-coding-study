@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -174,7 +173,7 @@ class AppApiService {
     bool includePreviewKey = false,
   }) async {
     if (!isConfigured) {
-      throw const SocketException('App API is not configured.');
+      throw StateError('App API is not configured.');
     }
 
     final response = await _client.get(
@@ -193,7 +192,7 @@ class AppApiService {
     required Map<String, Object?> body,
   }) async {
     if (!isConfigured) {
-      throw const SocketException('App API is not configured.');
+      throw StateError('App API is not configured.');
     }
 
     final response = await _client.post(

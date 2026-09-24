@@ -192,6 +192,7 @@ class Document:
           required variant,
           required fileContents,
           required entryFilePath,
+          runWithoutTests = false,
         }) {
           executeCalls += 1;
           return completer.future;
@@ -250,6 +251,7 @@ class _FakeSandboxApiService extends SandboxApiService {
     required ExerciseLanguageVariant variant,
     required Map<String, String> fileContents,
     required String entryFilePath,
+    bool runWithoutTests,
   }) onExecute;
 
   @override
@@ -259,6 +261,7 @@ class _FakeSandboxApiService extends SandboxApiService {
     required ExerciseLanguageVariant variant,
     required Map<String, String> fileContents,
     required String entryFilePath,
+    bool runWithoutTests = false,
   }) {
     return onExecute(
       action: action,
@@ -266,6 +269,7 @@ class _FakeSandboxApiService extends SandboxApiService {
       variant: variant,
       fileContents: fileContents,
       entryFilePath: entryFilePath,
+      runWithoutTests: runWithoutTests,
     );
   }
 }

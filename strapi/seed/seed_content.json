@@ -143,6 +143,26 @@
       "id": "flashcard-learning",
       "title": "Anki-like Flashcard System",
       "summary": "Note import, scheduling, due queues, and retention-focused study workflows."
+    },
+    {
+      "id": "scheduler-service",
+      "title": "Scheduler Service",
+      "summary": "Cron/recurrence, delayed jobs, reminders, and due-queue processing."
+    },
+    {
+      "id": "collaboration-suite",
+      "title": "Collaboration Suite",
+      "summary": "Sharing, permissions, realtime presence, and concurrent edits."
+    },
+    {
+      "id": "ecommerce-platform",
+      "title": "E-commerce Platform",
+      "summary": "Catalog search, cart/checkout, pricing, and fulfillment events."
+    },
+    {
+      "id": "todo-app",
+      "title": "Todo App",
+      "summary": "Lists, assignments, reminders, and sharing basics."
     }
   ],
   "skills": [
@@ -450,7 +470,7 @@
           "isDefault": true,
           "starterCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentQueries\n{\n    public static List<DocumentRow> ListActive(IEnumerable<DocumentRow> rows, string? owner)\n    {\n        return new List<DocumentRow>();\n    }\n}\n",
           "starterFiles": {
-            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar rows = new List<DocumentRow>\n{\n    new(\"Architecture Notes\", \"Nina\", false, 1700),\n    new(\"Quarterly Report\", \"Nina\", false, 2000),\n    new(\"Retired Draft\", \"Nina\", true, 2100),\n    new(\"Spec\", \"Minh\", false, 1800),\n};\n\nforeach (var item in DocumentQueries.ListActive(rows, \"Nina\"))\n{\n    Console.WriteLine($\"{item.Title}:{item.UpdatedAt}\");\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived, int UpdatedAt);\n"
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var rows = new List<DocumentRow>\n        {\n            new DocumentRow(\"Architecture Notes\", \"Nina\", false, 1700),\n            new DocumentRow(\"Quarterly Report\", \"Nina\", false, 2000),\n            new DocumentRow(\"Retired Draft\", \"Nina\", true, 2100),\n            new DocumentRow(\"Spec\", \"Minh\", false, 1800),\n        };\n\n        foreach (var item in DocumentQueries.ListActive(rows, \"Nina\"))\n        {\n            Console.WriteLine($\"{item.Title}:{item.UpdatedAt}\");\n        }\n    }\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived, int UpdatedAt);\n"
           },
           "solutionCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentQueries\n{\n    public static List<DocumentRow> ListActive(IEnumerable<DocumentRow> rows, string? owner)\n    {\n        var query = rows.Where(row => !row.IsArchived);\n        if (!string.IsNullOrWhiteSpace(owner))\n        {\n            query = query.Where(row => row.Owner == owner);\n        }\n\n        return query\n            .OrderByDescending(row => row.UpdatedAt)\n            .ToList();\n    }\n}\n",
           "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
@@ -532,7 +552,7 @@
           "isDefault": true,
           "starterCode": "using System.Collections.Generic;\nusing System.Linq;\n\npublic static class DocumentCards\n{\n    public static List<DocumentCard> Build(IEnumerable<DocumentRow> rows)\n    {\n        return new List<DocumentCard>();\n    }\n}\n",
           "starterFiles": {
-            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar rows = new List<DocumentRow>\n{\n    new(\"Architecture Notes\", \"Nina\", false),\n    new(\"Retired Draft\", \"Minh\", true),\n};\n\nforeach (var card in DocumentCards.Build(rows))\n{\n    Console.WriteLine($\"{card.Title}:{card.Status}\");\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived);\npublic record DocumentCard(string Title, string Owner, string Status);\n"
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var rows = new List<DocumentRow>\n        {\n            new DocumentRow(\"Architecture Notes\", \"Nina\", false),\n            new DocumentRow(\"Retired Draft\", \"Minh\", true),\n        };\n\n        foreach (var card in DocumentCards.Build(rows))\n        {\n            Console.WriteLine($\"{card.Title}:{card.Status}\");\n        }\n    }\n}\n\npublic record DocumentRow(string Title, string Owner, bool IsArchived);\npublic record DocumentCard(string Title, string Owner, string Status);\n"
           },
           "solutionCode": null,
           "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
@@ -599,7 +619,7 @@
           "isDefault": true,
           "starterCode": "public enum TransferStatus { Pending, Authorized, Settled, Cancelled }\n\npublic class Transfer\n{\n    public TransferStatus Status { get; private set; } = TransferStatus.Pending;\n\n    public void Authorize() { }\n    public void Settle() { }\n    public void Cancel() { }\n}\n",
           "starterFiles": {
-            "Program.cs": "using System;\n\nvar transfer = new Transfer();\ntransfer.Authorize();\ntransfer.Settle();\nConsole.WriteLine(transfer.Status);\n"
+            "Program.cs": "using System;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var transfer = new Transfer();\n        transfer.Authorize();\n        transfer.Settle();\n        Console.WriteLine(transfer.Status);\n    }\n}\n"
           },
           "solutionCode": null,
           "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
@@ -669,7 +689,7 @@
           "isDefault": true,
           "starterCode": "using System.Collections.Generic;\n\npublic class Inbox\n{\n    private readonly object _gate = new();\n    private readonly Queue<string> _pending = new();\n\n    public string? ClaimNext()\n    {\n        return null;\n    }\n}\n",
           "starterFiles": {
-            "Program.cs": "using System;\n\nvar inbox = new Inbox();\nConsole.WriteLine(inbox.ClaimNext() ?? \"none\");\n"
+            "Program.cs": "using System;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var inbox = new Inbox();\n        Console.WriteLine(inbox.ClaimNext() ?? \"none\");\n    }\n}\n"
           },
           "solutionCode": null,
           "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
@@ -961,7 +981,7 @@
           "isDefault": false,
           "starterCode": "using System.Collections.Generic;\n\npublic static class Solution\n{\n    public static IList<int[]> Merge(IList<int[]> intervals)\n    {\n        return new List<int[]>();\n    }\n}\n",
           "starterFiles": {
-            "Program.cs": "using System;\nusing System.Collections.Generic;\n\nvar merged = Solution.Merge(new List<int[]> { new[] { 1, 3 }, new[] { 2, 6 }, new[] { 8, 10 }, new[] { 15, 18 } });\nforeach (var item in merged)\n{\n    Console.WriteLine($\"[{item[0]}, {item[1]}]\");\n}\n"
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var merged = Solution.Merge(new List<int[]> { new[] { 1, 3 }, new[] { 2, 6 }, new[] { 8, 10 }, new[] { 15, 18 } });\n        foreach (var item in merged)\n        {\n            Console.WriteLine($\"[{item[0]}, {item[1]}]\");\n        }\n    }\n}\n"
           },
           "solutionCode": null,
           "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
@@ -3081,6 +3101,347 @@
           "testCases": []
         }
       ]
+    },
+    {
+      "id": "project_list_products",
+      "title": "List products with filters",
+      "summary": "Build a catalog list endpoint with keyword filtering, stable ordering, and a safe limit for pagination.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "sql"
+      ],
+      "domainIds": [
+        "ecommerce-platform"
+      ],
+      "tags": [
+        "list",
+        "query",
+        "pagination"
+      ],
+      "skillIds": [
+        "sql_list_queries"
+      ],
+      "problemStatement": "Your e-commerce app needs a `list products` query for the home screen. Only return active products, support an optional keyword filter on the title, order by most recently updated, and cap results by a caller-supplied limit.",
+      "acceptanceCriteria": [
+        "Only active products are returned.",
+        "Keyword filtering is applied only when provided.",
+        "Results are ordered by updated time descending.",
+        "Results are capped by limit."
+      ],
+      "taskSteps": [
+        {
+          "id": "filter_active",
+          "title": "Filter active products",
+          "description": "Start from only active rows before applying optional filters."
+        },
+        {
+          "id": "apply_keyword",
+          "title": "Apply the optional keyword filter",
+          "description": "Match the keyword against the product title when a value is supplied."
+        },
+        {
+          "id": "order_and_cap",
+          "title": "Order and cap",
+          "description": "Sort by updated time descending and cap the number of results."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "This is a list endpoint: filter, optionally narrow, then order + cap.",
+        "structure": "Build a base query for active rows, branch on keyword, then order and take limit.",
+        "pseudocode": "active = rows where active; if keyword, keep matching titles; order by updated desc; take limit.",
+        "lineHint": "In C#, look for `Where` + optional `Where` + `OrderByDescending` + `Take`.",
+        "fullExplain": "A passing solution needs correct filtering, deterministic sorting, and a safe cap."
+      },
+      "reflectionPrompts": [
+        "Why should list endpoints always define a stable ordering?",
+        "Where would cursor pagination fit into this query later?"
+      ],
+      "requirements": [
+        {
+          "label": "Filters inactive rows",
+          "pattern": "IsActive|is_active|active",
+          "feedback": "Filter out inactive rows before returning products."
+        },
+        {
+          "label": "Caps result size",
+          "pattern": "Take\\(|limit",
+          "feedback": "Cap the result size by the requested limit."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "csharp",
+          "languageLabel": "C#",
+          "isDefault": true,
+          "starterCode": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\n\npublic static class CatalogQueries\n{\n    public static List<ProductRow> ListVisible(IEnumerable<ProductRow> rows, string? keyword, int limit)\n    {\n        return new List<ProductRow>();\n    }\n}\n",
+          "starterFiles": {
+            "Program.cs": "using System;\nusing System.Collections.Generic;\n\npublic static class Program\n{\n    public static void Main()\n    {\n        var rows = new List<ProductRow>\n        {\n            new ProductRow(\"Keyboard\", true, 1000),\n            new ProductRow(\"Keyboard Case\", true, 1200),\n            new ProductRow(\"Old Mouse\", false, 900),\n            new ProductRow(\"Monitor\", true, 1500),\n        };\n\n        foreach (var item in CatalogQueries.ListVisible(rows, \"key\", 2))\n        {\n            Console.WriteLine($\"{item.Title}:{item.UpdatedAt}\");\n        }\n    }\n}\n\npublic record ProductRow(string Title, bool IsActive, int UpdatedAt);\n"
+          },
+          "solutionCode": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\n\npublic static class CatalogQueries\n{\n    public static List<ProductRow> ListVisible(IEnumerable<ProductRow> rows, string? keyword, int limit)\n    {\n        var query = rows.Where(row => row.IsActive);\n        if (!string.IsNullOrWhiteSpace(keyword))\n        {\n            query = query.Where(row => row.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase));\n        }\n\n        var safeLimit = limit <= 0 ? 50 : limit;\n        return query\n            .OrderByDescending(row => row.UpdatedAt)\n            .Take(safeLimit)\n            .ToList();\n    }\n}\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "dotnet-script Program.cs",
+          "entryFilePath": "CatalogQueries.cs",
+          "demoFilePath": "Program.cs",
+          "testCases": []
+        },
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": false,
+          "starterCode": "def list_visible(rows, keyword=None, limit=50):\n    return []\n",
+          "starterFiles": {
+            "main.py": "rows = [\n    {\"title\": \"Keyboard\", \"is_active\": True, \"updated_at\": 1000},\n    {\"title\": \"Keyboard Case\", \"is_active\": True, \"updated_at\": 1200},\n    {\"title\": \"Old Mouse\", \"is_active\": False, \"updated_at\": 900},\n    {\"title\": \"Monitor\", \"is_active\": True, \"updated_at\": 1500},\n]\n\nfor item in list_visible(rows, \"key\", 2):\n    print(f\"{item['title']}:{item['updated_at']}\")\n"
+          },
+          "solutionCode": "def list_visible(rows, keyword=None, limit=50):\n    filtered = [row for row in rows if row.get(\"is_active\")]\n    if keyword:\n        filtered = [row for row in filtered if keyword.lower() in row.get(\"title\", \"\").lower()]\n    filtered = sorted(filtered, key=lambda row: row.get(\"updated_at\", 0), reverse=True)\n    safe_limit = 50 if (limit is None or limit <= 0) else limit\n    return filtered[:safe_limit]\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "catalog_queries.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_apply_pricing_rules",
+      "title": "Apply pricing rules",
+      "summary": "Apply discount and shipping rules consistently for a checkout preview.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "pricing"
+      ],
+      "domainIds": [
+        "ecommerce-platform"
+      ],
+      "tags": [
+        "pricing",
+        "rules"
+      ],
+      "skillIds": [],
+      "problemStatement": "Implement a helper that computes the final total for a checkout preview. Apply an optional coupon percentage (0-50%) to subtotal, then add shipping: free when prime, otherwise a flat shipping fee.",
+      "acceptanceCriteria": [
+        "Coupon percentage is clamped to 0-50%.",
+        "Shipping is free for prime users.",
+        "Final total is returned as a number."
+      ],
+      "taskSteps": [
+        {
+          "id": "clamp_coupon",
+          "title": "Clamp the coupon percent",
+          "description": "Protect pricing by clamping coupon percent into a safe range."
+        },
+        {
+          "id": "apply_discount",
+          "title": "Apply the discount",
+          "description": "Compute the discounted subtotal before adding shipping."
+        },
+        {
+          "id": "add_shipping",
+          "title": "Add shipping",
+          "description": "Add the flat fee only when the user is not prime."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Pricing helpers stay testable when discount and shipping are separate steps.",
+        "structure": "Clamp coupon, compute discounted subtotal, then add shipping.",
+        "pseudocode": "coupon = clamp(coupon, 0..50); discounted = subtotal * (1 - coupon/100); total = discounted + (prime ? 0 : 4.99)",
+        "lineHint": "Don't forget to clamp coupon percent before using it.",
+        "fullExplain": "Passing means clamping + consistent math for prime vs non-prime."
+      },
+      "reflectionPrompts": [
+        "Where would taxes fit into this helper without making it unreadable?",
+        "What rounding strategy should the backend use for money calculations?"
+      ],
+      "requirements": [
+        {
+          "label": "Clamps coupon percent",
+          "pattern": "min\\(|max\\(|clamp",
+          "feedback": "Clamp coupon percent to 0-50%."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def checkout_total(subtotal, is_prime, coupon_percent=0):\n    return 0\n",
+          "starterFiles": {
+            "main.py": "print(checkout_total(100, False, 10))\nprint(checkout_total(100, True, 10))\n"
+          },
+          "solutionCode": "def checkout_total(subtotal, is_prime, coupon_percent=0):\n    pct = 0 if coupon_percent is None else coupon_percent\n    pct = max(0, min(50, pct))\n    discounted = subtotal * (1 - (pct / 100.0))\n    shipping = 0.0 if is_prime else 4.99\n    return discounted + shipping\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_share_todo_list",
+      "title": "Share a todo list safely",
+      "summary": "Implement a small permission helper for owner/viewer/editor roles.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "access-control"
+      ],
+      "domainIds": [
+        "todo-app",
+        "collaboration-suite"
+      ],
+      "tags": [
+        "share",
+        "permission"
+      ],
+      "skillIds": [],
+      "problemStatement": "Your todo app supports sharing lists. Implement a helper that decides whether a user can perform an action based on list ownership and a shared role (viewer/editor). Owner always has access.",
+      "acceptanceCriteria": [
+        "Owner can always view and edit.",
+        "Viewer can only view.",
+        "Editor can view and edit.",
+        "Unknown users have no access."
+      ],
+      "taskSteps": [
+        {
+          "id": "owner_short_circuit",
+          "title": "Handle the owner case",
+          "description": "Owners always pass permission checks."
+        },
+        {
+          "id": "map_role",
+          "title": "Map role to capabilities",
+          "description": "Treat viewer as read-only and editor as read/write."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Permission checks are clearer when roles map to a single ordered access level.",
+        "structure": "Short-circuit on owner, then look up share role, then compare to required access.",
+        "pseudocode": "if user==owner: return True; role = shares.get(user); return role >= required",
+        "lineHint": "Define an ordering like viewer < editor < owner.",
+        "fullExplain": "Passing means owner overrides, roles are enforced, and unknown users are denied."
+      },
+      "reflectionPrompts": [
+        "What would you store in the DB to support team roles later?",
+        "Why should permission helpers be deterministic and side-effect free?"
+      ],
+      "requirements": [
+        {
+          "label": "Checks owner id",
+          "pattern": "owner",
+          "feedback": "Short-circuit access for the owner."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def can_access_list(user_id, owner_id, shares, action):\n    return False\n",
+          "starterFiles": {
+            "main.py": "shares = {\"u2\": \"viewer\", \"u3\": \"editor\"}\nprint(can_access_list(\"u1\", \"u1\", shares, \"edit\"))\nprint(can_access_list(\"u2\", \"u1\", shares, \"edit\"))\nprint(can_access_list(\"u2\", \"u1\", shares, \"view\"))\n"
+          },
+          "solutionCode": "def can_access_list(user_id, owner_id, shares, action):\n    if user_id == owner_id:\n        return True\n\n    role = (shares or {}).get(user_id)\n    if not role:\n        return False\n\n    if role == \"viewer\":\n        return action == \"view\"\n\n    if role == \"editor\":\n        return action in (\"view\", \"edit\")\n\n    return False\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
+    },
+    {
+      "id": "project_schedule_reminders",
+      "title": "Schedule reminder jobs idempotently",
+      "summary": "Create reminder jobs from events without duplicating work across retries.",
+      "lane": "project",
+      "contentKind": "project_exercise",
+      "level": "foundation",
+      "topicIds": [
+        "idempotency",
+        "event-driven"
+      ],
+      "domainIds": [
+        "scheduler-service"
+      ],
+      "tags": [
+        "scheduler",
+        "retry"
+      ],
+      "skillIds": [],
+      "problemStatement": "A scheduler worker receives event ids to schedule reminder jobs. Implement a helper that returns a list of jobs to enqueue, skipping any event ids that have already been scheduled (idempotency).",
+      "acceptanceCriteria": [
+        "Already-scheduled event ids are skipped.",
+        "Every new event id produces exactly one job.",
+        "The result is stable regardless of duplicate inputs."
+      ],
+      "taskSteps": [
+        {
+          "id": "dedupe_input",
+          "title": "De-dupe the input",
+          "description": "Normalize the incoming event ids so duplicates don't create multiple jobs."
+        },
+        {
+          "id": "skip_existing",
+          "title": "Skip already scheduled ids",
+          "description": "Use the already-scheduled set as the source of truth."
+        }
+      ],
+      "supportedModes": [
+        "guided",
+        "standard"
+      ],
+      "hints": {
+        "concept": "Idempotent workers treat repeated input as a no-op.",
+        "structure": "De-dupe input ids, then build jobs only for ids not in the scheduled set.",
+        "pseudocode": "unique = set(incoming); return [job(id) for id in unique if id not in scheduled]",
+        "lineHint": "A `set` is enough for stable de-dupe in most cases.",
+        "fullExplain": "Passing means duplicates don't cause duplicate jobs and scheduled ids are skipped."
+      },
+      "reflectionPrompts": [
+        "Where would you persist idempotency keys in a real system?",
+        "What should happen if enqueue fails after marking an id as scheduled?"
+      ],
+      "requirements": [
+        {
+          "label": "Uses a set for dedupe",
+          "pattern": "set\\(",
+          "feedback": "Use a set to de-dupe incoming ids."
+        }
+      ],
+      "languageVariants": [
+        {
+          "languageId": "python",
+          "languageLabel": "Python",
+          "isDefault": true,
+          "starterCode": "def build_jobs(event_ids, already_scheduled_ids):\n    return []\n",
+          "starterFiles": {
+            "main.py": "incoming = [\"e1\", \"e1\", \"e2\"]\nalready = {\"e2\"}\nprint(build_jobs(incoming, already))\n"
+          },
+          "solutionCode": "def build_jobs(event_ids, already_scheduled_ids):\n    scheduled = already_scheduled_ids or set()\n    unique_ids = set(event_ids or [])\n    jobs = []\n    for event_id in unique_ids:\n        if event_id in scheduled:\n            continue\n        jobs.append({\"event_id\": event_id, \"kind\": \"reminder\"})\n    return sorted(jobs, key=lambda job: job[\"event_id\"])\n",
+          "sandboxHarnessTemplate": "{{USER_CODE}}\n\n{{TEST_BODY}}\n",
+          "runCommand": "python main.py",
+          "entryFilePath": "solution.py",
+          "demoFilePath": "main.py",
+          "testCases": []
+        }
+      ]
     }
   ],
   "tracks": [
@@ -3666,6 +4027,77 @@
           "exerciseId": "project_flashcard_deck_overview",
           "title": "Build a flashcard deck overview",
           "summary": "Aggregate total, due, new, and suspended counts."
+        }
+      ]
+    },
+    {
+      "id": "project_ecommerce_starter",
+      "title": "E-commerce Starter Track",
+      "summary": "Practice catalog listing and pricing helpers for an Amazon-like commerce app.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "sql",
+        "pricing"
+      ],
+      "domainIds": [
+        "ecommerce-platform"
+      ],
+      "tags": [
+        "catalog",
+        "pricing",
+        "checkout"
+      ],
+      "skillIds": [
+        "sql_list_queries"
+      ],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_list_products",
+          "title": "List products with filters",
+          "summary": "Build a stable, paginatable list query for the catalog."
+        },
+        {
+          "exerciseId": "project_apply_pricing_rules",
+          "title": "Apply pricing rules",
+          "summary": "Compute totals consistently for a checkout preview."
+        }
+      ]
+    },
+    {
+      "id": "project_todo_collab_starter",
+      "title": "Todo + Collaboration Starter",
+      "summary": "Add sharing permissions and idempotent scheduling to a simple todo app.",
+      "lane": "project",
+      "contentKind": "project_track",
+      "level": "foundation",
+      "topicIds": [
+        "access-control",
+        "idempotency",
+        "event-driven"
+      ],
+      "domainIds": [
+        "todo-app",
+        "collaboration-suite",
+        "scheduler-service"
+      ],
+      "tags": [
+        "share",
+        "permissions",
+        "scheduler"
+      ],
+      "skillIds": [],
+      "exerciseRefs": [
+        {
+          "exerciseId": "project_share_todo_list",
+          "title": "Share a todo list safely",
+          "summary": "Enforce owner/viewer/editor permissions."
+        },
+        {
+          "exerciseId": "project_schedule_reminders",
+          "title": "Schedule reminder jobs idempotently",
+          "summary": "Skip duplicates and schedule exactly once per event id."
         }
       ]
     }

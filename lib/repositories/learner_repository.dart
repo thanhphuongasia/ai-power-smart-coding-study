@@ -59,18 +59,31 @@ class AppApiLearnerRepository implements LearnerRepository {
     }
 
     final installId = document.installId ?? _generateInstallId();
-    final learnerProfile = _appApiService.isConfigured
-        ? await _appApiService.bootstrapAnonymousLearner(
-            installId: installId,
-            deviceInfo: _deviceInfo,
-          )
-        : LearnerProfile(
-            installId: installId,
-            learnerId: 'offline-$installId',
-            accessToken: '',
-            syncCursor: 0,
-            isOfflineOnly: true,
-          );
+    LearnerProfile learnerProfile;
+    if (_appApiService.isConfigured) {
+      try {
+        learnerProfile = await _appApiService.bootstrapAnonymousLearner(
+          installId: installId,
+          deviceInfo: _deviceInfo,
+        );
+      } catch (_) {
+        learnerProfile = LearnerProfile(
+          installId: installId,
+          learnerId: 'offline-$installId',
+          accessToken: '',
+          syncCursor: 0,
+          isOfflineOnly: true,
+        );
+      }
+    } else {
+      learnerProfile = LearnerProfile(
+        installId: installId,
+        learnerId: 'offline-$installId',
+        accessToken: '',
+        syncCursor: 0,
+        isOfflineOnly: true,
+      );
+    }
 
     await _localAppStore.write(
       document.copyWith(

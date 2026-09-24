@@ -16,6 +16,7 @@ const state = {
   domainFilter: "",
   tagFilter: "",
   view: "list",
+  selectedVariantIndex: 0,
   editorMode: "idle",
   editorInputMode: "form",
   editorKind: "tracks",
@@ -58,6 +59,7 @@ const dom = {
   tagFilterShell: document.getElementById("tag-filter")?.closest(".field-shell"),
   listScreen: document.getElementById("list-screen"),
   detailScreen: document.getElementById("detail-screen"),
+  variantScreen: document.getElementById("variant-screen"),
   editorScreen: document.getElementById("editor-screen"),
   listTitle: document.getElementById("list-title"),
   listSubtitle: document.getElementById("list-subtitle"),
@@ -77,6 +79,24 @@ const dom = {
   selectionAttributes: document.getElementById("selection-attributes"),
   selectionStructure: document.getElementById("selection-structure"),
   selectionRelated: document.getElementById("selection-related"),
+  exerciseContentSection: document.getElementById("exercise-content-section"),
+  exerciseProblem: document.getElementById("exercise-problem"),
+  exerciseGuidanceSection: document.getElementById("exercise-guidance-section"),
+  exerciseGuidance: document.getElementById("exercise-guidance"),
+  exerciseHintsSection: document.getElementById("exercise-hints-section"),
+  exerciseHints: document.getElementById("exercise-hints"),
+  exerciseVariantSection: document.getElementById("exercise-variant-section"),
+  exerciseVariant: document.getElementById("exercise-variant"),
+  variantBackButton: document.getElementById("variant-back-button"),
+  variantEditButton: document.getElementById("variant-edit-button"),
+  variantTitle: document.getElementById("variant-title"),
+  variantSubtitle: document.getElementById("variant-subtitle"),
+  variantProblem: document.getElementById("variant-problem"),
+  variantGuidance: document.getElementById("variant-guidance"),
+  variantHints: document.getElementById("variant-hints"),
+  variantConfig: document.getElementById("variant-config"),
+  variantStarter: document.getElementById("variant-starter"),
+  variantSolution: document.getElementById("variant-solution"),
   editorBackButton: document.getElementById("editor-back-button"),
   cancelEditorButton: document.getElementById("cancel-editor-button"),
   editorModeToggle: document.getElementById("editor-mode-toggle"),
@@ -124,6 +144,8 @@ function bindEvents() {
     toggleCreateMenu();
   });
   dom.backToListButton.addEventListener("click", () => switchView("list"));
+  dom.variantBackButton?.addEventListener("click", () => switchView("detail"));
+  dom.variantEditButton?.addEventListener("click", () => runAction(editSelectedExerciseVariant));
   dom.detailPublishButton.addEventListener("click", () => runAction(toggleSelectedPublishState));
   dom.detailMenuButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -247,6 +269,9 @@ async function refreshCatalog() {
   if (state.view === "detail" && !findSelectedEntry()) {
     state.view = "list";
   }
+  if (state.view === "variant" && (!findSelectedEntry() || state.selectedKind !== "exercises")) {
+    state.view = findSelectedEntry() ? "detail" : "list";
+  }
   if (state.view === "editor" && state.editorMode === "edit" && !findEntry(state.editorKind, state.editorSourceId)) {
     resetEditor();
     state.view = "list";
@@ -308,16 +333,21 @@ function renderCurrentScreen() {
   if (state.view === "detail" && !hasSelection) {
     state.view = "list";
   }
+  if (state.view === "variant" && (!hasSelection || state.selectedKind !== "exercises")) {
+    state.view = hasSelection ? "detail" : "list";
+  }
   if (state.view === "editor" && state.editorMode === "idle") {
     state.view = hasSelection ? "detail" : "list";
   }
 
   dom.listScreen.hidden = state.view !== "list";
   dom.detailScreen.hidden = state.view !== "detail";
+  dom.variantScreen.hidden = state.view !== "variant";
   dom.editorScreen.hidden = state.view !== "editor";
 
   renderListScreen();
   renderDetailScreen();
+  renderVariantScreen();
   renderEditorScreen();
 }
 
@@ -359,6 +389,7 @@ function renderDetailScreen() {
     dom.selectionAttributes.replaceChildren(createAttributeRow("Status", "—"));
     dom.selectionStructure.replaceChildren(createMutedText("No structure details yet."));
     dom.selectionRelated.replaceChildren(createMutedText("No related items yet."));
+    hideExerciseDetailSections();
     return;
   }
 
@@ -396,6 +427,116 @@ function renderDetailScreen() {
   dom.selectionRelated.replaceChildren(
     ...(related.length ? related : [createMutedText("No related items yet.")]),
   );
+
+  if (state.selectedKind === "exercises") {
+    renderExerciseDetailSections(item.draft);
+  } else {
+    hideExerciseDetailSections();
+  }
+}
+
+function renderVariantScreen() {
+  if (dom.variantScreen.hidden) {
+    return;
+  }
+
+  const item = findSelectedEntry();
+  if (!item || state.selectedKind !== "exercises") {
+    dom.variantTitle.textContent = "No variant selected";
+    dom.variantSubtitle.textContent = "Open an exercise language variant from the detail page.";
+    dom.variantProblem.textContent = "—";
+    dom.variantGuidance.replaceChildren(createMutedText("—"));
+    dom.variantHints.replaceChildren(createMutedText("—"));
+    dom.variantConfig.replaceChildren(createMutedText("—"));
+    dom.variantStarter.replaceChildren(createMutedText("—"));
+    dom.variantSolution.replaceChildren(createMutedText("—"));
+    dom.variantEditButton.disabled = true;
+    return;
+  }
+
+  const draft = item.draft || {};
+  const variants = Array.isArray(draft.languageVariants) ? draft.languageVariants : [];
+  if (variants.length === 0) {
+    dom.variantTitle.textContent = draft.title || item.id;
+    dom.variantSubtitle.textContent = `Exercise · ${item.id}`;
+    dom.variantProblem.textContent = draft.problemStatement || draft.summary || "—";
+    dom.variantGuidance.replaceChildren(createMutedText("No language variants configured."));
+    dom.variantHints.replaceChildren(createMutedText("—"));
+    dom.variantConfig.replaceChildren(createMutedText("—"));
+    dom.variantStarter.replaceChildren(createMutedText("—"));
+    dom.variantSolution.replaceChildren(createMutedText("—"));
+    dom.variantEditButton.disabled = false;
+    return;
+  }
+
+  const variantIndex = Math.min(
+    Math.max(state.selectedVariantIndex, 0),
+    variants.length - 1,
+  );
+  state.selectedVariantIndex = variantIndex;
+  const variant = variants[variantIndex];
+
+  const variantLabel = String(variant?.languageLabel || variant?.languageId || "Language").trim();
+  const variantId = String(variant?.languageId || "").trim();
+  const suffix = variantId ? `${variantLabel} · ${variantId}` : variantLabel;
+
+  dom.variantTitle.textContent = `${draft.title || item.id} — ${suffix}`;
+  dom.variantSubtitle.textContent = [
+    `Exercise · ${item.id}`,
+    draft.lane ? `Lane: ${draft.lane}` : null,
+    draft.level ? `Level: ${draft.level}` : null,
+    variant?.isDefault ? "Default variant" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  dom.variantProblem.textContent = draft.problemStatement || draft.summary || "—";
+
+  dom.variantGuidance.replaceChildren(
+    createVariantListSection("Acceptance criteria", Array.isArray(draft.acceptanceCriteria) ? draft.acceptanceCriteria : []),
+    createVariantTaskStepsSection(Array.isArray(draft.taskSteps) ? draft.taskSteps : []),
+    createVariantListSection("Reflection prompts", Array.isArray(draft.reflectionPrompts) ? draft.reflectionPrompts : []),
+  );
+
+  const hints = draft && typeof draft.hints === "object" && draft.hints !== null ? draft.hints : {};
+  const hintEntries = Object.entries(hints).filter(([, value]) => String(value || "").trim());
+  dom.variantHints.replaceChildren(
+    ...(hintEntries.length
+      ? hintEntries.map(([key, value]) => createStructureChip(humanizeValue(key), String(value)))
+      : [createMutedText("No hints configured.")]),
+  );
+
+  const starterFiles = variant?.starterFiles && typeof variant.starterFiles === "object" ? variant.starterFiles : {};
+  dom.variantConfig.replaceChildren(
+    ...[
+      createAttributeRow("Language", variantId ? `${variantLabel} (${variantId})` : variantLabel),
+      createAttributeRow("Run", String(variant?.runCommand || "—")),
+      createAttributeRow("Entry", String(variant?.entryFilePath || "—")),
+      createAttributeRow("Demo", String(variant?.demoFilePath || "—")),
+      createAttributeRow("Starter files", String(Object.keys(starterFiles).length)),
+      createAttributeRow(
+        "Test cases",
+        String(Array.isArray(variant?.testCases) ? variant.testCases.length : 0),
+      ),
+    ],
+  );
+
+  dom.variantStarter.replaceChildren(
+    createCodeBlock(String(variant?.starterCode || "")),
+    createCodeBlock(
+      Object.keys(starterFiles).length ? JSON.stringify(starterFiles, null, 2) : "",
+      { label: "starterFiles (JSON)" },
+    ),
+  );
+
+  dom.variantSolution.replaceChildren(
+    createCodeBlock(
+      variant?.solutionCode ? String(variant.solutionCode) : "",
+      { emptyLabel: "No solutionCode configured." },
+    ),
+  );
+
+  dom.variantEditButton.disabled = false;
 }
 
 function renderEditorScreen() {
@@ -452,6 +593,159 @@ function renderEditorScreen() {
   }
 }
 
+function hideExerciseDetailSections() {
+  dom.exerciseContentSection.hidden = true;
+  dom.exerciseGuidanceSection.hidden = true;
+  dom.exerciseHintsSection.hidden = true;
+  dom.exerciseVariantSection.hidden = true;
+}
+
+function renderExerciseDetailSections(draft) {
+  const exercise = draft || {};
+  dom.exerciseContentSection.hidden = false;
+  dom.exerciseGuidanceSection.hidden = false;
+  dom.exerciseHintsSection.hidden = false;
+  dom.exerciseVariantSection.hidden = false;
+
+  dom.exerciseProblem.textContent = exercise.problemStatement || exercise.summary || "—";
+
+  dom.exerciseGuidance.replaceChildren(
+    createVariantListSection(
+      "Acceptance criteria",
+      Array.isArray(exercise.acceptanceCriteria) ? exercise.acceptanceCriteria : [],
+    ),
+    createVariantTaskStepsSection(Array.isArray(exercise.taskSteps) ? exercise.taskSteps : []),
+    createVariantListSection(
+      "Reflection prompts",
+      Array.isArray(exercise.reflectionPrompts) ? exercise.reflectionPrompts : [],
+    ),
+    createVariantListSection(
+      "Requirements (regex checks)",
+      Array.isArray(exercise.requirements)
+        ? exercise.requirements
+            .map((req) => {
+              if (!req || typeof req !== "object") return "";
+              const label = String(req.label || "").trim();
+              const pattern = String(req.pattern || "").trim();
+              const feedback = String(req.feedback || "").trim();
+              const parts = [
+                label ? `Label: ${label}` : "",
+                pattern ? `Pattern: ${pattern}` : "",
+                feedback ? `Feedback: ${feedback}` : "",
+              ].filter(Boolean);
+              return parts.join(" · ");
+            })
+            .filter((line) => String(line).trim())
+        : [],
+    ),
+  );
+
+  const hints = exercise && typeof exercise.hints === "object" && exercise.hints !== null ? exercise.hints : {};
+  const hintEntries = Object.entries(hints).filter(([, value]) => String(value || "").trim());
+  dom.exerciseHints.replaceChildren(
+    ...(hintEntries.length
+      ? hintEntries.map(([key, value]) => createHintCard(key, String(value)))
+      : [createMutedText("No hints configured.")]),
+  );
+
+  dom.exerciseVariant.replaceChildren(renderExerciseVariantPreview(exercise));
+}
+
+function createHintCard(level, body) {
+  const details = document.createElement("details");
+  details.className = "related-card hint-card";
+  const summary = document.createElement("summary");
+  summary.className = "hint-summary";
+  summary.textContent = humanizeValue(level);
+  const text = document.createElement("div");
+  text.className = "muted hint-body";
+  text.textContent = body;
+  details.append(summary, text);
+  return details;
+}
+
+function renderExerciseVariantPreview(exercise) {
+  const container = document.createElement("div");
+  const variants = Array.isArray(exercise.languageVariants) ? exercise.languageVariants : [];
+  if (variants.length === 0) {
+    container.appendChild(createMutedText("No language variants configured."));
+    return container;
+  }
+
+  const activeIndex = Math.min(Math.max(state.selectedVariantIndex, 0), variants.length - 1);
+  state.selectedVariantIndex = activeIndex;
+
+  const tabs = document.createElement("div");
+  tabs.className = "variant-tabs";
+  variants.forEach((variant, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `variant-tab-button ${index === activeIndex ? "active" : ""}`;
+    const label = String(variant?.languageLabel || variant?.languageId || "Variant").trim();
+    button.textContent = variant?.isDefault ? `${label} *` : label;
+    button.addEventListener("click", () => {
+      state.selectedVariantIndex = index;
+      renderDetailScreen();
+    });
+    tabs.appendChild(button);
+  });
+  container.appendChild(tabs);
+
+  const active = variants[activeIndex];
+  const starterFiles =
+    active?.starterFiles && typeof active.starterFiles === "object" ? active.starterFiles : {};
+
+  const meta = document.createElement("div");
+  meta.className = "variant-meta";
+  meta.appendChild(
+    createVariantMetaRow("Run", String(active?.runCommand || active?.entryFilePath || "—")),
+  );
+  meta.appendChild(createVariantMetaRow("Entry", String(active?.entryFilePath || "—")));
+  meta.appendChild(createVariantMetaRow("Demo", String(active?.demoFilePath || "—")));
+  meta.appendChild(createVariantMetaRow("Starter files", String(Object.keys(starterFiles).length)));
+  meta.appendChild(
+    createVariantMetaRow(
+      "Test cases",
+      String(Array.isArray(active?.testCases) ? active.testCases.length : 0),
+    ),
+  );
+  container.appendChild(meta);
+
+  container.appendChild(createCodeBlock(String(active?.starterCode || ""), { label: "Starter code" }));
+  container.appendChild(
+    createCodeBlock(
+      Object.keys(starterFiles).length ? JSON.stringify(starterFiles, null, 2) : "",
+      { label: "starterFiles (JSON)", emptyLabel: "—" },
+    ),
+  );
+  container.appendChild(
+    createCodeBlock(active?.solutionCode ? String(active.solutionCode) : "", {
+      label: "Solution code",
+      emptyLabel: "No solutionCode configured.",
+    }),
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "inline-actions";
+
+  const openVariant = document.createElement("button");
+  openVariant.type = "button";
+  openVariant.className = "ghost-button";
+  openVariant.textContent = "Open variant page";
+  openVariant.addEventListener("click", () => runAction(() => openSelectedExerciseVariant(activeIndex)));
+  actions.appendChild(openVariant);
+
+  const editVariant = document.createElement("button");
+  editVariant.type = "button";
+  editVariant.className = "secondary-button";
+  editVariant.textContent = "Edit this variant";
+  editVariant.addEventListener("click", () => runAction(editSelectedExerciseVariant));
+  actions.appendChild(editVariant);
+
+  container.appendChild(actions);
+  return container;
+}
+
 async function loadCreateDraft(kind, { lane = "" } = {}) {
   state.editorMode = "create";
   state.editorKind = kind;
@@ -495,6 +789,46 @@ async function loadSelectedDraft() {
   clearEditorError();
   switchView("editor");
   setStatus(`Loaded ${item.id} into the editor.`);
+}
+
+async function openSelectedExerciseVariant(index) {
+  const item = findSelectedEntry();
+  if (!item || state.selectedKind !== "exercises") {
+    throw new Error("Open a variant from an exercise detail page.");
+  }
+
+  const variants = Array.isArray(item.draft?.languageVariants) ? item.draft.languageVariants : [];
+  if (variants.length === 0) {
+    throw new Error("This exercise has no language variants configured yet.");
+  }
+
+  state.selectedVariantIndex = Math.min(Math.max(index, 0), variants.length - 1);
+  switchView("variant");
+}
+
+async function editSelectedExerciseVariant() {
+  const item = findSelectedEntry();
+  if (!item || state.selectedKind !== "exercises") {
+    throw new Error("Pick an exercise before editing.");
+  }
+
+  const variants = Array.isArray(item.draft?.languageVariants) ? item.draft.languageVariants : [];
+  const variantIndex =
+    variants.length > 0
+      ? Math.min(Math.max(state.selectedVariantIndex, 0), variants.length - 1)
+      : 0;
+
+  state.editorMode = "edit";
+  state.editorKind = state.selectedKind;
+  state.editorSourceId = item.id;
+  state.editorDraft = structuredCloneSafe(item.draft);
+  state.editorStepIndex = 0;
+  state.editorInputMode = "form";
+  state.editorVariantIndex = variantIndex;
+  state.editorJsonText = "";
+  clearEditorError();
+  switchView("editor");
+  setStatus(`Editing ${item.id} (${variants[variantIndex]?.languageLabel || variants[variantIndex]?.languageId || "variant"}).`);
 }
 
 async function saveEditorDraft() {
@@ -2512,10 +2846,11 @@ function buildStructure(kind, draft) {
     return [
       createStructureChip("Language variants", `${variants.length} configured`),
       createStructureChip("Modes", supportedModes.join(", ") || "No modes"),
-      ...variants.slice(0, 6).map((variant) =>
-        createStructureChip(
-          variant.languageLabel || variant.languageId || "Language",
-          variant.runCommand || variant.entryFilePath || "No run command",
+      ...variants.slice(0, 6).map((variant, index) =>
+        createStructureChipButton(
+          `${variant.isDefault ? "Default · " : ""}${variant.languageLabel || variant.languageId || "Language"}`,
+          variant.runCommand || variant.entryFilePath || "Open variant",
+          () => runAction(() => openSelectedExerciseVariant(index)),
         ),
       ),
     ];
@@ -2670,6 +3005,73 @@ function createAttributeRow(label, value) {
   return wrapper;
 }
 
+function createVariantListSection(title, items) {
+  const list = Array.isArray(items) ? items.filter((item) => String(item || "").trim()) : [];
+  if (list.length === 0) {
+    return createMutedText(`${title}: —`);
+  }
+
+  const node = document.createElement("div");
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const ul = document.createElement("ul");
+  ul.className = "variant-list";
+  for (const item of list) {
+    const li = document.createElement("li");
+    li.textContent = String(item);
+    ul.appendChild(li);
+  }
+  node.append(heading, ul);
+  return node;
+}
+
+function createVariantTaskStepsSection(steps) {
+  const list = Array.isArray(steps) ? steps : [];
+  if (list.length === 0) {
+    return createMutedText("Steps: —");
+  }
+
+  const node = document.createElement("div");
+  const heading = document.createElement("strong");
+  heading.textContent = "Step guide";
+  const ol = document.createElement("ol");
+  ol.className = "variant-list";
+  for (const step of list) {
+    if (!step || typeof step !== "object") continue;
+    const title = String(step.title || "").trim();
+    const description = String(step.description || "").trim();
+    if (!title && !description) continue;
+    const li = document.createElement("li");
+    const label = title || "Step";
+    li.textContent = description ? `${label}: ${description}` : label;
+    ol.appendChild(li);
+  }
+  node.append(heading, ol);
+  return node;
+}
+
+function createVariantMetaRow(label, value) {
+  const row = document.createElement("div");
+  row.textContent = `${label}: ${value}`;
+  return row;
+}
+
+function createCodeBlock(code, { label = "", emptyLabel = "—" } = {}) {
+  const wrapper = document.createElement("div");
+  const trimmed = String(code || "");
+  if (label) {
+    const caption = document.createElement("div");
+    caption.className = "code-label";
+    caption.textContent = label;
+    wrapper.appendChild(caption);
+  }
+  const block = document.createElement("pre");
+  block.className = "code-block";
+  block.textContent = trimmed.trim() ? trimmed : emptyLabel;
+  wrapper.appendChild(block);
+  return wrapper;
+}
+
 function createStructureChip(title, description) {
   const chip = document.createElement("div");
   chip.className = "structure-chip";
@@ -2678,6 +3080,19 @@ function createStructureChip(title, description) {
   const detail = document.createElement("span");
   detail.textContent = description;
   chip.append(heading, detail);
+  return chip;
+}
+
+function createStructureChipButton(title, description, onClick) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "structure-chip structure-chip-button";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const detail = document.createElement("span");
+  detail.textContent = description;
+  chip.append(heading, detail);
+  chip.addEventListener("click", onClick);
   return chip;
 }
 

@@ -80,10 +80,44 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     }
 
     final theme = Theme.of(context);
+    final orientation = MediaQuery.orientationOf(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isLandscape = orientation == Orientation.landscape;
     final result = session.validationResult;
     final isSandboxExecutionRunning =
         result.status == ValidationStatus.running ||
             widget.appState.isSandboxExecutionRunning;
+    final actionRow = _QuickActionRow(
+      onHint: _openHint,
+      onBuild: () async {
+        final validation = await widget.appState.buildSession();
+        if (!mounted) {
+          return;
+        }
+        _showResultSheet(validation);
+      },
+      onRun: () async {
+        final validation = await widget.appState.runSession();
+        if (!mounted) {
+          return;
+        }
+        _showResultSheet(validation);
+      },
+      onRunWithoutTests: () async {
+        final validation = await widget.appState.runSessionWithoutTests();
+        if (!mounted) {
+          return;
+        }
+        _showResultSheet(validation);
+      },
+      onCheck: () {
+        final validation = widget.appState.checkSession();
+        _showTextSheet(validation.summary, validation.output);
+      },
+      onExplain: _showReflectionSheet,
+      isSandboxExecutionRunning: isSandboxExecutionRunning,
+      compact: isLandscape,
+    );
 
     return Column(
       children: <Widget>[
@@ -123,56 +157,48 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           ),
         ),
         Expanded(
-          child: ListView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              140 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
+          child: Stack(
             children: <Widget>[
-              _SessionBanner(session: session),
-              const SizedBox(height: 12),
-              _EditorPanel(
-                controller: _controller,
-                activeFile: session.activeFilePath,
-                onOpenSourceTree: _openSourceTreeSidebar,
-                onOpenFullscreen: _openFullscreenEditor,
+              ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  (isLandscape ? 168 : 140) + bottomInset,
+                ),
+                children: <Widget>[
+                  _SessionBanner(session: session),
+                  const SizedBox(height: 12),
+                  _EditorPanel(
+                    controller: _controller,
+                    activeFile: session.activeFilePath,
+                    onOpenSourceTree: _openSourceTreeSidebar,
+                    onOpenFullscreen: _openFullscreenEditor,
+                  ),
+                  const SizedBox(height: 12),
+                  if (!isLandscape) ...<Widget>[
+                    actionRow,
+                    const SizedBox(height: 12),
+                  ],
+                  _ValidationCard(
+                    result: result,
+                    milestone: session.milestone,
+                  ),
+                  const SizedBox(height: 12),
+                  _ExecutionHistoryCard(history: session.executionHistory),
+                  const SizedBox(height: 12),
+                  _SessionLogCard(log: session.sessionLog),
+                ],
               ),
-              const SizedBox(height: 12),
-              _QuickActionRow(
-                onHint: _openHint,
-                onBuild: () async {
-                  final validation = await widget.appState.buildSession();
-                  if (!mounted) {
-                    return;
-                  }
-                  _showResultSheet(validation);
-                },
-                onRun: () async {
-                  final validation = await widget.appState.runSession();
-                  if (!mounted) {
-                    return;
-                  }
-                  _showResultSheet(validation);
-                },
-                onCheck: () {
-                  final validation = widget.appState.checkSession();
-                  _showTextSheet(validation.summary, validation.output);
-                },
-                onExplain: _showReflectionSheet,
-                isSandboxExecutionRunning: isSandboxExecutionRunning,
-              ),
-              const SizedBox(height: 12),
-              _ValidationCard(
-                result: result,
-                milestone: session.milestone,
-              ),
-              const SizedBox(height: 12),
-              _ExecutionHistoryCard(history: session.executionHistory),
-              const SizedBox(height: 12),
-              _SessionLogCard(log: session.sessionLog),
+              if (isLandscape)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 12 + bottomInset,
+                  child: _FloatingActionDock(child: actionRow),
+                ),
             ],
           ),
         ),
@@ -460,6 +486,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           files: session.milestone.relatedFiles,
           onBuild: widget.appState.buildSession,
           onRun: widget.appState.runSession,
+          onRunWithoutTests: widget.appState.runSessionWithoutTests,
           onShowPrompt: _showProblemSheet,
           onShowHint: _showCurrentHint,
           onChanged: (filePath, code) => widget.appState.updateSessionFileCode(
@@ -515,7 +542,12 @@ class _BottomSheetScaffold extends StatelessWidget {
     final theme = Theme.of(context);
     return SafeArea(
       child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.9,
+        height: _sheetHeightForContext(
+          context,
+          portraitFactor: 0.9,
+          landscapeFactor: 0.97,
+          minHeight: 420,
+        ),
         child: Column(
           children: <Widget>[
             Padding(
@@ -845,7 +877,7 @@ class _EditorPanel extends StatelessWidget {
                             style: const TextStyle(
                               color: Color(0xFFF4F5F7),
                               fontFamily: 'monospace',
-                              fontSize: 14,
+                              fontSize: 16,
                               height: 1.45,
                             ),
                           ),
@@ -1010,6 +1042,7 @@ class _FullscreenEditorPage extends StatefulWidget {
     required this.files,
     required this.onBuild,
     required this.onRun,
+    required this.onRunWithoutTests,
     required this.onShowPrompt,
     required this.onShowHint,
     required this.onFileSelected,
@@ -1023,6 +1056,7 @@ class _FullscreenEditorPage extends StatefulWidget {
   final List<String> files;
   final SessionExecutionCallback onBuild;
   final SessionExecutionCallback onRun;
+  final SessionExecutionCallback onRunWithoutTests;
   final VoidCallback onShowPrompt;
   final VoidCallback onShowHint;
   final ValueChanged<String> onFileSelected;
@@ -1032,12 +1066,16 @@ class _FullscreenEditorPage extends StatefulWidget {
   State<_FullscreenEditorPage> createState() => _FullscreenEditorPageState();
 }
 
-class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
+class _FullscreenEditorPageState extends State<_FullscreenEditorPage>
+    with WidgetsBindingObserver {
   late final CodeController _controller;
   final FocusNode _focusNode = FocusNode();
   late String _activeFile;
   late final Map<String, String> _fileContents;
   SandboxExecutionAction? _activeSandboxAction;
+  double _editorFontSize = 17;
+  Orientation? _lastOrientation;
+  int _editorLayoutEpoch = 0;
 
   static const List<_EditorSnippet> _snippets = <_EditorSnippet>[
     _EditorSnippet(label: 'Space', value: '    '),
@@ -1052,6 +1090,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _activeFile = widget.activeFile;
     _fileContents = Map<String, String>.from(widget.fileContents);
     _controller = CodeController(
@@ -1069,6 +1108,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
     _controller.dispose();
     super.dispose();
@@ -1077,8 +1117,31 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final orientation = MediaQuery.orientationOf(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final isSandboxExecutionRunning = _activeSandboxAction != null;
+    final isCompactWidth = size.width < 430;
+    final wrapEditorLines =
+        orientation == Orientation.portrait && size.width < 560;
+    final editorPadding = isCompactWidth ? 12.0 : 16.0;
+    final gutterWidth = isCompactWidth ? 40.0 : 52.0;
+    final bodyPadding = isCompactWidth ? 12.0 : 16.0;
+    final resolvedFontSize =
+        (isCompactWidth ? _editorFontSize - 1 : _editorFontSize)
+            .clamp(14.0, 24.0)
+            .toDouble();
+
+    if (_lastOrientation != orientation) {
+      _lastOrientation = orientation;
+      _editorLayoutEpoch += 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
+        _focusNode.requestFocus();
+      });
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F1923),
@@ -1117,7 +1180,12 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
+          padding: EdgeInsets.fromLTRB(
+            bodyPadding,
+            12,
+            bodyPadding,
+            12 + bottomInset,
+          ),
           child: Column(
             children: <Widget>[
               _EditorActionToolbar(
@@ -1125,6 +1193,7 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
                 onShowHint: widget.onShowHint,
                 onBuild: _handleBuild,
                 onRun: _handleRun,
+                onRunWithoutTests: _handleRunWithoutTests,
                 isSandboxExecutionRunning: isSandboxExecutionRunning,
                 activeSandboxAction: _activeSandboxAction,
               ),
@@ -1147,57 +1216,89 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
                             const Icon(Icons.fullscreen_rounded,
                                 color: Colors.white70, size: 18),
                             const SizedBox(width: 8),
-                            Text(
-                              'Full-screen editor',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
+                            Expanded(
+                              child: Text(
+                                'Full-screen editor',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                ),
                               ),
+                            ),
+                            IconButton(
+                              tooltip: 'Decrease font size',
+                              onPressed: () => _adjustEditorFontSize(-1),
+                              icon: const Icon(Icons.zoom_out_rounded),
+                              color: Colors.white70,
+                            ),
+                            IconButton(
+                              tooltip: 'Increase font size',
+                              onPressed: () => _adjustEditorFontSize(1),
+                              icon: const Icon(Icons.zoom_in_rounded),
+                              color: Colors.white70,
                             ),
                           ],
                         ),
                       ),
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompactWidth ? 8 : 12,
+                          ),
                           child: Container(
                             decoration: BoxDecoration(
                               color: const Color(0xFF0F1923),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: CodeTheme(
-                              data: CodeThemeData(styles: _editorThemeStyles),
-                              child: CodeField(
-                                controller: _controller,
-                                focusNode: _focusNode,
-                                expands: true,
-                                wrap: false,
-                                onChanged: _handleEditorChanged,
-                                background: const Color(0xFF0F1923),
-                                gutterStyle: const GutterStyle(
-                                  width: 52,
-                                  margin: 12,
-                                  textStyle: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 12,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _focusNode.requestFocus(),
+                              child: CodeTheme(
+                                data: CodeThemeData(styles: _editorThemeStyles),
+                                child: CodeField(
+                                  key: ValueKey<String>(
+                                    '$_activeFile-${orientation.name}-$_editorLayoutEpoch',
                                   ),
+                                  controller: _controller,
+                                  focusNode: _focusNode,
+                                  expands: true,
+                                  wrap: wrapEditorLines,
+                                  onChanged: _handleEditorChanged,
+                                  background: const Color(0xFF0F1923),
+                                  gutterStyle: GutterStyle(
+                                    width: gutterWidth,
+                                    margin: isCompactWidth ? 8 : 12,
+                                    textStyle: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: (resolvedFontSize - 3)
+                                          .clamp(10.0, 22.0)
+                                          .toDouble(),
+                                    ),
+                                  ),
+                                  textStyle: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'monospace',
+                                    fontSize: resolvedFontSize,
+                                    height: 1.45,
+                                  ),
+                                  cursorColor: const Color(0xFFFFD4C6),
+                                  padding: EdgeInsets.all(editorPadding),
                                 ),
-                                textStyle: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'monospace',
-                                  fontSize: 15,
-                                  height: 1.45,
-                                ),
-                                cursorColor: const Color(0xFFFFD4C6),
-                                padding: const EdgeInsets.all(16),
                               ),
                             ),
                           ),
                         ),
                       ),
                       SizedBox(
-                        height: 60,
+                        height: isCompactWidth ? 56 : 60,
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          padding: EdgeInsets.fromLTRB(
+                            isCompactWidth ? 8 : 12,
+                            12,
+                            isCompactWidth ? 8 : 12,
+                            12,
+                          ),
                           scrollDirection: Axis.horizontal,
                           itemCount: _snippets.length,
                           separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -1295,6 +1396,31 @@ class _FullscreenEditorPageState extends State<_FullscreenEditorPage> {
         setState(() => _activeSandboxAction = null);
       }
     }
+  }
+
+  Future<void> _handleRunWithoutTests() async {
+    if (_activeSandboxAction != null) {
+      return;
+    }
+
+    setState(() => _activeSandboxAction = SandboxExecutionAction.run);
+    try {
+      final result = await widget.onRunWithoutTests();
+      if (!mounted) {
+        return;
+      }
+      _showResultSheet(result);
+    } finally {
+      if (mounted) {
+        setState(() => _activeSandboxAction = null);
+      }
+    }
+  }
+
+  void _adjustEditorFontSize(int delta) {
+    setState(() {
+      _editorFontSize = (_editorFontSize + delta).clamp(12.0, 24.0).toDouble();
+    });
   }
 
   void _showResultSheet(ValidationResult result) {
@@ -1439,6 +1565,7 @@ class _EditorActionToolbar extends StatelessWidget {
     required this.onShowHint,
     required this.onBuild,
     required this.onRun,
+    required this.onRunWithoutTests,
     required this.isSandboxExecutionRunning,
     required this.activeSandboxAction,
   });
@@ -1447,62 +1574,120 @@ class _EditorActionToolbar extends StatelessWidget {
   final VoidCallback onShowHint;
   final Future<void> Function() onBuild;
   final Future<void> Function() onRun;
+  final Future<void> Function() onRunWithoutTests;
   final bool isSandboxExecutionRunning;
   final SandboxExecutionAction? activeSandboxAction;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: onShowPrompt,
-          icon: const Icon(Icons.description_outlined),
-          label: const Text('Prompt'),
-        ),
-        OutlinedButton.icon(
-          onPressed: onShowHint,
-          icon: const Icon(Icons.lightbulb_outline_rounded),
-          label: const Text('Hint'),
-        ),
-        SizedBox(
-          width: 160,
-          child: FilledButton.tonalIcon(
-            onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
-            icon: activeSandboxAction == SandboxExecutionAction.build
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.build_circle_outlined),
-            label: Text(
-              activeSandboxAction == SandboxExecutionAction.build
-                  ? 'Building...'
-                  : 'Build',
+    final orientation = MediaQuery.orientationOf(context);
+    final isCompact = orientation == Orientation.landscape ||
+        MediaQuery.sizeOf(context).height < 760;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = isCompact ? 8.0 : 12.0;
+        final maxWidth = constraints.maxWidth;
+        final columns = isCompact
+            ? (maxWidth >= 980 ? 5 : (maxWidth >= 720 ? 4 : 3))
+            : (maxWidth >= 900 ? 5 : (maxWidth >= 680 ? 3 : 2));
+        final buttonWidth = ((maxWidth - (spacing * (columns - 1))) / columns)
+            .clamp(isCompact ? 112.0 : 140.0, isCompact ? 190.0 : 220.0)
+            .toDouble();
+        final iconSize = isCompact ? 18.0 : 20.0;
+        final buttonStyle = ButtonStyle(
+          padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
+            EdgeInsets.symmetric(
+              horizontal: isCompact ? 10 : 14,
+              vertical: isCompact ? 10 : 14,
             ),
           ),
-        ),
-        SizedBox(
-          width: 160,
-          child: FilledButton.tonalIcon(
-            onPressed: isSandboxExecutionRunning ? null : () => onRun(),
-            icon: activeSandboxAction == SandboxExecutionAction.run
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.play_circle_outline_rounded),
-            label: Text(
-              activeSandboxAction == SandboxExecutionAction.run
-                  ? 'Running...'
-                  : 'Run',
-            ),
+          minimumSize: WidgetStatePropertyAll<Size>(
+            Size(buttonWidth, isCompact ? 42 : 48),
           ),
-        ),
-      ],
+          visualDensity:
+              isCompact ? VisualDensity.compact : VisualDensity.standard,
+          textStyle: WidgetStatePropertyAll<TextStyle>(
+            Theme.of(context).textTheme.labelLarge!.copyWith(
+                  fontSize: isCompact ? 13 : 14,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        );
+
+        Widget sizedButton(Widget child) {
+          return SizedBox(width: buttonWidth, child: child);
+        }
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            sizedButton(
+              OutlinedButton.icon(
+                onPressed: onShowPrompt,
+                style: buttonStyle,
+                icon: Icon(Icons.description_outlined, size: iconSize),
+                label: const Text('Prompt'),
+              ),
+            ),
+            sizedButton(
+              OutlinedButton.icon(
+                onPressed: onShowHint,
+                style: buttonStyle,
+                icon: Icon(Icons.lightbulb_outline_rounded, size: iconSize),
+                label: const Text('Hint'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
+                icon: activeSandboxAction == SandboxExecutionAction.build
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.build_circle_outlined, size: iconSize),
+                label: Text(
+                  activeSandboxAction == SandboxExecutionAction.build
+                      ? 'Building...'
+                      : 'Build',
+                ),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning ? null : () => onRun(),
+                icon: activeSandboxAction == SandboxExecutionAction.run
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.play_circle_outline_rounded, size: iconSize),
+                label: Text(
+                  activeSandboxAction == SandboxExecutionAction.run
+                      ? 'Running...'
+                      : 'Run',
+                ),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning
+                    ? null
+                    : () => onRunWithoutTests(),
+                icon: Icon(Icons.bolt_rounded, size: iconSize),
+                label: const Text('Run (no tests)'),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1555,7 +1740,10 @@ class _SourceTreeSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final root = _buildFileTree(files);
-    final width = MediaQuery.sizeOf(context).width * 0.82;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final width = (screenWidth >= 900 ? 380.0 : screenWidth * 0.88)
+        .clamp(320.0, 420.0)
+        .toDouble();
 
     return SafeArea(
       child: Align(
@@ -1716,62 +1904,128 @@ class _QuickActionRow extends StatelessWidget {
     required this.onHint,
     required this.onBuild,
     required this.onRun,
+    required this.onRunWithoutTests,
     required this.onCheck,
     required this.onExplain,
     required this.isSandboxExecutionRunning,
+    this.compact = false,
   });
 
   final VoidCallback onHint;
   final Future<void> Function() onBuild;
   final Future<void> Function() onRun;
+  final Future<void> Function() onRunWithoutTests;
   final VoidCallback onCheck;
   final VoidCallback onExplain;
   final bool isSandboxExecutionRunning;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: <Widget>[
-        FilledButton.icon(
-          onPressed: onHint,
-          icon: const Icon(Icons.lightbulb_outline_rounded),
-          label: const Text('Hint'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
-          icon: isSandboxExecutionRunning
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.build_circle_outlined),
-          label: Text(isSandboxExecutionRunning ? 'Working...' : 'Build'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: isSandboxExecutionRunning ? null : () => onRun(),
-          icon: isSandboxExecutionRunning
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.play_arrow_rounded),
-          label: Text(isSandboxExecutionRunning ? 'Working...' : 'Run'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: onCheck,
-          icon: const Icon(Icons.task_alt_rounded),
-          label: const Text('Check'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: onExplain,
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          label: const Text('Explain'),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = compact ? 8.0 : 10.0;
+        final maxWidth = constraints.maxWidth;
+        final columns = compact
+            ? (maxWidth >= 1100 ? 6 : (maxWidth >= 780 ? 4 : 3))
+            : (maxWidth >= 960 ? 6 : (maxWidth >= 680 ? 3 : 2));
+        final buttonWidth = ((maxWidth - (spacing * (columns - 1))) / columns)
+            .clamp(compact ? 104.0 : 136.0, compact ? 176.0 : 210.0)
+            .toDouble();
+        final iconSize = compact ? 18.0 : 20.0;
+        final buttonStyle = ButtonStyle(
+          padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
+            EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 14,
+              vertical: compact ? 10 : 14,
+            ),
+          ),
+          minimumSize: WidgetStatePropertyAll<Size>(
+            Size(buttonWidth, compact ? 40 : 48),
+          ),
+          visualDensity:
+              compact ? VisualDensity.compact : VisualDensity.standard,
+          textStyle: WidgetStatePropertyAll<TextStyle>(
+            Theme.of(context).textTheme.labelLarge!.copyWith(
+                  fontSize: compact ? 13 : 14,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        );
+
+        Widget sizedButton(Widget child) {
+          return SizedBox(width: buttonWidth, child: child);
+        }
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            sizedButton(
+              FilledButton.icon(
+                style: buttonStyle,
+                onPressed: onHint,
+                icon: Icon(Icons.lightbulb_outline_rounded, size: iconSize),
+                label: const Text('Hint'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning ? null : () => onBuild(),
+                icon: isSandboxExecutionRunning
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.build_circle_outlined, size: iconSize),
+                label: Text(isSandboxExecutionRunning ? 'Working...' : 'Build'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning ? null : () => onRun(),
+                icon: isSandboxExecutionRunning
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.play_arrow_rounded, size: iconSize),
+                label: Text(isSandboxExecutionRunning ? 'Working...' : 'Run'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: isSandboxExecutionRunning
+                    ? null
+                    : () => onRunWithoutTests(),
+                icon: Icon(Icons.bolt_rounded, size: iconSize),
+                label: const Text('Run (no tests)'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: onCheck,
+                icon: Icon(Icons.task_alt_rounded, size: iconSize),
+                label: const Text('Check'),
+              ),
+            ),
+            sizedButton(
+              FilledButton.tonalIcon(
+                style: buttonStyle,
+                onPressed: onExplain,
+                icon: Icon(Icons.chat_bubble_outline_rounded, size: iconSize),
+                label: const Text('Explain'),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1900,12 +2154,21 @@ class _ExecutionResultSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final report = result.executionReport;
+    final sheetPadding =
+        MediaQuery.orientationOf(context) == Orientation.landscape
+            ? const EdgeInsets.fromLTRB(20, 4, 20, 16)
+            : const EdgeInsets.fromLTRB(20, 8, 20, 24);
     if (report == null) {
       return SafeArea(
         child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.8,
+          height: _sheetHeightForContext(
+            context,
+            portraitFactor: 0.82,
+            landscapeFactor: 0.96,
+            minHeight: 360,
+          ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: sheetPadding,
             child: ListView(
               children: <Widget>[
                 Text(result.summary, style: theme.textTheme.titleLarge),
@@ -1938,9 +2201,14 @@ class _ExecutionResultSheet extends StatelessWidget {
       length: tabs.isEmpty ? 1 : tabs.length,
       child: SafeArea(
         child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.84,
+          height: _sheetHeightForContext(
+            context,
+            portraitFactor: 0.86,
+            landscapeFactor: 0.97,
+            minHeight: 420,
+          ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: sheetPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -2009,6 +2277,57 @@ class _ExecutionResultSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FloatingActionDock extends StatelessWidget {
+  const _FloatingActionDock({
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        color: theme.colorScheme.surface.withValues(alpha: 0.96),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: child,
+      ),
+    );
+  }
+}
+
+double _sheetHeightForContext(
+  BuildContext context, {
+  required double portraitFactor,
+  required double landscapeFactor,
+  required double minHeight,
+}) {
+  final size = MediaQuery.sizeOf(context);
+  final safeTop = MediaQuery.paddingOf(context).top;
+  final safeBottom = MediaQuery.paddingOf(context).bottom;
+  final maxHeight = size.height - safeTop - safeBottom - 8;
+  final target = maxHeight *
+      (MediaQuery.orientationOf(context) == Orientation.landscape
+          ? landscapeFactor
+          : portraitFactor);
+  final resolvedMinHeight = maxHeight < minHeight ? maxHeight : minHeight;
+  return target.clamp(resolvedMinHeight, maxHeight).toDouble();
 }
 
 class _ExecutionCasesList extends StatelessWidget {

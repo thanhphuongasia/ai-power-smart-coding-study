@@ -492,11 +492,24 @@ button:hover {
   grid-column: 1 / -1;
 }
 
+.detail-span-full {
+  grid-column: 1 / -1;
+}
+
 .detail-section {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(119, 94, 47, 0.1);
   background: rgba(255, 255, 255, 0.56);
+  min-width: 0;
+}
+
+.detail-section[hidden] {
+  display: none;
+}
+
+.detail-body {
+  margin: 0;
 }
 
 .attribute-list,
@@ -536,6 +549,118 @@ button:hover {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.structure-chip-button {
+  cursor: pointer;
+  text-align: left;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.structure-chip-button:hover {
+  border-color: rgba(119, 94, 47, 0.18);
+}
+
+.structure-chip-button:active {
+  transform: translateY(1px);
+}
+
+.structure-chip-button strong {
+  pointer-events: none;
+}
+
+.structure-chip-button span {
+  pointer-events: none;
+}
+
+.hint-card summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.hint-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.hint-body {
+  margin-top: 10px;
+  white-space: pre-wrap;
+}
+
+.code-label {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.code-block {
+  margin: 6px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(119, 94, 47, 0.08);
+  background: rgba(255, 253, 248, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  max-height: 280px;
+}
+
+.variant-list {
+  margin: 10px 0 0 18px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.variant-list li {
+  margin: 6px 0;
+}
+
+.variant-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.variant-tab-button {
+  width: auto;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 94, 47, 0.12);
+  background: rgba(255, 253, 248, 0.92);
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.variant-tab-button.active {
+  border-color: rgba(22, 144, 129, 0.3);
+  background: rgba(22, 144, 129, 0.1);
+  color: var(--accent-strong);
+}
+
+.variant-meta {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .detail-menu-shell {

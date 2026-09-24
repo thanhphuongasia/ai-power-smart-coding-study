@@ -93,4 +93,63 @@ class Document:
     expect(find.textContaining('def __init__'), findsOneWidget);
     expect(state.activeSession!.code, solution);
   });
+
+  testWidgets('fullscreen editor stays editable after rotating the screen',
+      (WidgetTester tester) async {
+    final view = tester.view;
+    addTearDown(() {
+      view.resetPhysicalSize();
+      view.resetDevicePixelRatio();
+    });
+
+    view.devicePixelRatio = 1.0;
+    view.physicalSize = const Size(430, 932);
+
+    final state = await buildTestAppState();
+    final exercise = state.exercises.firstWhere(
+      (item) => item.id == 'project_document_class',
+    );
+
+    state.startSession(
+      exercise: exercise,
+      mode: PracticeMode.guided,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SafeArea(
+            child: PracticeSessionScreen(
+              appState: state,
+              onBackToCatalog: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Full screen'));
+    await tester.pumpAndSettle();
+
+    const initialCode = 'class Document:\n    pass\n';
+    await tester.enterText(find.byType(EditableText).first, initialCode);
+    await tester.pumpAndSettle();
+
+    view.physicalSize = const Size(932, 430);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EditableText), findsOneWidget);
+    expect(state.activeSession!.code, initialCode);
+
+    const rotatedCode =
+        'class Document:\n    pass\n\nprint("rotation still works")\n';
+    await tester.tap(find.byType(EditableText).first);
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText).first, rotatedCode);
+    await tester.pumpAndSettle();
+
+    expect(state.activeSession!.code, rotatedCode);
+    expect(state.activeSession!.code, contains('rotation still works'));
+  });
 }

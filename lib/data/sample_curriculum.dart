@@ -210,8 +210,14 @@ if __name__ == "__main__":
             starterFiles: <String, String>{
               'Program.cs': '''using System;
 
-var document = new Document("Quarterly Report", "Nina", 14);
-Console.WriteLine(document.Summary());
+public static class Program
+{
+    public static void Main()
+    {
+        Document document = new Document("Quarterly Report", "Nina", 14);
+        Console.WriteLine(document.Summary());
+    }
+}
 ''',
             },
             runCommand: 'dotnet-script Program.cs',

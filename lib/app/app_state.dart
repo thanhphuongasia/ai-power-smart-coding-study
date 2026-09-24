@@ -506,15 +506,26 @@ class AppState extends ChangeNotifier {
     return _startSandboxExecution(action: SandboxExecutionAction.run);
   }
 
+  Future<ValidationResult> runSessionWithoutTests() {
+    return _startSandboxExecution(
+      action: SandboxExecutionAction.run,
+      runWithoutTests: true,
+    );
+  }
+
   Future<ValidationResult> _startSandboxExecution({
     required SandboxExecutionAction action,
+    bool runWithoutTests = false,
   }) {
     final existingExecution = _inFlightSandboxExecution;
     if (existingExecution != null) {
       return existingExecution;
     }
 
-    final execution = _executeSession(action: action);
+    final execution = _executeSession(
+      action: action,
+      runWithoutTests: runWithoutTests,
+    );
     _inFlightSandboxExecution = execution;
     execution.whenComplete(() {
       if (identical(_inFlightSandboxExecution, execution)) {
@@ -526,6 +537,7 @@ class AppState extends ChangeNotifier {
 
   Future<ValidationResult> _executeSession({
     required SandboxExecutionAction action,
+    required bool runWithoutTests,
   }) async {
     final session = _activeSession;
     if (session == null) {
@@ -539,7 +551,9 @@ class AppState extends ChangeNotifier {
           : 'Run queued on the sandbox API.',
       output: action == SandboxExecutionAction.build
           ? 'Submitting your code to the sandbox API for compilation or syntax validation.'
-          : 'Submitting your code to the sandbox API for multi-case execution.',
+          : runWithoutTests
+              ? 'Submitting your code to the sandbox API for a quick run without test cases.'
+              : 'Submitting your code to the sandbox API for multi-case execution.',
       executionReport: null,
       matchedRequirements: session.validationResult.matchedRequirements,
       missingRequirements: session.validationResult.missingRequirements,
@@ -564,6 +578,7 @@ class AppState extends ChangeNotifier {
         variant: session.selectedVariant,
         fileContents: session.fileContents,
         entryFilePath: session.selectedVariant.entryFilePath,
+        runWithoutTests: runWithoutTests,
       );
 
       final result = ValidationResult(

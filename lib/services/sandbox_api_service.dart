@@ -25,6 +25,7 @@ class SandboxApiService {
     required ExerciseLanguageVariant variant,
     required Map<String, String> fileContents,
     required String entryFilePath,
+    bool runWithoutTests = false,
   }) async {
     if (!isConfigured) {
       return const SandboxExecutionResult(
@@ -43,6 +44,7 @@ class SandboxApiService {
         headers: const <String, String>{'Content-Type': 'application/json'},
         body: jsonEncode(<String, Object?>{
           'action': action.name,
+          'runWithoutTests': runWithoutTests,
           'entryFilePath': entryFilePath,
           'fileContents': fileContents,
           'exerciseId': exercise.id,

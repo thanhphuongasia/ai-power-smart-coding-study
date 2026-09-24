@@ -48,16 +48,20 @@ function createApp(options = {}) {
       const languageVariant = payload.languageVariant && typeof payload.languageVariant === 'object'
         ? payload.languageVariant
         : {};
+      const runWithoutTests =
+        payload.runWithoutTests === true || languageVariant.runWithoutTests === true;
       const languageLabel = languageVariant.languageLabel || payload.languageLabel;
       const entryFilePath = languageVariant.entryFilePath || payload.entryFilePath;
       const demoFilePath = languageVariant.demoFilePath || payload.demoFilePath;
       const fileContents = payload.fileContents;
       const harnessTemplate = languageVariant.harnessTemplate || payload.harnessTemplate;
-      const testCases = Array.isArray(languageVariant.testCases)
-        ? languageVariant.testCases
-        : Array.isArray(payload.testCases)
-          ? payload.testCases
-          : [];
+      const testCases = runWithoutTests
+        ? []
+        : Array.isArray(languageVariant.testCases)
+          ? languageVariant.testCases
+          : Array.isArray(payload.testCases)
+            ? payload.testCases
+            : [];
 
       if (action !== 'build' && action !== 'run') {
         return response.status(400).json({ error: 'action must be "build" or "run"' });
@@ -75,24 +79,31 @@ function createApp(options = {}) {
         return response.status(400).json({ error: 'harnessTemplate is required' });
       }
 
-      const entrySourceCode = String(fileContents[entryFilePath] || '');
+      const resolvedLanguage = await resolveLanguage(languageLabel);
+      const normalizedFiles = shouldRewriteLegacyCSharpRecords({
+        languageLabel,
+        resolvedLanguageName: resolvedLanguage.name,
+      })
+        ? rewriteLegacyCSharpFiles(fileContents)
+        : fileContents;
+      const entrySourceCode = String(normalizedFiles[entryFilePath] || '');
       const additionalFiles = await encodeAdditionalFiles({
         entryFilePath,
-        fileContents,
+        fileContents: normalizedFiles,
       });
       const demoSourceCode =
         typeof demoFilePath === 'string' && demoFilePath.trim().length > 0
-          ? String(fileContents[demoFilePath] || '')
+          ? String(normalizedFiles[demoFilePath] || '')
           : '';
       const demoAdditionalFiles =
         typeof demoFilePath === 'string' && demoFilePath.trim().length > 0
           ? await encodeAdditionalFiles({
               entryFilePath: demoFilePath,
-              fileContents,
+              fileContents: normalizedFiles,
             })
           : '';
 
-      const languageId = await resolveLanguageId(languageLabel);
+      const languageId = resolvedLanguage.id;
 
       if (action === 'build') {
         const buildCase = testCases[0] || {
@@ -105,7 +116,10 @@ function createApp(options = {}) {
           demoSourceCode.length > 0
             ? demoSourceCode
             : composeSource({
-                harnessTemplate,
+                harnessTemplate: resolveHarnessTemplate({
+                  languageLabel,
+                  harnessTemplate,
+                }),
                 sourceCode: entrySourceCode,
                 testBody: buildCase.body || '',
               });
@@ -134,10 +148,6 @@ function createApp(options = {}) {
         });
       }
 
-      if (testCases.length === 0) {
-        return response.status(400).json({ error: 'At least one test case is required for run.' });
-      }
-
       let programResult = null;
       if (demoSourceCode.length > 0) {
         const submission = await executeJudge0Submission({
@@ -157,10 +167,35 @@ function createApp(options = {}) {
         };
       }
 
+      if (testCases.length === 0 && programResult == null) {
+        const submission = await executeJudge0Submission({
+          languageId,
+          sourceCode: composeSource({
+            harnessTemplate,
+            sourceCode: entrySourceCode,
+            testBody: '',
+          }),
+          additionalFiles,
+        });
+        programResult = {
+          label: 'Program run',
+          passed: submission.statusDescription === 'Accepted',
+          statusLabel: submission.statusDescription,
+          actualOutput: actualOutputForSubmission(submission),
+          stdout: submission.stdout,
+          stderr: submission.stderr,
+          compileOutput: submission.compileOutput,
+          message: submission.message,
+        };
+      }
+
       const caseResults = [];
       for (const testCase of testCases) {
         const wrappedSource = composeSource({
-          harnessTemplate,
+          harnessTemplate: resolveHarnessTemplate({
+            languageLabel,
+            harnessTemplate,
+          }),
           sourceCode: entrySourceCode,
           testBody: String(testCase.body || ''),
         });
@@ -187,26 +222,43 @@ function createApp(options = {}) {
       const passedCaseCount = caseResults.filter((item) => item.passed).length;
       const programPassed = programResult == null || programResult.passed;
       const allCasesPassed = passedCaseCount === caseResults.length;
+      const sections =
+        caseResults.length > 0
+          ? buildSectionsFromCaseResults(caseResults)
+          : buildCombinedSections([
+              {
+                label: programResult.label,
+                stdout: programResult.stdout,
+                stderr: programResult.stderr,
+                compileOutput: programResult.compileOutput,
+                message: programResult.message,
+                actualOutput: programResult.actualOutput,
+              },
+            ]);
       const report = {
         engineLabel: 'Judge0 via sandbox proxy',
         statusLabel: programPassed && allCasesPassed ? 'Accepted' : 'Needs work',
         passedCaseCount,
         totalCaseCount: caseResults.length,
         programResult,
-        sections: buildSectionsFromCaseResults(caseResults),
+        sections,
         caseResults,
       };
 
       response.json({
         success: programPassed && allCasesPassed,
         summary:
-          programResult != null && !programPassed
-            ? `Program run reported issues. Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`
-            : programResult != null && allCasesPassed
-              ? `Program run completed and all ${caseResults.length} sandbox test cases passed.`
-              : allCasesPassed
-                ? `All ${caseResults.length} sandbox test cases passed.`
-              : `Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`,
+          caseResults.length === 0 && programResult != null
+            ? programPassed
+              ? 'Program run completed (no test cases executed).'
+              : 'Program run reported issues (no test cases executed).'
+            : programResult != null && !programPassed
+              ? `Program run reported issues. Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`
+              : programResult != null && allCasesPassed
+                ? `Program run completed and all ${caseResults.length} sandbox test cases passed.`
+                : allCasesPassed
+                  ? `All ${caseResults.length} sandbox test cases passed.`
+                  : `Passed ${passedCaseCount}/${caseResults.length} sandbox test cases.`,
         output: buildPlainTextOutput(report),
         report,
       });
@@ -217,7 +269,7 @@ function createApp(options = {}) {
     }
   });
 
-  async function resolveLanguageId(languageLabel) {
+  async function resolveLanguage(languageLabel) {
     if (!cachedLanguages) {
       const response = await config.fetchImpl(`${config.judge0BaseUrl}/languages`, {
         headers: judge0Headers(),
@@ -242,13 +294,19 @@ function createApp(options = {}) {
     for (const preferred of preferredLanguageNames(languageLabel)) {
       const exact = languageMap.get(normalize(preferred));
       if (exact != null) {
-        return exact;
+        return {
+          id: exact,
+          name: cachedLanguages.find((item) => item && typeof item === 'object' && item.id === exact)?.name || preferred,
+        };
       }
     }
 
     for (const [name, id] of languageMap.entries()) {
       if (preferredLanguageNames(languageLabel).some((candidate) => name.includes(normalize(candidate)))) {
-        return id;
+        return {
+          id,
+          name: cachedLanguages.find((item) => item && typeof item === 'object' && item.id === id)?.name || name,
+        };
       }
     }
 
@@ -356,7 +414,42 @@ async function encodeAdditionalFiles({ entryFilePath, fileContents }) {
 function composeSource({ harnessTemplate, sourceCode, testBody }) {
   return harnessTemplate
     .replace('{{USER_CODE}}', sourceCode)
-    .replace('{{TEST_BODY}}', testBody);
+    .replace('{{TEST_BODY}}', testBody)
+    .replace('{{TEST_BODY_INDENT_2}}', indentBlock(testBody, '        '));
+}
+
+function resolveHarnessTemplate({ languageLabel, harnessTemplate }) {
+  if (
+    isCSharpLanguage(languageLabel) &&
+    normalize(harnessTemplate) === normalize('{{USER_CODE}}\n\n{{TEST_BODY}}\n')
+  ) {
+    return [
+      '{{USER_CODE}}',
+      '',
+      'public static class Program',
+      '{',
+      '    public static void Main()',
+      '    {',
+      '{{TEST_BODY_INDENT_2}}',
+      '    }',
+      '}',
+      '',
+    ].join('\n');
+  }
+
+  return harnessTemplate;
+}
+
+function indentBlock(value, indent) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return `${indent}// No test body provided.`;
+  }
+
+  return normalized
+    .split('\n')
+    .map((line) => `${indent}${line}`)
+    .join('\n');
 }
 
 function buildSectionsFromSubmissions(submissions) {
@@ -454,10 +547,206 @@ function preferredLanguageNames(languageLabel) {
   if (normalized === 'python') {
     return ['Python (3.8.1)', 'Python (3.11.2)', 'Python'];
   }
-  if (normalized === 'c#') {
-    return ['C# (.NET Core SDK 7.0.400)', 'C# (.NET Core)', 'C#'];
+  if (isCSharpLanguage(normalized)) {
+    return [
+      'C# (.NET 8.0)',
+      'C# (.NET 7.0)',
+      'C# (.NET 6.0)',
+      'C# (.NET Core SDK 7.0.400)',
+      'C# (.NET Core)',
+      'C# (Mono 6.12.0.182)',
+      'C# (Mono 6.6.0.161)',
+      'C#',
+    ];
   }
   return [languageLabel];
+}
+
+function isCSharpLanguage(value) {
+  const normalized = normalize(value);
+  return normalized === 'c#' || normalized === 'csharp';
+}
+
+function shouldRewriteLegacyCSharpRecords({ languageLabel, resolvedLanguageName }) {
+  return isCSharpLanguage(languageLabel) && !isModernCSharpLanguageName(resolvedLanguageName);
+}
+
+function isModernCSharpLanguageName(value) {
+  const normalized = normalize(value);
+  return normalized.includes('.net') && !normalized.includes('mono');
+}
+
+function rewriteLegacyCSharpFiles(fileContents) {
+  const nextFiles = {};
+  let changed = false;
+
+  for (const [path, content] of Object.entries(fileContents)) {
+    if (typeof content !== 'string') {
+      nextFiles[path] = content;
+      continue;
+    }
+
+    const nextContent = path.endsWith('.cs') ? rewriteLegacyCSharpRecordSyntax(content) : content;
+    if (nextContent !== content) {
+      changed = true;
+    }
+    nextFiles[path] = nextContent;
+  }
+
+  return changed ? nextFiles : fileContents;
+}
+
+function rewriteLegacyCSharpRecordSyntax(source) {
+  const pattern =
+    /^[ \t]*(?<modifiers>(?:(?:public|internal|private|protected|sealed|abstract|partial|static)\s+)*)record(?:\s+class)?\s+(?<name>[A-Za-z_]\w*)\s*\((?<params>[^()]*)\)\s*(?<suffix>;|\{)/gm;
+  let match = pattern.exec(source);
+  if (!match) {
+    return source;
+  }
+
+  let rewritten = '';
+  let cursor = 0;
+
+  while (match) {
+    const { modifiers = '', name, params = '', suffix } = match.groups || {};
+    const memberBlock = buildLegacyCSharpRecordMembers(name, params);
+    if (!memberBlock) {
+      match = pattern.exec(source);
+      continue;
+    }
+
+    rewritten += source.slice(cursor, match.index);
+    if (suffix === ';') {
+      rewritten += `${modifiers}class ${name}\n{\n${memberBlock}\n}`;
+      cursor = pattern.lastIndex;
+    } else {
+      const bodyStart = pattern.lastIndex - 1;
+      const bodyEnd = findMatchingBrace(source, bodyStart);
+      if (bodyEnd === -1) {
+        rewritten += source.slice(cursor, pattern.lastIndex);
+        cursor = pattern.lastIndex;
+        match = pattern.exec(source);
+        continue;
+      }
+
+      const body = source.slice(bodyStart + 1, bodyEnd).trim();
+      rewritten += `${modifiers}class ${name}\n{\n${memberBlock}`;
+      if (body) {
+        rewritten += `\n\n${indentBody(body, '    ')}`;
+      }
+      rewritten += '\n}';
+      cursor = bodyEnd + 1;
+      pattern.lastIndex = cursor;
+    }
+
+    match = pattern.exec(source);
+  }
+
+  return `${rewritten}${source.slice(cursor)}`;
+}
+
+function buildLegacyCSharpRecordMembers(typeName, paramList) {
+  const params = splitCSharpParameters(paramList)
+    .map(parseCSharpRecordParameter)
+    .filter(Boolean);
+
+  if (params.length === 0 && String(paramList).trim().length > 0) {
+    return '';
+  }
+
+  const propertyLines = params.map(
+    ({ type, name }) => `    public ${type} ${name} { get; private set; }`,
+  );
+  const constructorArgs = params.map(({ type, name }) => `${type} ${name}`).join(', ');
+  const assignmentLines = params.map(({ name }) => `        this.${name} = ${name};`);
+
+  const sections = [];
+  if (propertyLines.length > 0) {
+    sections.push(propertyLines.join('\n'));
+  }
+  sections.push(`    public ${typeName}(${constructorArgs})`);
+  sections.push('    {');
+  if (assignmentLines.length === 0) {
+    sections.push('    }');
+  } else {
+    sections.push(assignmentLines.join('\n'));
+    sections.push('    }');
+  }
+  return sections.join('\n');
+}
+
+function splitCSharpParameters(paramList) {
+  const items = [];
+  let current = '';
+  let angleDepth = 0;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+
+  for (const char of String(paramList)) {
+    if (char === '<') {
+      angleDepth += 1;
+    } else if (char === '>') {
+      angleDepth = Math.max(0, angleDepth - 1);
+    } else if (char === '(') {
+      parenDepth += 1;
+    } else if (char === ')') {
+      parenDepth = Math.max(0, parenDepth - 1);
+    } else if (char === '[') {
+      bracketDepth += 1;
+    } else if (char === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+    }
+
+    if (char === ',' && angleDepth === 0 && parenDepth === 0 && bracketDepth === 0) {
+      if (current.trim()) {
+        items.push(current.trim());
+      }
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.trim()) {
+    items.push(current.trim());
+  }
+
+  return items;
+}
+
+function parseCSharpRecordParameter(parameter) {
+  const withoutDefault = String(parameter).split('=')[0].trim();
+  const match = withoutDefault.match(/^(?:this\s+)?(?<type>.+?)\s+(?<name>@?[A-Za-z_]\w*)$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    type: match.groups.type.trim(),
+    name: match.groups.name.trim(),
+  };
+}
+
+function findMatchingBrace(value, startIndex) {
+  let depth = 0;
+  for (let index = startIndex; index < value.length; index += 1) {
+    if (value[index] === '{') {
+      depth += 1;
+    } else if (value[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function indentBody(value, indent) {
+  return String(value)
+    .split('\n')
+    .map((line) => `${indent}${line}`)
+    .join('\n');
 }
 
 function normalize(value) {
