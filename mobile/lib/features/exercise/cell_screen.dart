@@ -49,9 +49,10 @@ class _CellScreenState extends ConsumerState<CellScreen> {
   }
 
   void _runCode(String code) {
-    final result = ref
-        .read(sessionProvider(widget.exerciseId).notifier)
-        .run(widget.blockIndex, code);
+    final sessionNotifier =
+        ref.read(sessionProvider(widget.exerciseId).notifier);
+    sessionNotifier.activity();
+    final result = sessionNotifier.run(widget.blockIndex, code);
     setState(() => _result = result);
   }
 
@@ -68,6 +69,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
   }
 
   void _showHintSheet() {
+    ref.read(sessionProvider(widget.exerciseId).notifier).activity();
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceRaised,
@@ -128,9 +130,14 @@ class _CellScreenState extends ConsumerState<CellScreen> {
                     key: const Key('hint-reveal-more'),
                     label: 'Gợi ý rõ hơn',
                     icon: Icons.lightbulb,
-                    onPressed: () => ref
-                        .read(progressProvider.notifier)
-                        .useHint(widget.exerciseId, _block.id),
+                    onPressed: () {
+                      ref
+                          .read(sessionProvider(widget.exerciseId).notifier)
+                          .activity();
+                      ref
+                          .read(progressProvider.notifier)
+                          .useHint(widget.exerciseId, _block.id);
+                    },
                   ),
               ],
             ),
@@ -231,18 +238,22 @@ class _CellScreenState extends ConsumerState<CellScreen> {
     // phím ký hiệu > nút Run — đề bài/block đã xong được phép co lại/cuộn.
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    final promptScroll = SingleChildScrollView(
+    // ListView (không phải SingleChildScrollView+Column) vì cần shrinkWrap:
+    // co lại theo nội dung khi constraints là loose (nhánh bàn phím đóng,
+    // xem ConstrainedBox bên dưới) — không đổi hành vi ở nhánh bàn phím mở
+    // vì Expanded(flex:1) đưa xuống constraints tight, shrinkWrap không có
+    // tác dụng khi min == max (INV-05).
+    final promptScroll = ListView(
+      key: const Key('cell-prompt-scroll'),
+      shrinkWrap: true,
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < widget.blockIndex; i++)
-            _DoneBlockPreview(block: exercise.blocks[i]),
-          if (widget.blockIndex > 0) const SizedBox(height: AppSpace.s4),
-          Text(block.prompt, style: AppText.body),
-          const SizedBox(height: AppSpace.s2),
-        ],
-      ),
+      children: [
+        for (var i = 0; i < widget.blockIndex; i++)
+          _DoneBlockPreview(block: exercise.blocks[i]),
+        if (widget.blockIndex > 0) const SizedBox(height: AppSpace.s4),
+        Text(block.prompt, style: AppText.body),
+        const SizedBox(height: AppSpace.s2),
+      ],
     );
 
     final codeInput = CodeInput(
@@ -280,7 +291,7 @@ class _CellScreenState extends ConsumerState<CellScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpace.s4,
-                  vertical: AppSpace.s2,
+                  vertical: AppSpace.s1,
                 ),
                 child: ThinProgressBar(value: widget.blockIndex / total),
               ),
@@ -291,14 +302,48 @@ class _CellScreenState extends ConsumerState<CellScreen> {
               // phím ký hiệu ngay trên bàn phím.
               Expanded(flex: 1, child: promptScroll),
               Expanded(flex: 3, child: codeInput),
-            ] else ...[
-              Expanded(child: promptScroll),
-              SizedBox(height: 200, child: codeInput),
-            ],
+            ] else
+              // Đề bài + block đã xong tối đa 25% chiều cao còn lại, NHƯNG
+              // editor (khung viền 'code-input-border' của T-03 + thanh gợi
+              // ý/phím ký hiệu ~96dp bên dưới nó) luôn được ưu tiên tối
+              // thiểu ~300dp tổng — đề bài co lại/cuộn nhường chỗ khi máy
+              // nhỏ không đủ cho cả hai. Thay cho SizedBox(200) cố định cũ
+              // (từng làm editor quá thấp, và ở máy rất nhỏ còn thấp hơn cả
+              // 200 nếu chỉ cap theo % — xem cell_layout_test.dart).
+              //
+              // Lưu ý (báo cáo T-02): ở 360x640 với block có title dài (vd
+              // 'Vòng lặp theo bước size'), ScreenHeader không giới hạn
+              // maxLines nên title tự xuống dòng, header phình tới ~189dp
+              // (so với ~84dp một dòng) — phần lớn "chỗ nhường" ở máy nhỏ
+              // là để bù cho phần phình này, không sửa được từ file này
+              // (ScreenHeader thuộc widgets.dart, ngoài phạm vi T-02).
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final avail = constraints.maxHeight;
+                    const minCodeInputHeight = 300.0;
+                    final promptCap = (avail - minCodeInputHeight).clamp(
+                      0.0,
+                      avail * 0.25,
+                    );
+                    return Column(
+                      children: [
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: promptCap),
+                          child: promptScroll,
+                        ),
+                        Expanded(child: codeInput),
+                      ],
+                    );
+                  },
+                ),
+              ),
             Padding(
-              padding: EdgeInsets.symmetric(
+              // s1 cả hai nhánh (trước đây s2 khi bàn phím đóng) — nhường
+              // thêm vài dp cho editor trên máy nhỏ (xem cell_layout_test).
+              padding: const EdgeInsets.symmetric(
                 horizontal: AppSpace.s4,
-                vertical: keyboardOpen ? AppSpace.s1 : AppSpace.s2,
+                vertical: AppSpace.s1,
               ),
               child: Row(
                 children: [
@@ -384,9 +429,10 @@ class _CompactHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: onBack,
-            child: const Icon(Icons.arrow_back, size: 20),
+          IconButton(
+            onPressed: onBack,
+            tooltip: 'Quay lại',
+            icon: const Icon(Icons.arrow_back, size: 20),
           ),
           const SizedBox(width: AppSpace.s2),
           Expanded(

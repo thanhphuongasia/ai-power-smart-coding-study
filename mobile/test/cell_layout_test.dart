@@ -89,6 +89,43 @@ void main() {
           expect(tester.getRect(chip).bottom, lessThanOrEqualTo(visibleBottom),
               reason: 'chip gợi ý bị bàn phím che');
 
+          // T-02: bàn phím đóng — editor không còn bị ép cao đúng 200dp cố
+          // định (từng quá thấp trên máy nhỏ). AC (orchestrator, sau khi
+          // phát hiện 45% màn hình không khả thi ở 360x640 — ScreenHeader
+          // wrap title dài ăn hết dư địa, xem cell_screen.dart): khung viền
+          // editor ('code-input-border', T-03) phải (a) cao ≥ 200dp — mức
+          // sàn cũ (SizedBox(200)); (b) cao HƠN vùng đề bài
+          // ('cell-prompt-scroll'); (c) không overflow, Run/chip vẫn thấy
+          // được (đã kiểm ở trên).
+          if (inset == 0) {
+            final border = find.byKey(const Key('code-input-border'));
+            expect(border, findsOneWidget, reason: 'thiếu khung viền editor');
+            final borderHeight = tester.getRect(border).height;
+
+            final prompt = find.byKey(const Key('cell-prompt-scroll'));
+            expect(prompt, findsOneWidget, reason: 'thiếu vùng đề bài');
+            final promptHeight = tester.getRect(prompt).height;
+
+            // Số đo cho báo cáo T-02, không phải log sản phẩm.
+            // ignore: avoid_print
+            print(
+              'T-02 layout $label: editor=$borderHeight '
+              'prompt=$promptHeight (màn hình=${size.height})',
+            );
+
+            expect(
+              borderHeight,
+              greaterThanOrEqualTo(200.0),
+              reason: 'editor bàn phím đóng phải cao ≥ 200dp (mức sàn cũ) — '
+                  'label=$label',
+            );
+            expect(
+              borderHeight,
+              greaterThan(promptHeight),
+              reason: 'editor phải cao hơn vùng đề bài — label=$label',
+            );
+          }
+
           await _drainEditorTimer(tester);
         },
       );
