@@ -1,0 +1,8 @@
+# DEVIATIONS (append-only)
+
+- Plan: giữ `google_fonts` · Thực tế: google_fonts tải font qua mạng lúc chạy, test không có mạng dễ fail, trái hướng offline-first · Quyết định: bundle TTF (Google Fonts, full glyph) vào mobile/assets/fonts, bỏ dependency · Duyệt: orchestrator (AC không đổi)
+- Plan: T-00 chỉ scaffold · Thực tế: thêm INTERFACES.md chốt chữ ký giữa các task để giảm lệch ở mối nối · Quyết định: thêm file, không đổi task/ownership · Duyệt: orchestrator
+- Plan: split-chunks block 3 = for + append (2 dòng) · Thực tế: T-01 thêm block 5 giả (trùng 'return chunks', code chết sau return) để đủ 5 block; contract của orchestrator mơ hồ · Quyết định: T-01b tách 5 block thật def/chunks=[]/for/append/return (khớp mockup B3–B5); e2e T-06 gõ block 3 = dòng for · Duyệt: orchestrator (AC không đổi)
+- Plan: overtype qua CodeModifier (T-03 contract) · Thực tế: modifier trả text không đổi làm package ném RangeError (code.dart:301) · Quyết định: overtype/xoá cặp làm trong override set value của controller con · Duyệt: orchestrator (AC không đổi), reviewer T-03 kiểm lại
+- Plan: T-05 không bắt buộc test (contract) · Thực tế: review chỉ ra 3 màn không có test nào bảo vệ INV-02 · Quyết định: T-05b thêm test/browse_screens_test.dart (file mới ngoài owned ban đầu) · Duyệt: orchestrator (lỗi contract của orchestrator, AC không đổi)
+- Plan: E2E bước 3 chụp màn qua Chrome headless 390px · Thực tế: Chrome có độ rộng tối thiểu ~500px → ảnh 390 bị cắt, không phản ánh layout thật · Quyết định: kiểm layout màn nhỏ + bàn phím bằng widget test kích thước thật (360x640, viewInsets 300) · Duyệt: orchestrator
