@@ -78,6 +78,7 @@ ThemeData buildAppTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     scaffoldBackgroundColor: AppColors.surface,
+    focusColor: AppColors.primary,
     colorScheme: ColorScheme.dark(
       surface: AppColors.surface,
       surfaceContainer: AppColors.surfaceRaised,
@@ -101,6 +102,14 @@ ThemeData buildAppTheme() {
     ),
     appBarTheme: const AppBarTheme(
       elevation: 0,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      focusedBorder: const OutlineInputBorder(
+        borderSide: BorderSide(
+          color: AppColors.primary,
+          width: 2,
+        ),
+      ),
     ),
     textTheme: TextTheme(
       displayLarge: AppText.display.copyWith(color: AppColors.ink),

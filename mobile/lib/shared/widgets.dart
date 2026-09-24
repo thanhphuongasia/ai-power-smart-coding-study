@@ -19,9 +19,9 @@ class SurfaceCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: highlighted ? AppColors.surfaceRaised : AppColors.surface,
+          color: AppColors.surfaceRaised,
           border: Border.all(
-            color: AppColors.outline,
+            color: highlighted ? AppColors.primary : AppColors.outline,
             width: 1,
           ),
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -268,6 +268,7 @@ class PrimaryButton extends StatelessWidget {
       icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
       label: Text(label),
       style: ElevatedButton.styleFrom(
+        elevation: 0,
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
         padding: const EdgeInsets.symmetric(
@@ -337,6 +338,7 @@ class HintButton extends StatelessWidget {
       icon: const Icon(Icons.lightbulb),
       label: Text(label),
       style: ElevatedButton.styleFrom(
+        elevation: 0,
         backgroundColor: AppColors.accent,
         foregroundColor: AppColors.onAccent,
         padding: const EdgeInsets.symmetric(

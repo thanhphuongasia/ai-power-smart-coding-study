@@ -316,5 +316,109 @@ void main() {
       );
       expect(find.byType(HintButton), findsOneWidget);
     });
+
+    testWidgets('PrimaryButton has elevation 0', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: const Scaffold(
+            body: PrimaryButton(label: 'Test'),
+          ),
+        ),
+      );
+      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton).first);
+      expect(button.style?.elevation?.resolve({}), 0);
+    });
+
+    testWidgets('HintButton has elevation 0', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: const Scaffold(
+            body: HintButton(used: 0),
+          ),
+        ),
+      );
+      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton).last);
+      expect(button.style?.elevation?.resolve({}), 0);
+    });
+
+    testWidgets('SurfaceCard default has surfaceRaised background', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final container = tester.widget<Container>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration as BoxDecoration;
+      expect(decoration.color, AppColors.surfaceRaised);
+    });
+
+    testWidgets('SurfaceCard default has outline border', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final container = tester.widget<Container>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration as BoxDecoration;
+      final border = decoration.border as Border;
+      expect(border.top.color, AppColors.outline);
+      expect(border.top.width, 1);
+    });
+
+    testWidgets('SurfaceCard highlighted has primary border', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: SurfaceCard(
+              highlighted: true,
+              child: const Text('Test'),
+            ),
+          ),
+        ),
+      );
+      final container = tester.widget<Container>(
+        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration as BoxDecoration;
+      final border = decoration.border as Border;
+      expect(border.top.color, AppColors.primary);
+      expect(border.top.width, 1);
+    });
+  });
+
+  group('Focus ring', () {
+    test('buildAppTheme has focusColor set to primary', () {
+      final theme = buildAppTheme();
+      expect(theme.focusColor, AppColors.primary);
+    });
+
+    test('buildAppTheme has inputDecorationTheme with focused border', () {
+      final theme = buildAppTheme();
+      expect(theme.inputDecorationTheme.focusedBorder, isNotNull);
+    });
+
+    test('inputDecorationTheme focused border has 2px primary width', () {
+      final theme = buildAppTheme();
+      final border = theme.inputDecorationTheme.focusedBorder as OutlineInputBorder;
+      expect(border.borderSide.width, 2);
+      expect(border.borderSide.color, AppColors.primary);
+    });
   });
 }
