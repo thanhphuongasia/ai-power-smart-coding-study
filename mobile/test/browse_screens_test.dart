@@ -114,7 +114,8 @@ void main() {
 
       // Trạng thái ban đầu: split-chunks 2/5 block; theme rag tổng 11 block,
       // đã xong 4 (split-chunks 2 + clean-text 2 + overlap-chunks 0).
-      expect(find.text('Block 2/5'), findsOneWidget);
+      expect(find.text('Tiếp tục Block 3/5'), findsOneWidget);
+      expect(find.text('Đã xong 2/5'), findsOneWidget);
       expect(find.text('4/11 block'), findsOneWidget);
 
       container.read(progressProvider.notifier).markBlockPassed(
@@ -123,7 +124,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Block 3/5'), findsOneWidget);
+      expect(find.text('Tiếp tục Block 4/5'), findsOneWidget);
+      expect(find.text('Đã xong 3/5'), findsOneWidget);
       expect(find.text('5/11 block'), findsOneWidget);
     },
   );

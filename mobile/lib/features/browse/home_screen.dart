@@ -71,7 +71,12 @@ class _ContinueCard extends StatelessWidget {
                   Text(exercise.title, style: AppText.title),
                   const SizedBox(height: AppSpace.s1),
                   Text(
-                    'Block $completed/$total',
+                    'Tiếp tục Block ${completed + 1}/$total',
+                    style: AppText.body,
+                  ),
+                  const SizedBox(height: AppSpace.s1),
+                  Text(
+                    'Đã xong $completed/$total',
                     style: AppText.body.copyWith(color: AppColors.inkMuted),
                   ),
                   const SizedBox(height: AppSpace.s2),
