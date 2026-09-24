@@ -43,3 +43,6 @@ sonnet-5: crew-impl-standard (T-01, T-04, T-05, T-06 + correction) và mọi cre
 
 ## Backlog bổ sung
 - SEAM Minor: biến lặp khai trong CHÍNH block 2 dòng (vd `i` ở overlap-chunks-b2) không được gợi ý ở dòng 2 — nên cho engine quét cả text đang gõ, không chỉ block trước
+
+PR: #4 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/4
+Phase 2: #5 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/5
