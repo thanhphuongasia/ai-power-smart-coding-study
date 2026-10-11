@@ -174,8 +174,8 @@
           {
             "from": "FlightController",
             "to": "FlightService",
-            "kind": "dependency",
-            "label": "gọi service thêm/xoá chuyến",
+            "kind": "association",
+            "label": "giữ service (tiêm qua __init__), gọi thêm/xoá chuyến",
             "via": [
               "add",
               "delete"
@@ -185,7 +185,7 @@
             "from": "FlightController",
             "to": "Flight",
             "kind": "dependency",
-            "label": "tạo Flight từ payload",
+            "label": "tạo chuyến từ payload (bản rút gọn dùng SimpleNamespace)",
             "via": [
               "add"
             ]
@@ -194,7 +194,7 @@
             "from": "BookingService",
             "to": "Flight",
             "kind": "association",
-            "label": "trừ/hoàn ghế của chuyến (booked)",
+            "label": "theo mã chuyến: free[mã] = số ghế trống (bản rút gọn không đụng Flight.booked)",
             "via": [
               "book",
               "cancel"
@@ -204,10 +204,8 @@
             "from": "SeatMap",
             "to": "Flight",
             "kind": "association",
-            "label": "sơ đồ ghế của một chuyến",
-            "via": [
-              "assign_seat"
-            ]
+            "label": "sơ đồ ghế của một chuyến (thiết kế; bản rút gọn chưa giữ mã chuyến)",
+            "via": []
           }
         ]
       },

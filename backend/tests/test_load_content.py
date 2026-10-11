@@ -218,6 +218,19 @@ def test_bad_diagram_rejected(db_session, mutate, msg):
         load_content(db_session, d)
 
 
+def test_relation_key_must_be_from_not_from_(db_session):
+    d = small()
+    g = diagram()
+    g["relations"][0]["from_"] = g["relations"][0].pop("from")
+    d["themes"][0]["diagram"] = g
+    with pytest.raises(ValueError, match="from"):
+        load_content(db_session, d)
+    try:
+        load_content(db_session, d)
+    except ValueError as exc:
+        assert "None" not in str(exc)  # chặn ở schema, không phải "quan hệ None → …"
+
+
 def test_diagram_key_required(db_session):
     d = small()
     del d["themes"][0]["diagram"]

@@ -87,9 +87,11 @@ class DiagramClass(_Strict):
 
 
 class DiagramRelation(_Strict):
-    """`via`: method của `from` tác động lên `to`."""
+    """`via`: method của `from` tác động lên `to`.
 
-    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    Chỉ nhận đúng key `from` (không populate_by_name): `from_` là key lạ → bị chặn ngay ở schema,
+    không lọt xuống bước kiểm quan hệ với endpoint None.
+    """
 
     from_: StrictStr = Field(alias="from")
     to: StrictStr

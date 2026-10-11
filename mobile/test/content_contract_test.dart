@@ -11,6 +11,21 @@ import 'package:smart_coding_study/domain/models.dart';
 
 import 'support/content_fixture.dart';
 
+/// Thân của `class [name]` (dòng bắt đầu ở cột 0) tới dòng kế tiếp không rỗng
+/// nằm ở cột 0; null nếu code không có lớp đó.
+String? _classBody(String code, String name) {
+  final lines = code.split('\n');
+  final head = RegExp('^class $name\\b');
+  final start = lines.indexWhere(head.hasMatch);
+  if (start < 0) return null;
+  var end = start + 1;
+  while (end < lines.length &&
+      (lines[end].trim().isEmpty || lines[end].startsWith(RegExp(r'\s')))) {
+    end++;
+  }
+  return lines.sublist(start, end).join('\n');
+}
+
 void main() {
   final rawExercises = contentJson['exercises'] as Map<String, dynamic>;
   final allExercises = testContent.uniqueExercises();
@@ -377,23 +392,29 @@ void main() {
                 if (testContent.locateExercise(e.id).theme.id == theme.id)
                   (e: e, code: mergedCode(e)),
             ];
-            if (!themeCodes.any((x) => x.e.className == name)) continue;
-            final codes = [
-              for (final x in themeCodes)
-                if (x.e.className == name || x.code.contains('class $name'))
-                  x.code,
+            // Thân `class Name` chính xác (không nhầm `class NameService`).
+            final bodies = [
+              for (final x in themeCodes) ?_classBody(x.code, name),
             ];
+            final methods = (cls['methods'] as List).cast<String>();
+            if (methods.isNotEmpty) {
+              expect(
+                bodies,
+                isNotEmpty,
+                reason: '$name: không bài nào chứa `class $name`',
+              );
+            }
             for (final a in cls['attributes'] as List) {
               final attr = (a as Map<String, dynamic>)['name'] as String;
               expect(
-                codes.any((c) => c.contains('self.$attr =')),
+                bodies.any((c) => c.contains('self.$attr =')),
                 isTrue,
                 reason: '$name.$attr: không bài nào có "self.$attr ="',
               );
             }
             for (final m in cls['methods'] as List) {
               expect(
-                codes.any((c) => c.contains('def $m(')),
+                bodies.any((c) => c.contains('def $m(')),
                 isTrue,
                 reason: '$name.$m(): không bài nào có "def $m("',
               );

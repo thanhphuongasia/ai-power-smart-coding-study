@@ -6,3 +6,4 @@
 | 2026-10-11-content-api-postgres | Nội dung học ở Postgres + app tải qua API (#10, stacked PR #9) | done (PR) |
 | 2026-10-11-deploy-vps-web | Deploy backend + web lên VPS (link test) | done (PR) |
 | 2026-10-11-project-tree-airline | Module lồng nhau + bài method + seed Airline (#16) | done (PR) |
+| 2026-10-11-class-diagram | Sơ đồ class trong tab Challenge (#21) | done (main) |

@@ -1,0 +1,6 @@
+ M mobile/lib/domain/models.dart
+ M mobile/test/content_json_test.dart
+ M planning/crew/_index.md
+?? mobile/lib/domain/class_scope.dart
+?? mobile/test/class_scope_test.dart
+?? planning/crew/2026-10-11-class-diagram/
