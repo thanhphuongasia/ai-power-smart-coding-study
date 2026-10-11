@@ -176,6 +176,91 @@
               "__init__",
               "assign_seat"
             ]
+          },
+          {
+            "name": "Notifier",
+            "file": "notifications/notifier.py",
+            "attributes": [
+              {
+                "name": "templates",
+                "type": "dict[str, str]",
+                "group": "core"
+              },
+              {
+                "name": "sent",
+                "type": "list[str]",
+                "group": "core"
+              },
+              {
+                "name": "seen",
+                "type": "set[str]",
+                "group": "support"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "notify"
+            ]
+          },
+          {
+            "name": "Outbox",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "state",
+                "type": "dict",
+                "group": "core"
+              },
+              {
+                "name": "pending",
+                "type": "list[dict]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "save_with_event"
+            ]
+          },
+          {
+            "name": "OutboxRelay",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "outbox",
+                "type": "Outbox",
+                "group": "core"
+              },
+              {
+                "name": "broker",
+                "type": "Broker",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "relay"
+            ]
+          },
+          {
+            "name": "Broker",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "fail_on",
+                "type": "set[str]",
+                "group": "support"
+              },
+              {
+                "name": "published",
+                "type": "list[dict]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "publish"
+            ]
           }
         ],
         "relations": [
@@ -247,6 +332,38 @@
             "kind": "association",
             "label": "sơ đồ ghế của một chuyến (thiết kế; bản rút gọn chưa giữ mã chuyến)",
             "via": []
+          },
+          {
+            "from": "ReservationService",
+            "to": "Notifier",
+            "kind": "association",
+            "label": "quan hệ thiết kế: huỷ/đổi đặt chỗ phát sự kiện để Notifier gửi tin (bản rút gọn của ReservationService không gọi Notifier)",
+            "via": []
+          },
+          {
+            "from": "ReservationService",
+            "to": "Outbox",
+            "kind": "association",
+            "label": "quan hệ thiết kế: ghi đặt chỗ và sự kiện cùng transaction qua Outbox (bản rút gọn không gọi Outbox)",
+            "via": []
+          },
+          {
+            "from": "OutboxRelay",
+            "to": "Outbox",
+            "kind": "aggregation",
+            "label": "giữ outbox, đọc pending theo thứ tự và bỏ sự kiện sau khi publish xong",
+            "via": [
+              "relay"
+            ]
+          },
+          {
+            "from": "OutboxRelay",
+            "to": "Broker",
+            "kind": "association",
+            "label": "publish từng sự kiện lên broker, dừng khi broker lỗi",
+            "via": [
+              "relay"
+            ]
           }
         ]
       },
@@ -346,8 +463,39 @@
                 }
               ],
               "modules": []
+            },
+            {
+              "id": "airline-notification",
+              "name": "Notification — thông báo",
+              "description": "Gửi thông báo cho khách khi huỷ hoặc đổi đặt chỗ, bỏ qua sự kiện giao trùng.",
+              "files": [
+                {
+                  "id": "airline-notifier-py",
+                  "name": "notifications/notifier.py",
+                  "exercise_ids": [
+                    "notifier-notify"
+                  ]
+                }
+              ],
+              "modules": []
             }
           ]
+        },
+        {
+          "id": "airline-reliability",
+          "name": "Reliability — chịu lỗi",
+          "description": "Outbox: ghi thay đổi và sự kiện cùng transaction, relay publish sau để huỷ/đổi đặt chỗ không mất thông báo hay hoàn tiền.",
+          "files": [
+            {
+              "id": "airline-outbox-py",
+              "name": "reliability/outbox.py",
+              "exercise_ids": [
+                "outbox-save",
+                "outbox-relay"
+              ]
+            }
+          ],
+          "modules": []
         }
       ]
     },
@@ -444,8 +592,88 @@
         "social"
       ],
       "diagram": {
-        "classes": [],
-        "relations": []
+        "classes": [
+          {
+            "name": "Outbox",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "state",
+                "type": "dict",
+                "group": "core"
+              },
+              {
+                "name": "pending",
+                "type": "list[dict]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "save_with_event"
+            ]
+          },
+          {
+            "name": "OutboxRelay",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "outbox",
+                "type": "Outbox",
+                "group": "core"
+              },
+              {
+                "name": "broker",
+                "type": "Broker",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "relay"
+            ]
+          },
+          {
+            "name": "Broker",
+            "file": "reliability/outbox.py",
+            "attributes": [
+              {
+                "name": "fail_on",
+                "type": "set[str]",
+                "group": "support"
+              },
+              {
+                "name": "published",
+                "type": "list[dict]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "publish"
+            ]
+          }
+        ],
+        "relations": [
+          {
+            "from": "OutboxRelay",
+            "to": "Outbox",
+            "kind": "aggregation",
+            "label": "giữ outbox, đọc pending theo thứ tự và bỏ sự kiện sau khi publish xong",
+            "via": [
+              "relay"
+            ]
+          },
+          {
+            "from": "OutboxRelay",
+            "to": "Broker",
+            "kind": "association",
+            "label": "publish từng sự kiện lên broker, dừng khi broker lỗi",
+            "via": [
+              "relay"
+            ]
+          }
+        ]
       },
       "topics": [
         {
@@ -458,6 +686,22 @@
               "name": "post.py",
               "exercise_ids": [
                 "like-post"
+              ]
+            }
+          ],
+          "modules": []
+        },
+        {
+          "id": "feed-reliability",
+          "name": "Reliability — chịu lỗi",
+          "description": "Outbox: đăng bài hoặc thích bài ghi sự kiện cùng transaction, relay publish sau để người theo dõi không mất thông báo.",
+          "files": [
+            {
+              "id": "feed-outbox-py",
+              "name": "reliability/outbox.py",
+              "exercise_ids": [
+                "outbox-save",
+                "outbox-relay"
               ]
             }
           ],
@@ -2733,6 +2977,532 @@
             "call": "sm.taken['1A']",
             "expect": {
               "return": "An"
+            }
+          }
+        ]
+      }
+    },
+    "notifier-notify": {
+      "id": "notifier-notify",
+      "title": "Gửi thông báo đặt chỗ và bỏ qua sự kiện trùng",
+      "class_name": "Notifier",
+      "function_name": "notify",
+      "params": [
+        "event"
+      ],
+      "template": "class Notifier:\n    def __init__(self):\n        self.templates = {\n            \"cancelled\": \"Đặt chỗ {reservation} đã huỷ, hoàn {amount}đ\",\n            \"seats_changed\": \"Đặt chỗ {reservation} đã đổi số ghế, chênh lệch {amount}đ\",\n            \"flight_changed\": \"Đặt chỗ {reservation} đã đổi chuyến, chênh lệch {amount}đ\",\n        }\n        self.sent = []  # các tin đã gửi, theo thứ tự\n        self.seen = set()  # id sự kiện đã xử lý\n\n    def notify(self, event):\n        # event: {\"id\": ..., \"type\": ..., \"reservation\": ..., \"amount\": ...}\n        if event[\"type\"] not in self.templates:\n            raise ValueError(\"Loại sự kiện không hỗ trợ\")\n        # TODO A\n            # TODO B\n        message = self.templates[event[\"type\"]].format(\n            reservation=event[\"reservation\"], amount=event[\"amount\"]\n        )\n        self.sent.append(message)\n        # TODO C\n        return True",
+      "challenge": {
+        "statement": "Viết phần giữa của notify(self, event): nếu id của sự kiện đã nằm trong self.seen thì không gửi gì và trả về False; ngược lại (code có sẵn) dựng tin, thêm vào self.sent, rồi ghi id vào self.seen và trả True. Loại sự kiện lạ đã được chặn bằng ValueError ở phía trên.",
+        "motivation": "Khi dùng outbox, tin được giao ít nhất một lần: nếu relay chết sau khi publish nhưng trước khi xoá khỏi hàng đợi thì lần sau nó publish lại. Nếu phía nhận không khử trùng lặp, khách sẽ nhận hai tin 'đã hoàn tiền' cho một lần huỷ. Khử trùng lặp bằng id sự kiện (idempotent consumer) là nửa còn lại của outbox.",
+        "small": {
+          "caption": "Cùng một sự kiện tới hai lần",
+          "input": "n = Notifier()\nev = {'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000}\nprint(n.notify(ev), n.notify(ev), len(n.sent))",
+          "output": "True False 1",
+          "note": null
+        },
+        "project": {
+          "caption": "Huỷ đặt chỗ rồi relay giao lại tin sau sự cố",
+          "input": "n = Notifier()\nn.notify({'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000})\nn.notify({'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000})\nprint(n.sent)",
+          "output": "['Đặt chỗ R1 đã huỷ, hoàn 3000000đ']",
+          "note": "Hai sự kiện khác id cho cùng một đặt chỗ vẫn gửi hai tin; chỉ trùng id mới bị bỏ."
+        }
+      },
+      "blocks": [
+        {
+          "id": "notifier-notify-a",
+          "label": "A",
+          "title": "Phát hiện sự kiện đã xử lý",
+          "prompt": "Nếu id của sự kiện đã nằm trong self.seen...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if event[\"id\"] in self.seen:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Outbox giao tin ít nhất một lần (at-least-once): cùng một sự kiện có thể tới nhiều lần. Id sự kiện là khoá để nhận ra bản lặp.",
+          "hints": [
+            "Dùng toán tử in với self.seen.",
+            "Khoá là event[\"id\"], không phải mã đặt chỗ.",
+            "if event[\"id\"] in self.seen:"
+          ],
+          "vocab": [
+            "set",
+            "in"
+          ]
+        },
+        {
+          "id": "notifier-notify-b",
+          "label": "B",
+          "title": "Bỏ qua bản lặp",
+          "prompt": "...thì không gửi gì và trả về False.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "return False"
+          ],
+          "expected_output": "Đã bỏ qua.",
+          "explanation": "Trả False và dừng ngay, trước khi thêm vào self.sent, nên khách không nhận tin hai lần.",
+          "hints": [
+            "Hàm trả về cờ cho biết có gửi hay không.",
+            "Gửi mới trả True, bỏ qua thì trả ngược lại.",
+            "return False"
+          ],
+          "vocab": [
+            "return"
+          ]
+        },
+        {
+          "id": "notifier-notify-c",
+          "label": "C",
+          "title": "Đánh dấu đã xử lý",
+          "prompt": "Sau khi gửi, ghi nhớ id sự kiện vào self.seen.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.seen.add(event[\"id\"])"
+          ],
+          "expected_output": "Đã ghi nhớ.",
+          "explanation": "Chỉ đánh dấu sau khi đã gửi xong: nếu gửi lỗi mà đã đánh dấu, lần giao lại sẽ bị bỏ qua và mất tin.",
+          "hints": [
+            "Thêm phần tử vào set bằng add.",
+            "Phần tử là event[\"id\"].",
+            "self.seen.add(event[\"id\"])"
+          ],
+          "vocab": [
+            "set.add"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Notifier:\n    def __init__(self):\n        self.templates = {\n            \"cancelled\": \"Đặt chỗ {reservation} đã huỷ, hoàn {amount}đ\",\n            \"seats_changed\": \"Đặt chỗ {reservation} đã đổi số ghế, chênh lệch {amount}đ\",\n            \"flight_changed\": \"Đặt chỗ {reservation} đã đổi chuyến, chênh lệch {amount}đ\",\n        }\n        self.sent = []  # các tin đã gửi, theo thứ tự\n        self.seen = set()  # id sự kiện đã xử lý\n\n    def notify(self, event):\n        # event: {\"id\": ..., \"type\": ..., \"reservation\": ..., \"amount\": ...}\n        if event[\"type\"] not in self.templates:\n            raise ValueError(\"Loại sự kiện không hỗ trợ\")\n        if event[\"id\"] in self.seen:\n            return False\n        message = self.templates[event[\"type\"]].format(\n            reservation=event[\"reservation\"], amount=event[\"amount\"]\n        )\n        self.sent.append(message)\n        self.seen.add(event[\"id\"])\n        return True",
+        "cases": [
+          {
+            "steps": [
+              "n = Notifier()"
+            ],
+            "call": "[n.notify({'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000}), n.sent]",
+            "expect": {
+              "return": [
+                true,
+                [
+                  "Đặt chỗ R1 đã huỷ, hoàn 3000000đ"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "n = Notifier()",
+              "ev = {'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000}",
+              "n.notify(ev)"
+            ],
+            "call": "[n.notify(ev), n.sent]",
+            "expect": {
+              "return": [
+                false,
+                [
+                  "Đặt chỗ R1 đã huỷ, hoàn 3000000đ"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "n = Notifier()",
+              "n.notify({'id': 'e1', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000})"
+            ],
+            "call": "[n.notify({'id': 'e2', 'type': 'seats_changed', 'reservation': 'R2', 'amount': 1500000}), n.sent]",
+            "expect": {
+              "return": [
+                true,
+                [
+                  "Đặt chỗ R1 đã huỷ, hoàn 3000000đ",
+                  "Đặt chỗ R2 đã đổi số ghế, chênh lệch 1500000đ"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "n = Notifier()"
+            ],
+            "call": "n.notify({'id': 'e9', 'type': 'refunded', 'reservation': 'R1', 'amount': 0})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "n = Notifier()",
+              "n.notify({'id': 'e1', 'type': 'flight_changed', 'reservation': 'R1', 'amount': 500000})"
+            ],
+            "call": "[n.notify({'id': 'e2', 'type': 'flight_changed', 'reservation': 'R1', 'amount': 500000}), len(n.sent)]",
+            "expect": {
+              "return": [
+                true,
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "outbox-save": {
+      "id": "outbox-save",
+      "title": "Ghi dữ liệu và sự kiện trong cùng một transaction",
+      "class_name": "Outbox",
+      "function_name": "save_with_event",
+      "params": [
+        "key",
+        "value",
+        "event"
+      ],
+      "template": "class Outbox:\n    def __init__(self):\n        self.state = {}  # dữ liệu nghiệp vụ (bảng chính)\n        self.pending = []  # sự kiện chờ publish (bảng outbox)\n\n    def save_with_event(self, key, value, event):\n        # Mô phỏng MỘT transaction: hoặc ghi cả hai, hoặc không ghi gì.\n        # TODO A\n            # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết phần thân của save_with_event(self, key, value, event): nếu event thiếu \"id\" hoặc \"type\" thì raise ValueError và KHÔNG ghi gì cả (cả self.state lẫn self.pending giữ nguyên); ngược lại gán self.state[key] = value và thêm event vào self.pending. Hai thao tác này mô phỏng một transaction.",
+        "motivation": "Cần outbox khi một thao tác vừa đổi dữ liệu của mình vừa phải báo cho hệ thống khác. Ví dụ: huỷ đặt chỗ thì ghi DB rồi phải gửi thông báo và hoàn tiền qua hệ thống khác. Nếu app chết giữa lúc commit và lúc publish thì tin biến mất; nếu publish trước rồi commit lỗi thì khách nhận thông báo 'ma' cho việc chưa xảy ra. Cách chữa: ghi thay đổi và sự kiện vào cùng một transaction, rồi một relay publish sau. Bảng tin Twitter cũng vậy: đăng bài hoặc thích bài phải báo cho người theo dõi mà không được mất tin.",
+        "small": {
+          "caption": "Ghi một lần huỷ kèm sự kiện",
+          "input": "o = Outbox()\no.save_with_event('R1', 'cancelled', {'id': 'e1', 'type': 'cancelled'})\nprint(o.state, len(o.pending))",
+          "output": "{'R1': 'cancelled'} 1",
+          "note": null
+        },
+        "project": {
+          "caption": "Sự kiện hỏng thì không để lại dấu vết",
+          "input": "o = Outbox()\ntry:\n    o.save_with_event('R1', 'cancelled', {'type': 'cancelled'})\nexcept ValueError:\n    pass\nprint(o.state, o.pending)",
+          "output": "{} []",
+          "note": "State đổi mà sự kiện không ghi được (hoặc ngược lại) chính là lỗi outbox sinh ra để tránh."
+        }
+      },
+      "blocks": [
+        {
+          "id": "outbox-save-a",
+          "label": "A",
+          "title": "Kiểm sự kiện trước khi ghi",
+          "prompt": "Nếu event thiếu \"id\" hoặc thiếu \"type\"...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if \"id\" not in event or \"type\" not in event:",
+            "if not (\"id\" in event and \"type\" in event):"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Kiểm hết trước khi ghi gì cả: đã ghi state rồi mới phát hiện event hỏng thì không thể 'rollback' bằng tay.",
+          "hints": [
+            "Dùng not in cho từng khoá.",
+            "Nối hai điều kiện bằng or.",
+            "if \"id\" not in event or \"type\" not in event:"
+          ],
+          "vocab": [
+            "dict",
+            "not in"
+          ]
+        },
+        {
+          "id": "outbox-save-b",
+          "label": "B",
+          "title": "Từ chối ghi",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Sự kiện thiếu id hoặc type\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "Ném lỗi trước khi đụng self.state và self.pending, nên transaction coi như chưa từng xảy ra.",
+          "hints": [
+            "raise ValueError(...)",
+            "Thông báo nói rõ thiếu id hoặc type.",
+            "raise ValueError(\"Sự kiện thiếu id hoặc type\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "outbox-save-c",
+          "label": "C",
+          "title": "Ghi state và sự kiện cùng lúc",
+          "prompt": "Gán self.state[key] = value rồi thêm event vào self.pending.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.state[key] = value\nself.pending.append(event)",
+            "self.pending.append(event)\nself.state[key] = value"
+          ],
+          "expected_output": "Đã ghi cả hai.",
+          "explanation": "Hai thao tác nằm trong cùng một transaction: không có khoảnh khắc nào state đã đổi mà sự kiện chưa được ghi. Việc publish để relay làm sau.",
+          "hints": [
+            "Hai dòng: một vào state, một vào pending.",
+            "Dùng dict gán và list.append.",
+            "self.state[key] = value\nself.pending.append(event)"
+          ],
+          "vocab": [
+            "transaction",
+            "list.append"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Outbox:\n    def __init__(self):\n        self.state = {}  # dữ liệu nghiệp vụ (bảng chính)\n        self.pending = []  # sự kiện chờ publish (bảng outbox)\n\n    def save_with_event(self, key, value, event):\n        # Mô phỏng MỘT transaction: hoặc ghi cả hai, hoặc không ghi gì.\n        if \"id\" not in event or \"type\" not in event:\n            raise ValueError(\"Sự kiện thiếu id hoặc type\")\n        self.state[key] = value\n        self.pending.append(event)",
+        "cases": [
+          {
+            "steps": [
+              "o = Outbox()"
+            ],
+            "call": "[o.save_with_event('R1', 'cancelled', {'id': 'e1', 'type': 'cancelled'}), o.state, o.pending]",
+            "expect": {
+              "return": [
+                null,
+                {
+                  "R1": "cancelled"
+                },
+                [
+                  {
+                    "id": "e1",
+                    "type": "cancelled"
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()"
+            ],
+            "call": "o.save_with_event('R1', 'cancelled', {'type': 'cancelled'})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()"
+            ],
+            "call": "o.save_with_event('R1', 'cancelled', {'id': 'e1'})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "try:\n    o.save_with_event('R1', 'cancelled', {'type': 'cancelled'})\nexcept ValueError:\n    pass"
+            ],
+            "call": "[o.state, o.pending]",
+            "expect": {
+              "return": [
+                {},
+                []
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "o.save_with_event('R1', 'cancelled', {'id': 'e1', 'type': 'cancelled'})"
+            ],
+            "call": "[o.save_with_event('R2', 'seats_changed', {'id': 'e2', 'type': 'seats_changed'}), sorted(o.state), [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                null,
+                [
+                  "R1",
+                  "R2"
+                ],
+                [
+                  "e1",
+                  "e2"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "outbox-relay": {
+      "id": "outbox-relay",
+      "title": "Relay đẩy sự kiện từ outbox sang broker và thử lại khi lỗi",
+      "class_name": "OutboxRelay",
+      "function_name": "relay",
+      "params": [],
+      "template": "class Broker:\n    def __init__(self, fail_on=()):\n        self.fail_on = set(fail_on)  # id sự kiện sẽ làm broker \"sập\"\n        self.published = []\n\n    def publish(self, event):\n        if event[\"id\"] in self.fail_on:\n            raise RuntimeError(\"broker down\")\n        self.published.append(event)\n\n\nclass Outbox:\n    def __init__(self):\n        self.state = {}\n        self.pending = []\n\n    def save_with_event(self, key, value, event):\n        if \"id\" not in event or \"type\" not in event:\n            raise ValueError(\"Sự kiện thiếu id hoặc type\")\n        self.state[key] = value\n        self.pending.append(event)\n\n\nclass OutboxRelay:\n    def __init__(self, outbox, broker):\n        self.outbox = outbox\n        self.broker = broker\n\n    def relay(self):\n        count = 0\n        while self.outbox.pending:\n            try:\n                # TODO A\n                # TODO B\n            # TODO C\n                break\n            count += 1\n        return count",
+      "challenge": {
+        "statement": "Viết phần thân vòng lặp của relay(self): với mỗi sự kiện đầu hàng trong self.outbox.pending, publish lên self.broker, và CHỈ SAU KHI publish thành công mới bỏ nó khỏi pending. Nếu broker ném RuntimeError thì dừng (dòng break có sẵn), giữ nguyên sự kiện lỗi và mọi sự kiện sau nó theo đúng thứ tự. relay trả về số sự kiện đã publish.",
+        "motivation": "Relay là nửa còn lại của outbox: sau khi huỷ đặt chỗ (hoặc đăng bài, thích bài trên Twitter) đã ghi sự kiện vào pending, relay đọc và đẩy sang hệ thống thông báo/hoàn tiền. Broker có thể sập bất cứ lúc nào, nên relay phải xoá sự kiện sau khi publish xong, không phải trước; làm vậy sự kiện không bao giờ mất, đổi lại có thể bị giao lặp (nên phía nhận phải khử trùng lặp, như Notifier).",
+        "small": {
+          "caption": "Broker sập ở sự kiện thứ hai",
+          "input": "o = Outbox()\no.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'cancelled'}])\nb = Broker(fail_on=('e2',))\nprint(OutboxRelay(o, b).relay(), [e['id'] for e in o.pending])",
+          "output": "1 ['e2']",
+          "note": null
+        },
+        "project": {
+          "caption": "Broker hồi phục, relay chạy lại và không mất tin",
+          "input": "r = OutboxRelay(o, b)\nr.relay()\nb.fail_on.clear()\nprint(r.relay(), [e['id'] for e in b.published])",
+          "output": "2 ['e1', 'e2', 'e3']",
+          "note": "Với 3 sự kiện e1..e3 và broker sập ở e2: lần relay đầu publish e1, lần sau publish e2 rồi e3; không mất, không lặp."
+        }
+      },
+      "blocks": [
+        {
+          "id": "outbox-relay-a",
+          "label": "A",
+          "title": "Publish sự kiện đầu hàng",
+          "prompt": "Publish sự kiện đầu tiên của self.outbox.pending lên broker (chưa xoá nó).",
+          "indent_level": 4,
+          "accepted_answers": [
+            "self.broker.publish(self.outbox.pending[0])"
+          ],
+          "expected_output": "Đã publish.",
+          "explanation": "Chỉ nhìn (pending[0]) chứ chưa lấy ra: nếu publish lỗi thì sự kiện vẫn còn nguyên trong hàng đợi để thử lại.",
+          "hints": [
+            "Gọi self.broker.publish với một sự kiện.",
+            "Sự kiện đầu hàng là pending[0].",
+            "self.broker.publish(self.outbox.pending[0])"
+          ],
+          "vocab": [
+            "list index",
+            "publish"
+          ]
+        },
+        {
+          "id": "outbox-relay-b",
+          "label": "B",
+          "title": "Xoá sau khi publish thành công",
+          "prompt": "Chỉ khi publish không lỗi, bỏ sự kiện đầu hàng khỏi pending.",
+          "indent_level": 4,
+          "accepted_answers": [
+            "self.outbox.pending.pop(0)",
+            "del self.outbox.pending[0]"
+          ],
+          "expected_output": "Đã xoá.",
+          "explanation": "Xoá sau khi thành công, không phải trước: xoá trước mà publish lỗi thì sự kiện mất vĩnh viễn.",
+          "hints": [
+            "list có hàm pop theo vị trí.",
+            "Bỏ phần tử ở vị trí 0.",
+            "self.outbox.pending.pop(0)"
+          ],
+          "vocab": [
+            "list.pop"
+          ]
+        },
+        {
+          "id": "outbox-relay-c",
+          "label": "C",
+          "title": "Dừng khi broker lỗi",
+          "prompt": "Nếu publish ném RuntimeError thì thoát vòng lặp (dòng break có sẵn).",
+          "indent_level": 3,
+          "accepted_answers": [
+            "except RuntimeError:",
+            "except Exception:"
+          ],
+          "expected_output": "Đã bắt lỗi.",
+          "explanation": "Gặp lỗi thì dừng hẳn để giữ nguyên thứ tự: sự kiện hỏng và mọi sự kiện sau nó nằm lại trong pending cho lần relay kế tiếp.",
+          "hints": [
+            "Dòng thuộc cặp với try.",
+            "Broker ném RuntimeError.",
+            "except RuntimeError:"
+          ],
+          "vocab": [
+            "try",
+            "except"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Broker:\n    def __init__(self, fail_on=()):\n        self.fail_on = set(fail_on)  # id sự kiện sẽ làm broker \"sập\"\n        self.published = []\n\n    def publish(self, event):\n        if event[\"id\"] in self.fail_on:\n            raise RuntimeError(\"broker down\")\n        self.published.append(event)\n\n\nclass Outbox:\n    def __init__(self):\n        self.state = {}\n        self.pending = []\n\n    def save_with_event(self, key, value, event):\n        if \"id\" not in event or \"type\" not in event:\n            raise ValueError(\"Sự kiện thiếu id hoặc type\")\n        self.state[key] = value\n        self.pending.append(event)\n\n\nclass OutboxRelay:\n    def __init__(self, outbox, broker):\n        self.outbox = outbox\n        self.broker = broker\n\n    def relay(self):\n        count = 0\n        while self.outbox.pending:\n            try:\n                self.broker.publish(self.outbox.pending[0])\n                self.outbox.pending.pop(0)\n            except RuntimeError:\n                break\n            count += 1\n        return count",
+        "cases": [
+          {
+            "steps": [
+              "o = Outbox()",
+              "o.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'seats_changed'}, {'id': 'e3', 'type': 'flight_changed'}])",
+              "b = Broker()",
+              "r = OutboxRelay(o, b)"
+            ],
+            "call": "[r.relay(), [e['id'] for e in b.published], [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                3,
+                [
+                  "e1",
+                  "e2",
+                  "e3"
+                ],
+                []
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "o.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'seats_changed'}, {'id': 'e3', 'type': 'flight_changed'}])",
+              "b = Broker(fail_on=('e2',))",
+              "r = OutboxRelay(o, b)"
+            ],
+            "call": "[r.relay(), [e['id'] for e in b.published], [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                1,
+                [
+                  "e1"
+                ],
+                [
+                  "e2",
+                  "e3"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "o.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'seats_changed'}, {'id': 'e3', 'type': 'flight_changed'}])",
+              "b = Broker(fail_on=('e2',))",
+              "r = OutboxRelay(o, b)",
+              "r.relay()",
+              "b.fail_on.clear()"
+            ],
+            "call": "[r.relay(), [e['id'] for e in b.published], [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                2,
+                [
+                  "e1",
+                  "e2",
+                  "e3"
+                ],
+                []
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "b = Broker()",
+              "r = OutboxRelay(o, b)"
+            ],
+            "call": "[r.relay(), [e['id'] for e in b.published], [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                0,
+                [],
+                []
+              ]
+            }
+          },
+          {
+            "steps": [
+              "o = Outbox()",
+              "o.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'seats_changed'}, {'id': 'e3', 'type': 'flight_changed'}])",
+              "b = Broker(fail_on=('e1',))",
+              "r = OutboxRelay(o, b)"
+            ],
+            "call": "[r.relay(), [e['id'] for e in b.published], [e['id'] for e in o.pending]]",
+            "expect": {
+              "return": [
+                0,
+                [],
+                [
+                  "e1",
+                  "e2",
+                  "e3"
+                ]
+              ]
             }
           }
         ]

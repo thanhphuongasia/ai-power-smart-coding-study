@@ -94,6 +94,9 @@ void main() {
         'reservation-change-seats',
         'reservation-change-flight',
         'seat-map-assign',
+        'notifier-notify',
+        'outbox-save',
+        'outbox-relay',
       ]) {
         expect(rawExercises.containsKey(id), isTrue, reason: id);
       }
@@ -101,13 +104,13 @@ void main() {
       expect(testContent.locateFilesNamed('chunker.py').length, 2);
     });
 
-    test('theme airline đứng đầu, cây ≥ 2 cấp module, 14 bài method', () {
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 17 bài method', () {
       final airline = testContent.themes.first;
       expect(airline.id, 'airline');
       expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
       expect(airline.allTopics.length, greaterThanOrEqualTo(4));
       final methods = allExercises.where((e) => e.className != null).toList();
-      expect(methods.length, 14);
+      expect(methods.length, 17);
       for (final e in methods) {
         final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
         expect(
@@ -392,7 +395,9 @@ void main() {
             // khác (vd FlightService.remove_flight chỉ có trong bài controller).
             final themeCodes = [
               for (final e in allExercises)
-                if (testContent.locateExercise(e.id).theme.id == theme.id)
+                if (theme.allFiles.any(
+                  (f) => f.exercises.any((x) => x.id == e.id),
+                ))
                   (e: e, code: mergedCode(e)),
             ];
             // Thân `class Name` chính xác (không nhầm `class NameService`).
@@ -431,12 +436,20 @@ void main() {
       for (final e in allExercises) {
         final cn = e.className;
         if (cn == null) continue;
-        final themeId = testContent.locateExercise(e.id).theme.id;
-        expect(
-          classesOf(themeId).any((c) => c['name'] == cn),
-          isTrue,
-          reason: '${e.id}: lớp $cn thiếu trong diagram của theme $themeId',
-        );
+        // Bài dùng ở nhiều theme (file cùng tên) thì theme nào cũng phải có lớp.
+        for (final theme in testContent.themes) {
+          if (!theme.allFiles.any(
+            (f) => f.exercises.any((x) => x.id == e.id),
+          )) {
+            continue;
+          }
+          expect(
+            classesOf(theme.id).any((c) => c['name'] == cn),
+            isTrue,
+            reason:
+                '${e.id}: lớp $cn thiếu trong diagram của theme ${theme.id}',
+          );
+        }
       }
     });
 
