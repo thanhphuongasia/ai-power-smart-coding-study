@@ -1,7 +1,8 @@
-"""Đặt lại mật khẩu cho một user (việc của người vận hành, chạy trên server). Mật khẩu gõ qua prompt ẩn
-— không nằm trong argv, lịch sử shell hay log.
+"""Đặt lại mật khẩu cho một user (việc của người vận hành, chạy trên server). Mật khẩu không bao giờ
+nằm trong argv (lộ qua `ps`): gõ ở prompt ẩn khi có terminal, hoặc đưa qua stdin (một dòng):
 
-    python -m app.set_password <email>
+    python -m app.set_password <email>                      # có terminal: hỏi 2 lần
+    printf '%s' 'mat-khau' | python -m app.set_password <email>  # không terminal (vd qua ssh)
 
 Đặt xong thì thu hồi mọi phiên đăng nhập cũ của user đó. Ngắn hơn MIN_PASSWORD_LENGTH vẫn cho đặt
 (người vận hành tự chọn, vd tài khoản test) nhưng in cảnh báo; màn Đổi mật khẩu trong app vẫn bắt ≥ 10.
@@ -35,9 +36,15 @@ def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("usage: python -m app.set_password <email>", file=sys.stderr)
         return 2
-    password = getpass.getpass("Mật khẩu mới: ")
-    if not password or password != getpass.getpass("Nhập lại: "):
-        print("không khớp hoặc rỗng — không đổi gì", file=sys.stderr)
+    if sys.stdin.isatty():
+        password = getpass.getpass("Mật khẩu mới: ")
+        if password != getpass.getpass("Nhập lại: "):
+            print("không khớp — không đổi gì", file=sys.stderr)
+            return 1
+    else:
+        password = sys.stdin.readline().rstrip("\r\n")
+    if not password:
+        print("mật khẩu rỗng — không đổi gì", file=sys.stderr)
         return 1
     if len(password) < MIN_PASSWORD_LENGTH:
         print(f"cảnh báo: mật khẩu ngắn hơn {MIN_PASSWORD_LENGTH} ký tự", file=sys.stderr)

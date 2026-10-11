@@ -135,3 +135,13 @@ def test_set_password_cli_never_takes_password_in_argv(capsys):
 
     assert main(["set_password"]) == 2
     assert main(["set_password", "a@b.c", "secret"]) == 2
+
+
+def test_set_password_reads_stdin_when_not_a_terminal(monkeypatch, capsys):
+    import io
+
+    from app.set_password import main
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    assert main(["set_password", "a@b.c"]) == 1  # rỗng → không đổi gì
+    assert "rỗng" in capsys.readouterr().err
