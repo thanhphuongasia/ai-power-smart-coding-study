@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../app/theme_mode.dart';
+import '../../data/api_client.dart';
 import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
@@ -36,11 +37,44 @@ class HomeScreen extends ConsumerWidget {
                   today: dayOf(ref.read(clockProvider)()),
                 ),
                 const Spacer(),
-                IconButton(
-                  key: const Key('admin-button'),
-                  icon: const Icon(Icons.fact_check_outlined),
-                  tooltip: 'Duyệt nội dung',
-                  onPressed: () => context.push('/admin'),
+                if (ref.watch(currentUserProvider)?.isAdmin ?? false)
+                  IconButton(
+                    key: const Key('admin-button'),
+                    icon: const Icon(Icons.fact_check_outlined),
+                    tooltip: 'Duyệt nội dung',
+                    onPressed: () => context.push('/admin'),
+                  ),
+                PopupMenuButton<String>(
+                  key: const Key('account-button'),
+                  icon: const Icon(Icons.account_circle_outlined),
+                  tooltip: 'Tài khoản',
+                  onSelected: (value) {
+                    if (value == 'password') {
+                      context.push('/account/password');
+                    } else {
+                      ref.read(authControllerProvider.notifier).logout();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Text(
+                        ref.read(currentUserProvider)?.email ?? '',
+                        key: const Key('account-email'),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'password',
+                      key: Key('account-change-password'),
+                      child: Text('Đổi mật khẩu'),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      key: Key('account-logout'),
+                      child: Text('Đăng xuất'),
+                    ),
+                  ],
                 ),
                 const ThemeModeButton(),
               ],
@@ -256,7 +290,8 @@ class _ContinueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final written = progress[exercise.id]?.drafts.values
+    final written =
+        progress[exercise.id]?.drafts.values
             .where((code) => code.trim().isNotEmpty)
             .length ??
         0;
@@ -278,7 +313,9 @@ class _ContinueCard extends StatelessWidget {
                   const SizedBox(height: AppSpace.s1),
                   Text(
                     '$written/$total ô đã viết',
-                    style: AppText.body.copyWith(color: context.palette.inkMuted),
+                    style: AppText.body.copyWith(
+                      color: context.palette.inkMuted,
+                    ),
                   ),
                   const SizedBox(height: AppSpace.s2),
                   ThinProgressBar(
@@ -322,9 +359,7 @@ class _ThemeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final exercises = [
-      for (final file in theme.allFiles) ...file.exercises,
-    ];
+    final exercises = [for (final file in theme.allFiles) ...file.exercises];
     final total = totalBlocksIn(exercises);
     final done = completedBlocksIn(exercises, progress);
 

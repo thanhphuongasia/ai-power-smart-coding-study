@@ -4,7 +4,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/demo_seed.dart';
+import '../../data/progress_api.dart';
 import '../exercise/session_providers.dart';
 
 /// Nửa đêm của ngày chứa [t] (giờ địa phương).
@@ -18,14 +18,11 @@ DateTime addDays(DateTime day, int delta) =>
 class ActivityController extends Notifier<Map<DateTime, int>> {
   @override
   Map<DateTime, int> build() {
-    final today = dayOf(ref.read(clockProvider)());
-    return {
-      for (final e in seedActivityDaysAgo.entries)
-        addDays(today, -e.key): e.value,
-    };
+    return Map.of(ref.watch(loadedProgressProvider)?.activity ?? const {});
   }
 
-  /// Ghi thêm 1 hoạt động vào hôm nay.
+  /// Ghi thêm 1 hoạt động vào hôm nay. Chỉ đổi state cục bộ — caller gọi
+  /// `syncLearningState` để đẩy lên server (cùng review trong một PUT).
   void record() {
     final today = dayOf(ref.read(clockProvider)());
     state = {...state, today: (state[today] ?? 0) + 1};

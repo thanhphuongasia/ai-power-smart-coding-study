@@ -7,9 +7,11 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/content_providers.dart';
-import '../../data/demo_seed.dart';
+import '../../data/progress_api.dart';
 import '../../domain/content.dart';
 import '../../domain/models.dart';
+import '../review/review_controller.dart'
+    show reviewScheduleProvider, syncLearningState;
 import '../stats/activity.dart';
 import 'session_providers.dart';
 
@@ -68,31 +70,80 @@ class ExerciseProgress {
   }
 }
 
-/// Tiến trình của mọi exercise, khởi tạo từ [seedPassedExercises] +
-/// [seedDrafts]. KHÔNG autoDispose — phải sống qua việc [SessionController]
-/// (autoDispose) bị huỷ khi người học rời màn hình.
+/// Delay gom các lần gõ trước khi đẩy draft lên server.
+const draftSyncDelay = Duration(milliseconds: 800);
+
+/// Tiến trình của mọi exercise, khởi tạo từ snapshot server
+/// ([loadedProgressProvider]). KHÔNG autoDispose — phải sống qua việc
+/// [SessionController] (autoDispose) bị huỷ khi người học rời màn hình.
+///
+/// Đẩy lên server: draft gom 800 ms/exercise; hint và xem lời giải đẩy ngay;
+/// `markPassed` chỉ đổi cục bộ (server đã tự ghi lúc `/run`). Lỗi mạng không
+/// ném — state cục bộ giữ nguyên, lần đổi sau đẩy lại toàn bộ exercise đó.
+/// Draft còn đang chờ lúc controller bị huỷ (đổi/đăng xuất phiên) thì bỏ.
 class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
+  final Map<String, Timer> _draftTimers = {};
+
   @override
   Map<String, ExerciseProgress> build() {
+    ref.onDispose(() {
+      for (final t in _draftTimers.values) {
+        t.cancel();
+      }
+      _draftTimers.clear();
+    });
     // ref.read, KHÔNG watch (INV-10): nội dung đổi không được dựng lại
     // controller và xoá tiến độ.
     final content = ref.read(contentIndexProvider);
-    final ids = {...seedPassedExercises, ...seedDrafts.keys};
+    final snapshot = ref.watch(loadedProgressProvider);
     return {
-      for (final id in ids)
-        // Id demo không có trong nội dung server → bỏ qua (không crash).
-        if (_blockCount(content, id) case final total?)
-          id: ExerciseProgress(
-            passed: seedPassedExercises.contains(id),
-            totalBlocks: total,
-            drafts: Map.of(seedDrafts[id] ?? const {}),
+      for (final e in (snapshot?.exercises ?? const {}).entries)
+        // Id server có mà nội dung không có → bỏ qua (không crash). Nhãn ô không
+        // còn trong bài (admin đổi/xoá ô) cũng bỏ: giữ lại thì mọi PUT của bài
+        // này bị server từ chối (422 nhãn lạ) và tiến độ ngừng đồng bộ.
+        if (_labels(content, e.key) case final labels?)
+          e.key: ExerciseProgress(
+            passed: e.value.passed,
+            totalBlocks: labels.length,
+            drafts: {
+              for (final d in e.value.drafts.entries)
+                if (labels.contains(d.key)) d.key: d.value,
+            },
+            hintsUsed: {
+              for (final h in e.value.hintsUsed.entries)
+                if (labels.contains(h.key)) h.key: h.value,
+            },
+            solutionViewed: e.value.solutionViewed
+                .where(labels.contains)
+                .toSet(),
           ),
     };
   }
 
-  static int? _blockCount(Content content, String id) {
+  /// Đẩy ngay tiến độ hiện tại của [exerciseId]; không bao giờ ném.
+  void _push(String exerciseId) {
+    if (!ref.mounted || !canPushProgress(ref)) return;
+    final progress = state[exerciseId];
+    if (progress == null) return;
+    // Draft quá lớn / có NUL: server sẽ từ chối → giữ cục bộ, không gửi.
+    if (!draftsPushable(progress.drafts)) return;
+    final api = ref.read(progressApiProvider);
+    unawaited(_save(api, exerciseId, progress));
+  }
+
+  static Future<void> _save(
+    ProgressApi api,
+    String exerciseId,
+    ExerciseProgress progress,
+  ) async {
     try {
-      return content.exerciseById(id).blocks.length;
+      await api.saveExercise(exerciseId, progress);
+    } catch (_) {}
+  }
+
+  static Set<String>? _labels(Content content, String id) {
+    try {
+      return {for (final b in content.exerciseById(id).blocks) b.label};
     } on StateError {
       return null;
     }
@@ -116,6 +167,11 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
     if (current.passed) return;
     ref.read(activityProvider.notifier).record();
     state = {...state, exerciseId: current.copyWith(passed: true)};
+    syncLearningState(
+      ref,
+      ref.read(reviewScheduleProvider),
+      ref.read(activityProvider),
+    );
   }
 
   /// Lưu draft code đang gõ dở cho ô [label] của [exerciseId].
@@ -125,6 +181,12 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
       ...state,
       exerciseId: current.copyWith(drafts: {...current.drafts, label: code}),
     };
+    if (!canPushProgress(ref)) return;
+    _draftTimers[exerciseId]?.cancel();
+    _draftTimers[exerciseId] = Timer(draftSyncDelay, () {
+      _draftTimers.remove(exerciseId);
+      _push(exerciseId);
+    });
   }
 
   /// Tăng số hint đã dùng cho ô [label], tối đa 3. Trả về số hint sau khi
@@ -139,6 +201,7 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
         hintsUsed: {...current.hintsUsed, label: next},
       ),
     };
+    if (next != used) _push(exerciseId);
     return next;
   }
 
@@ -152,6 +215,7 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
         solutionViewed: {...current.solutionViewed, label},
       ),
     };
+    _push(exerciseId);
   }
 }
 

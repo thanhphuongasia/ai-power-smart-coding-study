@@ -19,7 +19,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DataError, OperationalError
 
 from app import harness
 from app.admin_api import router as admin_router
@@ -59,8 +59,10 @@ def _body_limit(path: str) -> int:
 @app.middleware("http")
 async def _limit_body(request: Request, call_next):
     # Field(max_length) chỉ kiểm SAU khi đọc hết body; chặn body lớn trước khi đọc.
-    if request.method in ("POST", "PUT"):
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
         length = request.headers.get("content-length")
+        if length is None and "transfer-encoding" not in request.headers:
+            return await call_next(request)  # không có body (vd POST /api/auth/logout từ curl)
         if length is None or not length.isdigit():
             return JSONResponse(status_code=411, content={"detail": "length_required"})
         if int(length) > _body_limit(request.url.path):
@@ -86,6 +88,14 @@ async def _database_unavailable(request: Request, exc: OperationalError) -> JSON
     # DB chết / không kết nối được: 503 có nghĩa thay vì 500, không lộ chi tiết kết nối.
     logger.warning("database unavailable on %s: %s", request.url.path, type(exc.orig).__name__)
     return JSONResponse(status_code=503, content={"detail": "database_unavailable"})
+
+
+@app.exception_handler(DataError)
+async def _unstorable_input(request: Request, exc: DataError) -> JSONResponse:
+    # Lưới cuối: dữ liệu Postgres không lưu được (NUL, JSON NaN…) lọt qua validate của endpoint →
+    # 422 thay vì 500. Validate ở boundary vẫn là chỗ chính; đây chỉ để không có lỗ hổng nào thành 500.
+    logger.warning("unstorable input on %s: %s", request.url.path, type(exc.orig).__name__)
+    return JSONResponse(status_code=422, content={"detail": "invalid_request"})
 
 
 @app.exception_handler(ContentNotLoaded)
@@ -167,7 +177,11 @@ async def run(
         else:
             # Chỉ server ghi passed, và chỉ khi máy chấm xác nhận (client không tự khai được).
             if user is not None and response.status == "passed":
-                await run_in_threadpool(record_pass, user.id, request.exercise_id)
+                try:
+                    await run_in_threadpool(record_pass, user.id, request.exercise_id)
+                except Exception:
+                    # Kết quả chấm vẫn trả về; chỉ mất lần ghi tiến độ này (Run lại là ghi được).
+                    logger.exception("record_pass failed for %s", request.exercise_id)
             return response
     if execution.status == "error":
         # Harness bị dừng trước khi in kết quả (vd hết bộ nhớ): lỗi do code học viên.

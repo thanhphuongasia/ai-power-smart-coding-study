@@ -36,6 +36,7 @@ enum AuthErrorKind {
   tooManyAttempts,
   wrongPassword,
   weakPassword,
+  sessionExpired,
   network,
 }
 
@@ -165,7 +166,7 @@ class AuthRepository {
 
   Future<void> changePassword(String current, String next) async {
     final token = (await _prefs()).getString(tokenKey);
-    if (token == null) throw const AuthError(AuthErrorKind.wrongPassword);
+    if (token == null) throw const AuthError(AuthErrorKind.sessionExpired);
     final http.Response r;
     try {
       r = await _http
@@ -183,7 +184,28 @@ class AuthRepository {
     }
     if (r.statusCode == 204 || r.statusCode == 200) return;
     if (r.statusCode == 400) throw const AuthError(AuthErrorKind.weakPassword);
-    if (r.statusCode == 401) throw const AuthError(AuthErrorKind.wrongPassword);
+    if (r.statusCode == 401) {
+      switch (_detail(r)) {
+        case 'wrong_password':
+          throw const AuthError(AuthErrorKind.wrongPassword);
+        case 'not_authenticated':
+          throw const AuthError(AuthErrorKind.sessionExpired);
+      }
+    }
+    if (r.statusCode == 429) {
+      throw const AuthError(AuthErrorKind.tooManyAttempts);
+    }
     throw const AuthError(AuthErrorKind.network);
+  }
+
+  /// Giá trị `detail` trong body lỗi của server; null nếu body không đọc được.
+  static String? _detail(http.Response r) {
+    try {
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      final detail = body is Map ? body['detail'] : null;
+      return detail is String ? detail : null;
+    } catch (_) {
+      return null;
+    }
   }
 }

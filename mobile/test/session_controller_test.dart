@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_coding_study/data/demo_seed.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
@@ -15,6 +14,7 @@ import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/stats/activity.dart';
 
 import 'support/content_fixture.dart';
+import 'support/progress_fixture.dart';
 
 /// Chạy [body] trong một [ProviderContainer] mà [clockProvider] đọc thời
 /// gian từ [FakeAsync] — cho phép test Timer.periodic bằng `async.elapse`
@@ -51,7 +51,7 @@ void _withFakeSession(
 
 void main() {
   group('ProgressController', () {
-    test('khởi tạo từ seedPassedExercises + seedDrafts', () {
+    test('khởi tạo từ snapshot tiến độ (demo)', () {
       final container = testContainer();
       addTearDown(container.dispose);
 
@@ -93,7 +93,10 @@ void main() {
       expect(() => content.exerciseById('clean-text'), throwsStateError);
 
       final container = ProviderContainer(
-        overrides: [contentIndexProvider.overrideWithValue(content)],
+        overrides: [
+          contentIndexProvider.overrideWithValue(content),
+          ...demoProgressOverrides(),
+        ],
       );
       addTearDown(container.dispose);
 

@@ -1,5 +1,6 @@
-"""Bảng Postgres chứa nội dung học. Nguồn soạn là `content/content.json`; `load_content.py` nạp
-vào đây (thay toàn bộ), `/content` và `/run` đọc ra. Sửa trực tiếp bảng sẽ bị lần nạp sau ghi đè.
+"""Bảng Postgres chứa nội dung học — DB là nguồn chính. Mọi lần ghi đi qua `load_content.py` (thay toàn
+bộ, có kiểm luật): seed từ `content/content.json` khi DB rỗng, hoặc admin lưu qua `/api/admin/content`.
+`/content` và `/run` đọc ra.
 
 Thứ tự hiển thị lưu ở cột `position` (theme, topic, file, bài trong file, ô trong bài).
 Module lồng nhau = `topics.parent_id`; `topics.position` là thứ tự duyệt trước (preorder) trong theme,

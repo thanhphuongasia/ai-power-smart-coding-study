@@ -27,23 +27,25 @@ def count(session, model) -> int:
 
 
 def small() -> dict:
-    def block(i: str, label: str) -> dict:
+    # Đủ luật nội dung (content_rules): marker khớp ô, ghép đáp án == solution, 3 hint, vocab.
+    def block(i: str, label: str, answer: str) -> dict:
         return {
             "id": i, "label": label, "title": "t", "prompt": "p", "indent_level": 1,
-            "accepted_answers": ["x"], "expected_output": "o", "explanation": "e",
-            "hints": ["h"], "vocab": [],
+            "accepted_answers": [answer], "expected_output": "o", "explanation": "e",
+            "hints": ["h1", "h2", "h3"], "vocab": ["v"],
         }
 
     def ex(i: str) -> dict:
         return {
-            "id": i, "title": i, "class_name": None, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
+            "id": i, "title": i, "class_name": None, "function_name": "f", "params": ["a"],
+            "template": "def f(a):\n    # TODO A\n    # TODO B",
             "challenge": {
                 "statement": "s", "motivation": "m",
                 "small": {"caption": "c", "input": "f(1)", "output": "1", "note": None},
                 "project": {"caption": "c", "input": "f(2)", "output": "2", "note": "n"},
             },
-            "blocks": [block(i + "-a", "A"), block(i + "-b", "B")],
-            "judge": {"solution": "def f(a):\n    return a", "cases": [{"args": [1], "expect": {"return": 1}}]},
+            "blocks": [block(i + "-a", "A", "x = a"), block(i + "-b", "B", "return x")],
+            "judge": {"solution": "def f(a):\n    x = a\n    return x", "cases": [{"args": [1], "expect": {"return": 1}}]},
         }
 
     return {
@@ -109,9 +111,19 @@ def nested() -> dict:
         ]},
     ]
     d["themes"][0]["topics"].append({"id": "tp2", "name": "N2", "description": "d", "files": [], "modules": []})
-    d["exercises"]["e2"]["class_name"] = "Svc"
-    d["exercises"]["e2"]["judge"]["cases"] = [{"call": "1", "expect": {"return": 1}}]  # bài method: case kịch bản
+    e2 = d["exercises"]["e2"]
+    e2["class_name"] = "Svc"
+    e2["template"] = "class Svc:\n    def f(self, a):\n        # TODO A\n        # TODO B"
+    e2["judge"]["solution"] = "class Svc:\n    def f(self, a):\n        x = a\n        return x"
+    for b in e2["blocks"]:
+        b["indent_level"] = 2
+    e2["judge"]["cases"] = [{"call": "1", "expect": {"return": 1}}]  # bài method: case kịch bản
+    d["themes"][0]["diagram"] = svc_diagram()  # bài có class phải có lớp đó trong sơ đồ theme
     return d
+
+
+def svc_diagram() -> dict:
+    return {"classes": [{"name": "Svc", "file": "svc.py", "attributes": [], "methods": ["f"]}], "relations": []}
 
 
 def test_nested_modules_stored_preorder_with_parent(db_session):
@@ -192,10 +204,9 @@ def test_version_changes_when_diagram_changes():
 
 
 def test_diagram_stored_on_theme(db_session):
-    d = small()
-    d["themes"][0]["diagram"] = diagram()
+    d = nested()
     load_content(db_session, d)
-    assert db_session.get(Theme, "th").diagram == diagram()
+    assert db_session.get(Theme, "th").diagram == svc_diagram()
 
 
 @pytest.mark.parametrize(

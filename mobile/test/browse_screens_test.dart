@@ -15,6 +15,7 @@ import 'package:smart_coding_study/features/practice/practice_screen.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'support/content_fixture.dart';
+import 'support/progress_fixture.dart';
 
 GoRouter _buildTestRouter([String initialLocation = '/']) {
   return GoRouter(
@@ -389,7 +390,10 @@ void main() {
     Future<void> pumpNested(WidgetTester tester, String location) async {
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [contentIndexProvider.overrideWithValue(nested)],
+          overrides: [
+            contentIndexProvider.overrideWithValue(nested),
+            ...demoProgressOverrides(),
+          ],
           child: MaterialApp.router(
             theme: buildAppTheme(),
             routerConfig: _buildTestRouter(location),

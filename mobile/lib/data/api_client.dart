@@ -38,8 +38,16 @@ class AuthController extends AsyncNotifier<AuthSession?> {
     state = const AsyncData(null);
   }
 
-  Future<void> changePassword(String current, String next) =>
-      ref.read(authRepositoryProvider).changePassword(current, next);
+  /// Server báo phiên hết hạn → đăng xuất để AuthGate về màn đăng nhập,
+  /// rồi vẫn ném lỗi để màn gọi biết.
+  Future<void> changePassword(String current, String next) async {
+    try {
+      await ref.read(authRepositoryProvider).changePassword(current, next);
+    } on AuthError catch (e) {
+      if (e.kind == AuthErrorKind.sessionExpired) await expire();
+      rethrow;
+    }
+  }
 
   /// Server báo 401 cho token đang dùng: xoá phiên local, không gọi mạng.
   Future<void> expire() async {

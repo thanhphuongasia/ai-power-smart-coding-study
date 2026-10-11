@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_coding_study/app/auth_gate.dart';
 import 'package:smart_coding_study/data/api_client.dart';
 import 'package:smart_coding_study/data/auth_repository.dart';
+import 'package:smart_coding_study/data/progress_api.dart';
 
 const _appKey = Key('app-body');
 
@@ -47,6 +48,9 @@ class _Server {
 
 Widget _app(_Server server) => ProviderScope(
   overrides: [
+    progressApiProvider.overrideWithValue(
+      ProgressApi(MockClient(server.handle), baseUrl: Uri.parse('http://test')),
+    ),
     authRepositoryProvider.overrideWithValue(
       AuthRepository(
         MockClient(server.handle),
@@ -133,6 +137,39 @@ void main() {
       (await SharedPreferences.getInstance()).getString('auth.token'),
       isNull,
     );
+  });
+
+  group('tải tiến độ lỗi', () {
+    setUp(
+      () => SharedPreferences.setMockInitialValues({
+        'auth.token': 'tok-1',
+        'auth.user': jsonEncode({'email': 'a@b.c', 'roles': []}),
+      }),
+    );
+
+    testWidgets('hiện màn lỗi, Thử lại tải lại rồi vào app', (tester) async {
+      final server = _Server()..apiStatus = 500;
+      await tester.pumpWidget(_app(server));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('progress-load-error')), findsOneWidget);
+      expect(find.text('Không tải được tiến độ học'), findsOneWidget);
+      expect(find.byKey(_appKey), findsNothing);
+
+      server.apiStatus = 200;
+      await tester.tap(find.byKey(const Key('progress-retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('progress-load-error')), findsNothing);
+      expect(find.byKey(_appKey), findsOneWidget);
+    });
+
+    testWidgets('Đăng xuất từ màn lỗi → màn đăng nhập', (tester) async {
+      final server = _Server()..apiStatus = 500;
+      await tester.pumpWidget(_app(server));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Đăng xuất'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('login-screen')), findsOneWidget);
+    });
   });
 }
 

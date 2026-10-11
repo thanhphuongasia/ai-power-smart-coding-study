@@ -6,6 +6,7 @@ import 'package:smart_coding_study/domain/models.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/domain/progression.dart';
 import 'support/content_fixture.dart';
+import 'support/progress_fixture.dart';
 
 final content = testContent;
 
@@ -139,7 +140,10 @@ void main() {
 
     test('override content có bài mới → unlocked/inProgress thấy bài mới', () {
       final container = ProviderContainer(
-        overrides: [contentIndexProvider.overrideWithValue(withNewExercise())],
+        overrides: [
+          contentIndexProvider.overrideWithValue(withNewExercise()),
+          ...demoProgressOverrides(),
+        ],
       );
       addTearDown(container.dispose);
 
@@ -161,7 +165,10 @@ void main() {
 
     test('đổi content không xoá tiến độ đã markPassed (INV-10)', () {
       final container = ProviderContainer(
-        overrides: [contentIndexProvider.overrideWithValue(content)],
+        overrides: [
+          contentIndexProvider.overrideWithValue(content),
+          ...demoProgressOverrides(),
+        ],
       );
       addTearDown(container.dispose);
 
@@ -173,6 +180,7 @@ void main() {
 
       container.updateOverrides([
         contentIndexProvider.overrideWithValue(withNewExercise()),
+        ...demoProgressOverrides(),
       ]);
 
       final progress = container.read(progressProvider);
@@ -240,7 +248,10 @@ void nestedProgressionTests() {
 
     test('inProgressExerciseProvider thấy bài trong sub-module', () {
       final container = ProviderContainer(
-        overrides: [contentIndexProvider.overrideWithValue(nested)],
+        overrides: [
+          contentIndexProvider.overrideWithValue(nested),
+          ...demoProgressOverrides(),
+        ],
       );
       addTearDown(container.dispose);
       container.read(progressProvider.notifier).saveDraft('b', 'A', 'x = 1');

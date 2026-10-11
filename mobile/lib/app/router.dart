@@ -6,7 +6,9 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/account/change_password_screen.dart';
 import '../features/admin/admin_screen.dart';
+import '../features/admin/exercise_editor.dart';
 import '../features/browse/file_crosscut_screen.dart';
 import '../features/browse/home_screen.dart';
 import '../features/browse/theme_detail_screen.dart';
@@ -77,8 +79,19 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,
+      path: '/account/password',
+      builder: (context, state) => const ChangePasswordScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
       path: '/admin',
       builder: (context, state) => const AdminScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/exercise/:id',
+      builder: (context, state) =>
+          ExerciseEditorScreen(exerciseId: state.pathParameters['id']!),
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,

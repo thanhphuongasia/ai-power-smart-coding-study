@@ -3,3 +3,6 @@
 .vscode/
 *.iml
 .env
+
+# Mật khẩu ban đầu do app.seed_users sinh ở máy dev — không bao giờ commit.
+backend/.initial-passwords

@@ -5,16 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api_client.dart';
+import '../data/progress_api.dart';
 import '../features/account/login_screen.dart';
 import 'theme.dart';
 import 'theme_mode.dart';
-
-/// HOOK SAU ĐĂNG NHẬP: việc cần xong trước khi hiện app (vd tải tiến độ).
-/// Mặc định no-op. Task khác override/thay thân provider này; nó có thể
-/// `ref.watch(authControllerProvider)` để chạy lại theo phiên. AuthGate chỉ
-/// hiện spinner lúc nó đang tải LẦN ĐẦU; về sau (refresh) giữ nguyên app,
-/// nên không remount. Lỗi ở đây không chặn app.
-final postLoginLoaderProvider = FutureProvider<void>((ref) async {});
 
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key, required this.child});
@@ -29,12 +23,50 @@ class AuthGate extends ConsumerWidget {
       if (auth.isLoading) return const _Shell(home: _Splash());
       return const _Shell(home: LoginScreen());
     }
-    final loader = ref.watch(postLoginLoaderProvider);
-    if (loader.isLoading && !loader.hasValue && !loader.hasError) {
+    // Chỉ vào app khi tiến độ của ĐÚNG phiên hiện tại đã tải xong. Đang tải
+    // (kể cả tải lại, khi `value` còn là của phiên trước) → spinner.
+    final snapshot = ref.watch(progressSnapshotProvider);
+    if (snapshot.isLoading) return const _Shell(home: _Splash());
+    if (snapshot.hasError) return const _Shell(home: _ProgressLoadError());
+    if (snapshot.value?.token != session.token) {
       return const _Shell(home: _Splash());
     }
     return child;
   }
+}
+
+/// Tải tiến độ lỗi: không mở app rỗng (sẽ tắt đồng bộ âm thầm) mà cho thử lại
+/// hoặc đăng xuất.
+class _ProgressLoadError extends ConsumerWidget {
+  const _ProgressLoadError();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+    body: Center(
+      key: const Key('progress-load-error'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Không tải được tiến độ học'),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const Key('progress-retry'),
+              onPressed: () => ref.invalidate(progressSnapshotProvider),
+              child: const Text('Thử lại'),
+            ),
+            TextButton(
+              key: const Key('progress-logout'),
+              onPressed: () =>
+                  ref.read(authControllerProvider.notifier).logout(),
+              child: const Text('Đăng xuất'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _Splash extends StatelessWidget {

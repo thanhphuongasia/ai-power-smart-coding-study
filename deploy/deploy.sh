@@ -24,6 +24,7 @@ STAGE=/root/.smart-coding-study-deploy
 ssh "$HOST" "mkdir -p $APP_DIR/backend $APP_DIR/web && rm -rf $STAGE && install -d -m 700 $STAGE"
 rsync -az --delete \
   --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude tests --exclude .env \
+  --exclude .initial-passwords \
   "$ROOT/backend/" "$HOST:$APP_DIR/backend/"
 rsync -az --delete "$ROOT/mobile/build/web/" "$HOST:$APP_DIR/web/"
 scp -q "$ROOT/deploy/nginx/smart-coding-study.conf" "$ROOT/deploy/systemd/smart-coding-study-api.service" \
@@ -66,11 +67,20 @@ cd "$APP_DIR/backend"
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -r requirements.txt
 
-# Migration + nạp nội dung (thay toàn bộ, idempotent).
+# Migration; nội dung chỉ nạp khi DB còn rỗng — DB là nguồn chính (admin sửa qua /api/admin), deploy
+# KHÔNG ghi đè. Ghi đè có chủ ý: export trước rồi `python -m app.load_content --force` (README).
+# Seed user: mật khẩu ban đầu chỉ vào file root 600, log deploy chỉ có số lượng.
 ( set -a; . "$ENV_FILE"; set +a
   .venv/bin/alembic upgrade head
-  echo "content version: $(.venv/bin/python -m app.load_content)" )
+  # Gán vào biến trước: `echo "$(lệnh)"` nuốt exit code của lệnh nên set -e không dừng được.
+  content_out="$(.venv/bin/python -m app.load_content --if-empty)"
+  echo "content: $content_out"
+  install -d -m 700 /etc/smart-coding-study && chmod 700 /etc/smart-coding-study
+  INITIAL_PASSWORDS_FILE=/etc/smart-coding-study/initial-passwords .venv/bin/python -m app.seed_users )
 
+# File mật khẩu dev không bao giờ được nằm trong thư mục app (rsync loại trừ nó nên --delete cũng không
+# xoá bản cũ nếu từng có) — xoá trước khi chmod -R mở quyền đọc cho mọi user.
+rm -f "$APP_DIR/backend/.initial-passwords"
 # Quyền: code của root, chỉ đọc với service; web đọc được bởi nginx.
 chown -R root:root "$APP_DIR"
 chmod -R u=rwX,go=rX "$APP_DIR"
@@ -101,6 +111,9 @@ done
 curl -fsS -o /dev/null http://127.0.0.1:8100/content
 curl -fsS -o /dev/null http://127.0.0.1:8090/content
 curl -fsS -o /dev/null http://127.0.0.1:8090/
+# /api đi qua nginx và chặn khi chưa đăng nhập.
+[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/me)" = 401 ] \
+  || { echo "/api/me qua nginx không trả 401 — kiểm location /api/ trong nginx" >&2; exit 1; }
 rm -rf "$TMP"
 echo "server OK"
 REMOTE

@@ -165,7 +165,7 @@ void main() {
     expect(prefs.getString('auth.token'), isNull);
   });
 
-  test('changePassword: 204 ok, 400 weak, 401 wrong, lỗi mạng', () async {
+  test('changePassword: 204 ok, 400, 401 (hai loại), 429, lỗi mạng', () async {
     SharedPreferences.setMockInitialValues({'auth.token': 'tok-1'});
     String? auth;
     await repoWith((req) async {
@@ -188,9 +188,35 @@ void main() {
     );
     expect(
       await kindOf(
-        () => repoWith((_) async => json(401, {})).changePassword('o', 'n'),
+        () => repoWith(
+          (_) async => json(401, {'detail': 'wrong_password'}),
+        ).changePassword('o', 'n'),
       ),
       AuthErrorKind.wrongPassword,
+    );
+    expect(
+      await kindOf(
+        () => repoWith(
+          (_) async => json(401, {'detail': 'not_authenticated'}),
+        ).changePassword('o', 'n'),
+      ),
+      AuthErrorKind.sessionExpired,
+    );
+    expect(
+      await kindOf(
+        () => repoWith(
+          (_) async => json(429, {'detail': 'too_many_attempts'}),
+        ).changePassword('o', 'n'),
+      ),
+      AuthErrorKind.tooManyAttempts,
+    );
+    expect(
+      await kindOf(
+        () => repoWith(
+          (_) async => http.Response('x', 502),
+        ).changePassword('o', 'n'),
+      ),
+      AuthErrorKind.network,
     );
     expect(
       await kindOf(
@@ -201,4 +227,15 @@ void main() {
       AuthErrorKind.network,
     );
   });
+
+  test(
+    'changePassword: không có token → sessionExpired, không gọi mạng',
+    () async {
+      final repo = repoWith((_) async => fail('không được gọi mạng'));
+      expect(
+        await kindOf(() => repo.changePassword('o', 'n')),
+        AuthErrorKind.sessionExpired,
+      );
+    },
+  );
 }

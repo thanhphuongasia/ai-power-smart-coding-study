@@ -233,14 +233,15 @@ def test_nested_modules_and_class_name_round_trip(db_session, content_data, clie
         ]}
     )
     ex_id = moved["exercise_ids"][0]
-    data["exercises"][ex_id]["class_name"] = "Svc"
+    class_name = data["exercises"][ex_id]["class_name"]
+    assert class_name  # file chuyển xuống là bài method (luật nội dung cấm đổi class_name lệch code)
     load_content(db_session, data)
 
     body = client_for(db_session).get("/content").json()
     assert {"themes": body["themes"], "exercises": body["exercises"]} == public_payload(data)
     sub = body["themes"][0]["topics"][0]["modules"][-1]
     assert sub["id"] == "nested-a" and sub["modules"][0]["files"] == [moved]
-    assert body["exercises"][ex_id]["class_name"] == "Svc"
+    assert body["exercises"][ex_id]["class_name"] == class_name
 
     # Thứ tự bài = preorder, file của module TRƯỚC sub-module (khớp Topic.allFiles ở app).
     def preorder_ids(topics):
@@ -257,21 +258,14 @@ def test_nested_modules_and_class_name_round_trip(db_session, content_data, clie
     expected += sorted(i for i in data["exercises"] if i not in expected)
     assert list(body["exercises"]) == expected
     assert expected.index(ex_id) > expected.index(first["files"][0]["exercise_ids"][0])
-    assert read_judge(db_session, ex_id).class_name == "Svc"
+    assert read_judge(db_session, ex_id).class_name == class_name
     assert read_judge(db_session, "split-chunks").class_name is None
 
 
 def test_theme_diagram_served_with_from_key(db_session, content_data, client_for):
     """Sơ đồ class đi nguyên vẹn ra /content; quan hệ giữ key `from` (không phải `from_`)."""
     data = copy.deepcopy(content_data)
-    data["themes"][0]["diagram"] = {
-        "classes": [
-            {"name": "A", "file": "a.py", "attributes": [{"name": "x", "type": "int", "group": "core"}],
-             "methods": ["run"]},
-            {"name": "B", "file": "b.py", "attributes": [], "methods": []},
-        ],
-        "relations": [{"from": "A", "to": "B", "kind": "dependency", "label": "dùng B", "via": ["run"]}],
-    }
+    assert data["themes"][0]["diagram"]["relations"]  # sơ đồ thật (khớp code) có quan hệ `from`
     load_content(db_session, data)
     body = client_for(db_session).get("/content").json()
     assert body["themes"][0]["diagram"] == data["themes"][0]["diagram"]

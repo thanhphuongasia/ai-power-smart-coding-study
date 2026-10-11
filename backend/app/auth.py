@@ -2,8 +2,9 @@
 
 - Mật khẩu: argon2id (`argon2-cffi`). Không bao giờ lưu hay log mật khẩu thô.
 - Token: `secrets.token_urlsafe(32)` trả cho client MỘT lần; DB chỉ lưu sha256 của nó (`user_sessions`).
-- Login sai 5 lần / 15 phút theo (IP, email) → 429. Đếm trong RAM: mất khi restart, chỉ đúng với 1
-  process uvicorn (đúng cấu hình hiện tại).
+- Login sai 5 lần / 15 phút theo (IP, email) → 429; mỗi IP tối đa 30 lần thử sai / 15 phút trên mọi
+  email (chặn dò nhiều email và giữ RAM có giới hạn theo số IP). Đổi mật khẩu sai cũng bị đếm. Đếm
+  trong RAM: mất khi restart, chỉ đúng với 1 process uvicorn (đúng cấu hình hiện tại).
 - `current_user` / `require_admin` là dependency cho mọi API cần đăng nhập. Phân quyền kiểm ở server,
   UI ẩn nút chỉ là phụ.
 """
@@ -34,6 +35,9 @@ ROLES = frozenset({"learner", "admin"})
 SESSION_TTL = timedelta(days=30)
 MIN_PASSWORD_LENGTH = 10
 MAX_FAILURES = 5
+MAX_FAILURES_PER_IP = 30
+# Quá số khoá này thì quét bỏ khoá đã hết hạn (khoá chỉ tự dọn khi chính nó được chạm lại).
+SWEEP_AT_KEYS = 10_000
 FAILURE_WINDOW_SECONDS = 15 * 60
 
 _hasher = PasswordHasher()
@@ -81,14 +85,31 @@ class LoginThrottle:
             self._failures.pop(key, None)
         return recent
 
-    def blocked(self, key: tuple[str, str]) -> bool:
-        with self._lock:
-            return len(self._recent(key, time.monotonic())) >= self.max_failures
+    def attempt(self, key: tuple[str, str]) -> bool:
+        """Giữ chỗ một lần thử TRƯỚC khi verify (tính như thất bại). Hết lượt → False.
 
-    def fail(self, key: tuple[str, str]) -> None:
+        Check-rồi-ghi trong cùng một lock: N request song song không cùng lọt qua trước khi ai kịp
+        ghi thất bại. Thử đúng thì gọi `reset`/`release` để trả lại chỗ.
+        """
         with self._lock:
             now = time.monotonic()
-            self._failures[key] = [*self._recent(key, now), now]
+            recent = self._recent(key, now)
+            if len(recent) >= self.max_failures:
+                return False
+            self._failures[key] = [*recent, now]
+            if len(self._failures) > SWEEP_AT_KEYS:
+                for k in list(self._failures):
+                    self._recent(k, now)
+            return True
+
+    def release(self, key: tuple[str, str]) -> None:
+        """Trả lại chỗ của lần thử gần nhất (thử đúng)."""
+        with self._lock:
+            times = self._failures.get(key)
+            if times:
+                times.pop()
+                if not times:
+                    self._failures.pop(key, None)
 
     def reset(self, key: tuple[str, str]) -> None:
         with self._lock:
@@ -96,6 +117,7 @@ class LoginThrottle:
 
 
 throttle = LoginThrottle()
+ip_throttle = LoginThrottle(max_failures=MAX_FAILURES_PER_IP)
 
 
 @dataclass(frozen=True)
@@ -130,16 +152,16 @@ def user_for_token(session: Session, token: str) -> CurrentUser | None:
     return CurrentUser(id=user_id, email=email, roles=tuple(roles), session_id=session_id)
 
 
-_UNAUTHORIZED = HTTPException(
-    status_code=401, detail="not_authenticated", headers={"WWW-Authenticate": "Bearer"}
-)
+def _unauthorized() -> HTTPException:
+    # Mỗi lần một instance mới: raise lại một instance dùng chung làm traceback của nó dài mãi.
+    return HTTPException(status_code=401, detail="not_authenticated", headers={"WWW-Authenticate": "Bearer"})
 
 
 def current_user(request: Request, session: Session = Depends(get_session)) -> CurrentUser:
     token = _bearer(request)
     user = user_for_token(session, token) if token else None
     if user is None:
-        raise _UNAUTHORIZED
+        raise _unauthorized()
     return user
 
 
@@ -200,15 +222,21 @@ def create_session(session: Session, user_id: int) -> str:
 @router.post("/auth/login", response_model=LoginResponse)
 def login(body: LoginRequest, request: Request, session: Session = Depends(get_session)) -> LoginResponse:
     email = normalize_email(body.email)
-    key = (_client_ip(request), email)
-    if throttle.blocked(key):
+    ip = _client_ip(request)
+    key, ip_key = (ip, email), (ip, "*")
+    if not ip_throttle.attempt(ip_key):
         raise HTTPException(status_code=429, detail="too_many_attempts")
-    user = session.scalar(select(User).where(User.email == email))
+    if not throttle.attempt(key):
+        ip_throttle.release(ip_key)
+        raise HTTPException(status_code=429, detail="too_many_attempts")
+    # FOR UPDATE: đổi mật khẩu đồng thời phải xong trước (hoặc chờ login này xong) — không để login
+    # bằng mật khẩu cũ tạo phiên mới SAU khi đổi mật khẩu đã thu hồi các phiên.
+    user = session.scalar(select(User).where(User.email == email).with_for_update())
     ok = verify_password(user.password_hash if user else _DUMMY_HASH, body.password)
     if user is None or not ok:
-        throttle.fail(key)
         raise HTTPException(status_code=401, detail="invalid_credentials")
     throttle.reset(key)
+    ip_throttle.release(ip_key)
     if _hasher.check_needs_rehash(user.password_hash):
         user.password_hash = hash_password(body.password)
     session.execute(delete(UserSession).where(UserSession.user_id == user.id, UserSession.expires_at <= _now()))
@@ -232,12 +260,18 @@ def me(user: CurrentUser = Depends(current_user)) -> UserOut:
 @router.post("/auth/password", status_code=204)
 def change_password(
     body: PasswordChange,
+    request: Request,
     user: CurrentUser = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> Response:
-    row = session.get(User, user.id)
+    # Token lọt (vd XSS) không được thành công cụ dò mật khẩu không giới hạn.
+    key = (_client_ip(request), f"pw:{user.id}")
+    if not throttle.attempt(key):
+        raise HTTPException(status_code=429, detail="too_many_attempts")
+    row = session.get(User, user.id, with_for_update=True)
     if row is None or not verify_password(row.password_hash, body.current_password):
         raise HTTPException(status_code=401, detail="wrong_password")
+    throttle.reset(key)
     if len(body.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail="weak_password")
     row.password_hash = hash_password(body.new_password)

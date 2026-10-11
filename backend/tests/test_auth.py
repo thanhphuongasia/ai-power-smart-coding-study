@@ -34,6 +34,7 @@ class LocalRunner:
 @pytest.fixture(autouse=True)
 def fresh_throttle(monkeypatch):
     monkeypatch.setattr(auth, "throttle", LoginThrottle())
+    monkeypatch.setattr(auth, "ip_throttle", LoginThrottle(max_failures=auth.MAX_FAILURES_PER_IP))
 
 
 @pytest.fixture()
@@ -215,3 +216,98 @@ def test_record_pass_keeps_existing_drafts(loaded_session):
     loaded_session.expire_all()
     row = loaded_session.get(UserProgress, (user.id, "split-chunks"))
     assert (row.passed, row.drafts, row.hints_used) == (True, {"A": "x"}, {"A": 1})
+
+
+def test_throttle_reserves_before_verify_so_parallel_bursts_get_only_5():
+    """M1: kiểm-rồi-ghi atomic — 40 request song song cùng khoá chỉ 5 cái được đi verify."""
+    import threading
+
+    t = LoginThrottle()
+    results: list[bool] = []
+    barrier = threading.Barrier(40)
+
+    def hit():
+        barrier.wait()
+        results.append(t.attempt(("ip", "a@b.c")))
+
+    threads = [threading.Thread(target=hit) for _ in range(40)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert results.count(True) == 5
+
+
+def test_successful_login_does_not_use_up_ip_budget(db_session, client_for):
+    add_user(db_session)
+    client = client_for(db_session)
+    for _ in range(auth.MAX_FAILURES_PER_IP + 5):
+        assert login(client).status_code == 200
+
+
+def test_ip_capped_across_many_emails(db_session, client_for):
+    add_user(db_session)
+    client = client_for(db_session)
+    for i in range(auth.MAX_FAILURES_PER_IP):
+        assert login(client, email=f"guess{i}@gmail.com").status_code == 401
+    # Dò quá 30 email từ một IP: chặn luôn, kể cả email/mật khẩu đúng.
+    assert login(client).status_code == 429
+
+
+def test_change_password_wrong_guesses_are_throttled(db_session, client_for):
+    add_user(db_session)
+    client = client_for(db_session)
+    token = login(client).json()["token"]
+    body = {"current_password": "wrong", "new_password": "new-password-123"}
+    for _ in range(5):
+        assert client.post("/api/auth/password", json=body, headers=bearer(token)).status_code == 401
+    body["current_password"] = PASSWORD
+    r = client.post("/api/auth/password", json=body, headers=bearer(token))
+    assert r.status_code == 429 and r.json() == {"detail": "too_many_attempts"}
+
+
+def test_run_still_returns_result_when_recording_pass_fails(loaded_session, content_data, client_for):
+    add_user(loaded_session)
+    client = client_for(loaded_session)
+    token = login(client).json()["token"]
+
+    def broken(user_id, exercise_id):
+        raise RuntimeError("db blip")
+
+    app.dependency_overrides[get_pass_recorder] = lambda: broken
+    code = _solution(content_data, "split-chunks")
+    r = client.post("/run", json={"exercise_id": "split-chunks", "code": code}, headers=bearer(token))
+    assert r.status_code == 200 and r.json()["status"] == "passed"
+
+
+def test_logout_without_body_or_content_length_is_not_411(db_session, client_for):
+    add_user(db_session)
+    client = client_for(db_session)
+    token = login(client).json()["token"]
+    r = client.request("POST", "/api/auth/logout", headers={**bearer(token)})
+    assert r.status_code == 204
+
+
+def test_record_pass_bumps_updated_at(loaded_session):
+    user = add_user(loaded_session)
+    loaded_session.add(UserProgress(user_id=user.id, exercise_id="split-chunks", passed=False, drafts={},
+                                    hints_used={}, solution_viewed=[],
+                                    updated_at=datetime(2000, 1, 1, tzinfo=timezone.utc)))
+    loaded_session.flush()
+    record_pass(loaded_session, user.id, "split-chunks")
+    loaded_session.expire_all()
+    assert loaded_session.get(UserProgress, (user.id, "split-chunks")).updated_at.year > 2000
+
+
+def test_throttle_sweeps_expired_keys(monkeypatch):
+    monkeypatch.setattr(auth, "SWEEP_AT_KEYS", 3)
+    t = LoginThrottle(window=0.0)  # mọi lần thử hết hạn ngay
+    for i in range(10):
+        t.attempt(("ip", f"user{i}"))
+    assert len(t._failures) <= 4
+
+
+def test_unstorable_input_is_422_not_500(db_session, client_for):
+    """Lưới cuối ở main.py: NUL không lưu/so được trong Postgres → 422, không 500."""
+    r = login(client_for(db_session), email="a\u0000b@gmail.com")
+    assert r.status_code == 422

@@ -2,10 +2,12 @@
 /// theo đánh giá Khó / Được / Dễ (SM-2 rút gọn), lưu trong bộ nhớ.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/content_providers.dart';
-import '../../data/demo_seed.dart';
+import '../../data/progress_api.dart';
 import '../../domain/models.dart';
 import '../exercise/session_providers.dart';
 import '../stats/activity.dart';
@@ -80,24 +82,39 @@ class ReviewCard {
 
 class ReviewController extends Notifier<Map<String, ReviewEntry>> {
   @override
-  Map<String, ReviewEntry> build() {
-    final today = dayOf(ref.read(clockProvider)());
-    return {
-      for (final e in seedReviewDueInDays.entries)
-        e.key: ReviewEntry(
-          due: addDays(today, e.value),
-          intervalDays: e.value,
-          ease: _initialEase,
-          reps: 1,
-        ),
-    };
-  }
+  Map<String, ReviewEntry> build() =>
+      Map.of(ref.watch(loadedProgressProvider)?.review ?? const {});
 
   void rate(String cardId, ReviewRating rating) {
     final today = ref.read(clockProvider)();
     state = {...state, cardId: scheduleNext(state[cardId], rating, today)};
     ref.read(activityProvider.notifier).record();
+    syncLearningState(ref, state, ref.read(activityProvider));
   }
+}
+
+/// Đẩy lịch ôn + nhật ký hoạt động lên server ngay (một PUT). Không bao giờ
+/// ném: lỗi thì giữ state cục bộ, lần đổi sau sẽ đẩy lại toàn bộ. State được
+/// truyền vào (không đọc provider) vì caller có thể chính là một trong hai
+/// controller — không được tự đọc mình.
+void syncLearningState(
+  Ref ref,
+  Map<String, ReviewEntry> review,
+  Map<DateTime, int> activity,
+) {
+  if (!canPushProgress(ref)) return;
+  final api = ref.read(progressApiProvider);
+  unawaited(_saveState(api, review, activity));
+}
+
+Future<void> _saveState(
+  ProgressApi api,
+  Map<String, ReviewEntry> review,
+  Map<DateTime, int> activity,
+) async {
+  try {
+    await api.saveState(review, activity);
+  } catch (_) {}
 }
 
 final reviewScheduleProvider =

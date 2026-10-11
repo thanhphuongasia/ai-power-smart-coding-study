@@ -28,11 +28,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     AuthErrorKind.invalidCredentials => 'Email hoặc mật khẩu không đúng.',
     AuthErrorKind.tooManyAttempts =>
       'Thử quá nhiều lần. Vui lòng đợi một lúc rồi thử lại.',
-    _ => 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.',
+    AuthErrorKind.wrongPassword ||
+    AuthErrorKind.weakPassword ||
+    AuthErrorKind.sessionExpired ||
+    AuthErrorKind.network =>
+      'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.',
   };
 
   Future<void> _submit() async {
     if (_busy) return;
+    final email = _email.text.trim();
+    if (email.isEmpty || _password.text.isEmpty) {
+      setState(() => _error = 'Nhập email và mật khẩu');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -40,7 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await ref
           .read(authControllerProvider.notifier)
-          .login(_email.text.trim(), _password.text);
+          .login(email, _password.text);
       // Thành công: AuthGate tự chuyển sang app, màn này bị gỡ.
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = _message(e.kind));

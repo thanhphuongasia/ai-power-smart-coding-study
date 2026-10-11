@@ -2,12 +2,17 @@
 /// Tiến độ, File cross-cut, Admin.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/testing.dart';
 import 'package:smart_coding_study/app/router.dart';
+import 'package:smart_coding_study/data/admin_repository.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
+import 'admin_controller_test.dart' show jsonResponse;
 import 'support/auth_fixture.dart';
 import 'support/content_fixture.dart';
 
@@ -203,37 +208,54 @@ void main() {
     expect(find.text('Đang dở'), findsNWidgets(2));
   });
 
-  testWidgets('Admin: duyệt, từ chối, hoàn tác', (tester) async {
-    await _pumpApp(tester);
+  testWidgets('Admin: nút Admin mở màn soạn nội dung (cây nội dung)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    appRouter.go('/');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...contentOverrides,
+          ...authOverrides(roles: {'learner', 'admin'}),
+          adminRepositoryProvider.overrideWithValue(
+            AdminRepository(
+              MockClient(
+                (r) async => jsonResponse(
+                  jsonEncode({
+                    'version': 'v1',
+                    'content': {
+                      'version': 'x',
+                      'themes': [
+                        {
+                          'id': 'tt',
+                          'name': 'Theme thử',
+                          'description': '',
+                          'tags': <String>[],
+                          'topics': <dynamic>[],
+                        },
+                      ],
+                      'exercises': <String, dynamic>{},
+                    },
+                  }),
+                  200,
+                ),
+              ),
+              baseUrl: Uri.parse('http://x'),
+            ),
+          ),
+        ],
+        child: const SmartCodingStudyApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('admin-button')));
     await tester.pumpAndSettle();
-    expect(
-      find.text('3 chờ duyệt · 0 đã duyệt · 0 đã từ chối'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('approve-pending-fanout-write')));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('reject-pending-url-shortener')),
-      200,
-    );
-    await tester.tap(find.byKey(const Key('reject-pending-url-shortener')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('1 chờ duyệt · 1 đã duyệt · 1 đã từ chối'),
-      findsOneWidget,
-    );
-
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('undo-pending-fanout-write')),
-      200,
-    );
-    await tester.tap(find.byKey(const Key('undo-pending-fanout-write')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('2 chờ duyệt · 0 đã duyệt · 1 đã từ chối'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('admin-tree')), findsOneWidget);
+    expect(find.text('Theme thử'), findsOneWidget);
+    expect(find.byKey(const Key('admin-validate')), findsOneWidget);
+    expect(find.byKey(const Key('admin-save')), findsOneWidget);
   });
 }

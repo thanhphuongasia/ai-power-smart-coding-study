@@ -17,7 +17,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 set -a; [ -f .env ] && . ./.env; set +a        # tuỳ chọn (DATABASE_URL, máy chấm) — trước các lệnh dưới
 createdb smart_coding_study                    # một lần
 .venv/bin/alembic upgrade head                 # tạo bảng
-.venv/bin/python -m app.load_content           # nạp content/content.json, in version
+.venv/bin/python -m app.load_content --if-empty  # nạp content/content.json nếu DB chưa có nội dung
+.venv/bin/python -m app.seed_users             # tạo 2 tài khoản; mật khẩu vào backend/.initial-passwords (gitignore)
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -32,16 +33,22 @@ curl -s localhost:8000/run -H 'Content-Type: application/json' \
 
 ## Thêm / sửa bài
 
-Nguồn soạn duy nhất là `content/content.json` (cùng shape `/content`, mỗi bài thêm
-`judge: {solution, cases}` — phần này KHÔNG trả ra app). Sửa file rồi nạp lại:
+**DB là nguồn chính.** Cách thường dùng: đăng nhập tài khoản admin → nút Admin → sửa → "Kiểm tra" →
+"Lưu" (`/api/admin/content`, xem `app/admin_api.py`). `content/content.json` chỉ còn để seed lần đầu
+và làm bản xuất (cùng shape `/content`, mỗi bài thêm `judge: {solution, cases}` — phần này KHÔNG trả
+ra app). Sửa bằng file:
 
 ```bash
-.venv/bin/python -m app.load_content
+.venv/bin/python -m app.export_content content/content.json   # 1. lấy bản đang chạy (có sửa của admin)
+# 2. sửa file
+.venv/bin/python -m app.load_content --force                   # 3. kiểm đủ luật rồi thay toàn bộ
 ```
 
-Lệnh nạp kiểm dữ liệu trước (id trùng, bài không tồn tại, thiếu judge…) rồi **thay toàn bộ** nội
-dung trong một transaction. Sửa thẳng trong DB sẽ bị lần nạp sau ghi đè. App thấy nội dung mới ở
-lần mở sau, không cần build lại. Giữ nguyên `id` bài và `id`/`label` ô khi sửa: tiến độ của học viên
+Lệnh nạp và nút Lưu của admin chạy CÙNG bộ kiểm (`load_content.validation_errors`: schema, id trùng,
+judge, sơ đồ + `app/content_rules.py`: marker, ghép đáp án == lời giải, ≤3 ô, 3 gợi ý…) rồi **thay
+toàn bộ** nội dung trong một transaction (khoá `pg_advisory_xact_lock`, không ghi xen nhau). Không có
+`--force` thì CLI không ghi đè DB đã có nội dung. Tiến độ học viên ở bảng riêng, không bị xoá. App thấy
+nội dung mới ở lần mở sau, không cần build lại. Giữ nguyên `id` bài và `id`/`label` ô khi sửa: tiến độ của học viên
 gắn theo các id đó.
 
 ## Test
