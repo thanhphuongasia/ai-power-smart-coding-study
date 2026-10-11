@@ -97,6 +97,13 @@ void main() {
         'notifier-notify',
         'outbox-save',
         'outbox-relay',
+        'bank-init',
+        'bank-properties',
+        'bank-balance-setter',
+        'bank-deposit',
+        'bank-withdraw',
+        'bank-apply-interest',
+        'bank-display-info',
       ]) {
         expect(rawExercises.containsKey(id), isTrue, reason: id);
       }
@@ -111,13 +118,13 @@ void main() {
       );
     });
 
-    test('theme airline đứng đầu, cây ≥ 2 cấp module, 17 bài method', () {
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 24 bài method', () {
       final airline = testContent.themes.first;
       expect(airline.id, 'airline');
       expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
       expect(airline.allTopics.length, greaterThanOrEqualTo(4));
       final methods = allExercises.where((e) => e.className != null).toList();
-      expect(methods.length, 17);
+      expect(methods.length, 24);
       for (final e in methods) {
         final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
         expect(

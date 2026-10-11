@@ -128,7 +128,8 @@ def run(payload):
                 error = {"kind": "runtime", "line": None,
                          "message": "Không tìm thấy class %s trong code" % class_name}
                 return finish()
-            if not callable(getattr(cls, function, None)):
+            # hasattr (không phải callable): property (owner_name, balance…) cũng là thành viên hợp lệ.
+            if not hasattr(cls, function):
                 error = {"kind": "runtime", "line": None,
                          "message": "Không tìm thấy method %s.%s() trong code" % (class_name, function)}
                 return finish()

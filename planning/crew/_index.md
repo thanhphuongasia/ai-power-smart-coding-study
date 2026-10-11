@@ -12,3 +12,4 @@
 | 2026-10-11-auth-open-mode | Chế độ mở: bỏ màn đăng nhập bằng cờ AUTH_OPEN_AS | done (main a12ee78) |
 | 2026-10-11-admin-ux-levels | Admin UX đi từng tầng (Projects → module → file + thẻ bài) | done (main) |
 | 2026-10-11-testflight-prep | HTTPS domain + iOS sẵn sàng TestFlight | done (main a25b41d) |
+| 2026-10-11-python-oop-bank | Python Fundamentals — OOP BankAccount | open (main) |

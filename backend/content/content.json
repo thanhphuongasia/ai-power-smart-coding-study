@@ -715,6 +715,68 @@
           "modules": []
         }
       ]
+    },
+    {
+      "id": "python-fundamentals",
+      "name": "Python Fundamentals",
+      "description": "Ôn lại nền tảng Python qua các bài nhỏ, bắt đầu từ lập trình hướng đối tượng với một tài khoản ngân hàng đơn giản.",
+      "tags": [
+        "python",
+        "oop"
+      ],
+      "diagram": {
+        "classes": [
+          {
+            "name": "BankAccount",
+            "file": "bank_account.py",
+            "attributes": [
+              {
+                "name": "__owner_name",
+                "type": "str",
+                "group": "core"
+              },
+              {
+                "name": "__balance",
+                "type": "float",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "owner_name",
+              "balance",
+              "deposit",
+              "withdraw",
+              "apply_interest",
+              "display_info"
+            ]
+          }
+        ],
+        "relations": []
+      },
+      "topics": [
+        {
+          "id": "oop",
+          "name": "OOP — Lập trình hướng đối tượng",
+          "description": "Class, thuộc tính private, property và setter: đóng gói dữ liệu để chỉ thay đổi qua các method có kiểm tra.",
+          "files": [
+            {
+              "id": "oop-bank-account",
+              "name": "bank_account.py",
+              "exercise_ids": [
+                "bank-init",
+                "bank-properties",
+                "bank-balance-setter",
+                "bank-deposit",
+                "bank-withdraw",
+                "bank-apply-interest",
+                "bank-display-info"
+              ]
+            }
+          ],
+          "modules": []
+        }
+      ]
     }
   ],
   "exercises": {
@@ -4203,6 +4265,1240 @@
               "value": {
                 "likes": 0
               }
+            }
+          }
+        ]
+      }
+    },
+    "bank-init": {
+      "id": "bank-init",
+      "title": "Khởi tạo tài khoản ngân hàng",
+      "class_name": "BankAccount",
+      "function_name": "__init__",
+      "params": [
+        "owner_name",
+        "initial_balance"
+      ],
+      "template": "class BankAccount:\n    # TODO A\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        # TODO B\n        # TODO C\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Hoàn thiện phần khởi tạo của class BankAccount. Tạo biến class interest_rate = 0.02 (lãi suất chung cho mọi tài khoản). Trong __init__, tên chủ tài khoản đã được lưu sẵn vào self.__owner_name; bạn cần kiểm tra số dư ban đầu: nếu initial_balance < 0 thì raise ValueError(\"Initial balance cannot be negative\"), còn hợp lệ thì lưu vào self.__balance.",
+        "motivation": "Hai dấu gạch dưới đầu tên (self.__balance) biến thuộc tính thành private: code bên ngoài không đọc/ghi trực tiếp được, buộc phải đi qua method. Kiểm tra dữ liệu ngay lúc tạo đối tượng để không bao giờ tồn tại một tài khoản có số dư âm.",
+        "small": {
+          "caption": "Mở tài khoản với $1000.0",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nprint(acc.interest_rate)\nprint(acc.balance)",
+          "output": "0.02\n1000.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Quầy giao dịch nhập nhầm số dư âm",
+          "input": "acc = BankAccount(\"An\", -50)",
+          "output": "ValueError: Initial balance cannot be negative",
+          "note": "interest_rate nằm ở cấp class nên mọi tài khoản dùng chung một giá trị; còn self.__balance là dữ liệu riêng của từng tài khoản."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-init-a",
+          "label": "A",
+          "title": "Biến class: lãi suất",
+          "prompt": "Khai báo biến class interest_rate có giá trị 0.02 (nằm ngay dưới dòng class, ngoài mọi method).",
+          "indent_level": 1,
+          "accepted_answers": [
+            "interest_rate = 0.02"
+          ],
+          "expected_output": "Đã có lãi suất chung.",
+          "explanation": "Biến khai báo trực tiếp trong thân class là biến class: chỉ có một bản, mọi đối tượng cùng dùng. Khác với self.x chỉ thuộc một đối tượng.",
+          "hints": [
+            "Chỉ là một phép gán, không cần self.",
+            "Tên biến là interest_rate.",
+            "interest_rate = 0.02"
+          ],
+          "vocab": [
+            "class variable",
+            "interest_rate"
+          ]
+        },
+        {
+          "id": "bank-init-b",
+          "label": "B",
+          "title": "Chặn số dư ban đầu âm",
+          "prompt": "Nếu initial_balance nhỏ hơn 0 thì ném ValueError với đúng thông báo \"Initial balance cannot be negative\".",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if initial_balance < 0:\n    raise ValueError(\"Initial balance cannot be negative\")",
+            "if initial_balance < 0:\n    raise ValueError('Initial balance cannot be negative')"
+          ],
+          "expected_output": "Đã chặn số dư âm.",
+          "explanation": "raise dừng __init__ ngay, nên đối tượng không được tạo ra và dòng gán self.__balance bên dưới không chạy. Số dư bằng đúng 0 vẫn hợp lệ nên điều kiện dùng < chứ không dùng <=.",
+          "hints": [
+            "Dùng if rồi raise ValueError(...) ở dòng thụt vào.",
+            "Điều kiện: initial_balance < 0.",
+            "if initial_balance < 0:\n    raise ValueError(\"Initial balance cannot be negative\")"
+          ],
+          "vocab": [
+            "if",
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "bank-init-c",
+          "label": "C",
+          "title": "Lưu số dư private",
+          "prompt": "Lưu initial_balance vào thuộc tính private self.__balance.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.__balance = initial_balance"
+          ],
+          "expected_output": "Đã lưu số dư.",
+          "explanation": "Python đổi tên self.__balance thành _BankAccount__balance (name mangling) nên bên ngoài gõ acc.__balance sẽ không thấy. Dòng này chỉ chạy khi số dư đã hợp lệ.",
+          "hints": [
+            "Giống dòng self.__owner_name = owner_name ở trên.",
+            "Vế phải là tham số initial_balance.",
+            "self.__balance = initial_balance"
+          ],
+          "vocab": [
+            "self",
+            "__balance",
+            "private"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc._BankAccount__owner_name, acc._BankAccount__balance]",
+            "expect": {
+              "return": [
+                "John Doe",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [],
+            "call": "BankAccount.interest_rate",
+            "expect": {
+              "return": 0.02
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "sorted(vars(acc))",
+            "expect": {
+              "return": [
+                "_BankAccount__balance",
+                "_BankAccount__owner_name"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "hasattr(acc, '__balance') or hasattr(acc, '__owner_name')",
+            "expect": {
+              "return": false
+            }
+          },
+          {
+            "steps": [],
+            "call": "BankAccount(\"An\", -1)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "try:\n    BankAccount(\"An\", -0.01)\nexcept ValueError as e:\n    msg = str(e)"
+            ],
+            "call": "msg",
+            "expect": {
+              "return": "Initial balance cannot be negative"
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"Zero\", 0)"
+            ],
+            "call": "acc._BankAccount__balance",
+            "expect": {
+              "return": 0
+            }
+          }
+        ]
+      }
+    },
+    "bank-properties": {
+      "id": "bank-properties",
+      "title": "Property chỉ đọc cho tên và số dư",
+      "class_name": "BankAccount",
+      "function_name": "owner_name",
+      "params": [],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    # TODO A\n    def owner_name(self):\n        # TODO B\n\n    @property\n    def balance(self):\n        # TODO C\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Cho phép đọc tên chủ tài khoản và số dư từ bên ngoài mà không lộ thuộc tính private. Dùng @property để owner_name trả về self.__owner_name và balance trả về self.__balance (decorator của balance đã viết sẵn làm mẫu).",
+        "motivation": "Property cho phép viết acc.balance như đọc một biến thường, nhưng thực chất chạy một method. Không có setter đi kèm nghĩa là gán trực tiếp acc.owner_name = ... sẽ báo lỗi, tên chủ tài khoản được bảo vệ.",
+        "small": {
+          "caption": "Đọc thông tin qua property",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nprint(acc.owner_name)\nprint(acc.balance)",
+          "output": "John Doe\n1000.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Đổi tên trực tiếp bị từ chối",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nacc.owner_name = \"Hacker\"",
+          "output": "AttributeError",
+          "note": "owner_name chỉ có getter nên là thuộc tính chỉ đọc. Muốn cho phép ghi phải thêm setter (như bài kế tiếp làm với balance)."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-properties-a",
+          "label": "A",
+          "title": "Decorator @property",
+          "prompt": "Dòng ngay trên def owner_name: biến method thành thuộc tính đọc được bằng acc.owner_name (không có dấu ngoặc).",
+          "indent_level": 1,
+          "accepted_answers": [
+            "@property"
+          ],
+          "expected_output": "Đã khai báo property.",
+          "explanation": "@property là decorator: bọc method lại để khi gõ acc.owner_name, Python tự gọi hàm và trả kết quả.",
+          "hints": [
+            "Decorator bắt đầu bằng dấu @.",
+            "Giống dòng nằm trên def balance ở bên dưới.",
+            "@property"
+          ],
+          "vocab": [
+            "@property",
+            "decorator"
+          ]
+        },
+        {
+          "id": "bank-properties-b",
+          "label": "B",
+          "title": "Trả về tên chủ tài khoản",
+          "prompt": "Trả về thuộc tính private chứa tên chủ tài khoản.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return self.__owner_name"
+          ],
+          "expected_output": "Đã trả về tên.",
+          "explanation": "Bên trong class vẫn truy cập self.__owner_name bình thường; property là cổng duy nhất cho code bên ngoài đọc giá trị này.",
+          "hints": [
+            "Dùng return.",
+            "Thuộc tính private là self.__owner_name.",
+            "return self.__owner_name"
+          ],
+          "vocab": [
+            "return",
+            "self"
+          ]
+        },
+        {
+          "id": "bank-properties-c",
+          "label": "C",
+          "title": "Trả về số dư",
+          "prompt": "Trả về thuộc tính private chứa số dư.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return self.__balance"
+          ],
+          "expected_output": "Đã trả về số dư.",
+          "explanation": "Mỗi lần đọc acc.balance, method chạy lại và trả về giá trị mới nhất, nên số dư luôn cập nhật sau khi nạp/rút.",
+          "hints": [
+            "Tương tự ô B nhưng cho số dư.",
+            "Thuộc tính private là self.__balance.",
+            "return self.__balance"
+          ],
+          "vocab": [
+            "return",
+            "self"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.owner_name, acc.balance]",
+            "expect": {
+              "return": [
+                "John Doe",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "setattr(acc, 'owner_name', 'Hacker')",
+            "expect": {
+              "raises": "AttributeError"
+            }
+          },
+          {
+            "steps": [],
+            "call": "[type(BankAccount.__dict__['owner_name']).__name__, type(BankAccount.__dict__['balance']).__name__]",
+            "expect": {
+              "return": [
+                "property",
+                "property"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "acc._BankAccount__balance = 50.0"
+            ],
+            "call": "acc.balance",
+            "expect": {
+              "return": 50.0
+            }
+          },
+          {
+            "steps": [
+              "a = BankAccount(\"An\", 10.0)",
+              "b = BankAccount(\"Binh\", 20.0)"
+            ],
+            "call": "[a.owner_name, b.owner_name, a.balance, b.balance]",
+            "expect": {
+              "return": [
+                "An",
+                "Binh",
+                10.0,
+                20.0
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "bank-balance-setter": {
+      "id": "bank-balance-setter",
+      "title": "Setter của số dư có kiểm tra",
+      "class_name": "BankAccount",
+      "function_name": "balance",
+      "params": [
+        "value"
+      ],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        # TODO A\n            # TODO B\n        # TODO C\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Viết phần thân của @balance.setter. Nếu value < 0 thì in \"Balance cannot be negative\" rồi return, số dư giữ nguyên. Ngược lại gán value cho self.__balance.",
+        "motivation": "Setter là chỗ duy nhất cho phép ghi acc.balance = ... từ bên ngoài, nên đặt luật kiểm tra ở đây: dù gọi từ đâu, số dư âm cũng không lọt vào được.",
+        "small": {
+          "caption": "Gán số dư hợp lệ",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nacc.balance = 500.0\nprint(acc.balance)",
+          "output": "500.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Gán số dư âm bị từ chối",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nacc.balance = -20\nprint(acc.balance)",
+          "output": "Balance cannot be negative\n1000.0",
+          "note": "Setter in cảnh báo rồi thoát sớm, số dư vẫn là 1000.0."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-balance-setter-a",
+          "label": "A",
+          "title": "Kiểm tra giá trị âm",
+          "prompt": "Nếu value nhỏ hơn 0...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if value < 0:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Số dư bằng 0 vẫn hợp lệ nên chỉ chặn khi value < 0.",
+          "hints": [
+            "Dùng if với phép so sánh <.",
+            "Biến cần kiểm tra là value.",
+            "if value < 0:"
+          ],
+          "vocab": [
+            "if",
+            "<"
+          ]
+        },
+        {
+          "id": "bank-balance-setter-b",
+          "label": "B",
+          "title": "Báo lỗi và thoát",
+          "prompt": "...thì in \"Balance cannot be negative\" rồi return để không gán.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "print(\"Balance cannot be negative\")\nreturn",
+            "print('Balance cannot be negative')\nreturn"
+          ],
+          "expected_output": "Đã in cảnh báo.",
+          "explanation": "return không kèm giá trị kết thúc setter ngay, nên dòng gán phía dưới bị bỏ qua và số dư giữ nguyên.",
+          "hints": [
+            "Hai dòng: print rồi return.",
+            "Thông báo phải khớp từng chữ.",
+            "print(\"Balance cannot be negative\")\nreturn"
+          ],
+          "vocab": [
+            "print",
+            "return"
+          ]
+        },
+        {
+          "id": "bank-balance-setter-c",
+          "label": "C",
+          "title": "Gán số dư mới",
+          "prompt": "Giá trị hợp lệ thì gán value vào thuộc tính private.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.__balance = value"
+          ],
+          "expected_output": "Đã gán số dư.",
+          "explanation": "Trong setter phải ghi vào self.__balance; nếu viết self.balance = value, setter sẽ tự gọi chính nó và lặp vô hạn.",
+          "hints": [
+            "Gán vào thuộc tính private, không phải self.balance.",
+            "Giá trị cần gán là value.",
+            "self.__balance = value"
+          ],
+          "vocab": [
+            "self",
+            "__balance"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "acc.balance = 500.0"
+            ],
+            "call": "acc.balance",
+            "expect": {
+              "return": 500.0
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.balance = -1"
+            ],
+            "call": "[acc.balance, buf.getvalue()]",
+            "expect": {
+              "return": [
+                1000.0,
+                "Balance cannot be negative\n"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "acc.balance = 0"
+            ],
+            "call": "acc.balance",
+            "expect": {
+              "return": 0
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.balance = 250.0"
+            ],
+            "call": "[acc.balance, buf.getvalue()]",
+            "expect": {
+              "return": [
+                250.0,
+                ""
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.balance = -5",
+              "acc.balance = 200.0"
+            ],
+            "call": "[acc.balance, buf.getvalue()]",
+            "expect": {
+              "return": [
+                200.0,
+                "Balance cannot be negative\n"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.balance = -0.01"
+            ],
+            "call": "acc._BankAccount__balance",
+            "expect": {
+              "return": 1000.0
+            }
+          }
+        ]
+      }
+    },
+    "bank-deposit": {
+      "id": "bank-deposit",
+      "title": "Nạp tiền vào tài khoản",
+      "class_name": "BankAccount",
+      "function_name": "deposit",
+      "params": [
+        "amount"
+      ],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        # TODO A\n            # TODO B\n        # TODO C\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Hoàn thiện deposit(self, amount). Nếu amount <= 0 thì in \"Deposit amount must be positive\" và return False. Ngược lại cộng amount vào self.__balance và return True.",
+        "motivation": "Method trả về True/False để nơi gọi biết giao dịch có thành công không, thay vì phải đoán từ số dư. Chặn số tiền không dương để không ai \"nạp\" số âm thành một lần rút lén.",
+        "small": {
+          "caption": "Nạp 250 đồng",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nprint(acc.deposit(250.0))\nprint(acc.balance)",
+          "output": "True\n1250.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Quầy nhập nhầm số tiền 0",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nok = acc.deposit(0)\nprint(ok, acc.balance)",
+          "output": "Deposit amount must be positive\nFalse 1000.0",
+          "note": "Giao dịch bị từ chối nên số dư không đổi."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-deposit-a",
+          "label": "A",
+          "title": "Chặn số tiền không dương",
+          "prompt": "Nếu amount nhỏ hơn hoặc bằng 0...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if amount <= 0:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Nạp đúng 0 đồng cũng vô nghĩa nên điều kiện dùng <= chứ không phải <.",
+          "hints": [
+            "Dùng if với phép so sánh <=.",
+            "Biến cần kiểm tra là amount.",
+            "if amount <= 0:"
+          ],
+          "vocab": [
+            "if",
+            "<="
+          ]
+        },
+        {
+          "id": "bank-deposit-b",
+          "label": "B",
+          "title": "Báo lỗi và trả False",
+          "prompt": "...thì in \"Deposit amount must be positive\" rồi return False.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "print(\"Deposit amount must be positive\")\nreturn False",
+            "print('Deposit amount must be positive')\nreturn False"
+          ],
+          "expected_output": "Đã từ chối giao dịch.",
+          "explanation": "return False thoát method ngay, phần cộng tiền phía dưới không chạy.",
+          "hints": [
+            "Hai dòng: print rồi return False.",
+            "Thông báo phải khớp từng chữ.",
+            "print(\"Deposit amount must be positive\")\nreturn False"
+          ],
+          "vocab": [
+            "print",
+            "return",
+            "False"
+          ]
+        },
+        {
+          "id": "bank-deposit-c",
+          "label": "C",
+          "title": "Cộng tiền và báo thành công",
+          "prompt": "Cộng amount vào số dư private rồi return True.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.__balance += amount\nreturn True"
+          ],
+          "expected_output": "Đã cộng tiền.",
+          "explanation": "+= cộng thẳng vào thuộc tính private. return True cho biết giao dịch thành công.",
+          "hints": [
+            "Dùng toán tử += rồi return True.",
+            "Thuộc tính private là self.__balance.",
+            "self.__balance += amount\nreturn True"
+          ],
+          "vocab": [
+            "+=",
+            "return",
+            "True"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.deposit(250.0), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                1250.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.deposit(0)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                false,
+                "Deposit amount must be positive\n",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.deposit(-5)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                false,
+                "Deposit amount must be positive\n",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.deposit(500.0)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                "",
+                1500.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.deposit(100.0), acc.deposit(50.0), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                true,
+                1150.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.deposit(0.5), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                1000.5
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "bank-withdraw": {
+      "id": "bank-withdraw",
+      "title": "Rút tiền có kiểm tra",
+      "class_name": "BankAccount",
+      "function_name": "withdraw",
+      "params": [
+        "amount"
+      ],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        # TODO A\n            return False\n        # TODO B\n            return False\n        # TODO C\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Hoàn thiện withdraw(self, amount) với hai lớp kiểm tra. Nếu amount <= 0 thì in \"Withdrawal amount must be positive\"; nếu amount lớn hơn số dư thì in \"Insufficient funds\". Cả hai trường hợp đều return False (dòng return đã có sẵn). Hợp lệ thì trừ amount khỏi self.__balance rồi return True.",
+        "motivation": "Rút tiền là thao tác nhạy cảm nhất của tài khoản: kiểm tra số tiền hợp lệ trước, rồi kiểm tra đủ tiền, cuối cùng mới trừ. Thứ tự này đảm bảo số dư không bao giờ âm.",
+        "small": {
+          "caption": "Rút 300 đồng từ 1000",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nprint(acc.withdraw(300.0))\nprint(acc.balance)",
+          "output": "True\n700.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Rút quá số dư",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nok = acc.withdraw(1500.0)\nprint(ok, acc.balance)",
+          "output": "Insufficient funds\nFalse 1000.0",
+          "note": "Rút đúng bằng số dư vẫn được (số dư về 0); chỉ rút nhiều hơn số dư mới bị từ chối."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-withdraw-a",
+          "label": "A",
+          "title": "Kiểm tra số tiền không dương",
+          "prompt": "Nếu amount <= 0 thì in \"Withdrawal amount must be positive\" (dòng return False bên dưới đã có sẵn).",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if amount <= 0:\n    print(\"Withdrawal amount must be positive\")",
+            "if amount <= 0:\n    print('Withdrawal amount must be positive')"
+          ],
+          "expected_output": "Đã kiểm tra số tiền.",
+          "explanation": "Ô này gồm điều kiện và dòng in thụt vào trong. Dòng return False sau đó thuộc cùng khối if nên chỉ chạy khi điều kiện đúng.",
+          "hints": [
+            "Hai dòng: if rồi print thụt vào.",
+            "Điều kiện amount <= 0.",
+            "if amount <= 0:\n    print(\"Withdrawal amount must be positive\")"
+          ],
+          "vocab": [
+            "if",
+            "print"
+          ]
+        },
+        {
+          "id": "bank-withdraw-b",
+          "label": "B",
+          "title": "Kiểm tra đủ tiền",
+          "prompt": "Nếu amount lớn hơn số dư thì in \"Insufficient funds\" (return False bên dưới đã có sẵn).",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if amount > self.__balance:\n    print(\"Insufficient funds\")",
+            "if amount > self.__balance:\n    print('Insufficient funds')",
+            "if amount > self.balance:\n    print(\"Insufficient funds\")"
+          ],
+          "expected_output": "Đã kiểm tra đủ tiền.",
+          "explanation": "Dùng > chứ không phải >= vì rút đúng bằng số dư là hợp lệ.",
+          "hints": [
+            "So sánh amount với số dư hiện có.",
+            "Điều kiện amount > self.__balance.",
+            "if amount > self.__balance:\n    print(\"Insufficient funds\")"
+          ],
+          "vocab": [
+            "if",
+            ">",
+            "print"
+          ]
+        },
+        {
+          "id": "bank-withdraw-c",
+          "label": "C",
+          "title": "Trừ tiền",
+          "prompt": "Hai kiểm tra đã qua, trừ amount khỏi số dư private.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.__balance -= amount"
+          ],
+          "expected_output": "Đã trừ tiền.",
+          "explanation": "-= trừ trực tiếp vào thuộc tính private; return True đã có sẵn ngay phía dưới.",
+          "hints": [
+            "Dùng toán tử -=.",
+            "Thuộc tính private là self.__balance.",
+            "self.__balance -= amount"
+          ],
+          "vocab": [
+            "-=",
+            "self"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.withdraw(300.0), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                700.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.withdraw(1000.0), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                0.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.withdraw(0)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                false,
+                "Withdrawal amount must be positive\n",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.withdraw(-50)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                false,
+                "Withdrawal amount must be positive\n",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.withdraw(1000.01)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                false,
+                "Insufficient funds\n",
+                1000.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ok = acc.withdraw(200.0)"
+            ],
+            "call": "[ok, buf.getvalue(), acc.balance]",
+            "expect": {
+              "return": [
+                true,
+                "",
+                800.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    r = [acc.withdraw(600.0), acc.withdraw(300.0), acc.withdraw(200.0)]"
+            ],
+            "call": "[r, acc.balance, buf.getvalue()]",
+            "expect": {
+              "return": [
+                [
+                  true,
+                  true,
+                  false
+                ],
+                100.0,
+                "Insufficient funds\n"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "bank-apply-interest": {
+      "id": "bank-apply-interest",
+      "title": "Cộng lãi vào tài khoản",
+      "class_name": "BankAccount",
+      "function_name": "apply_interest",
+      "params": [],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        # TODO A\n        # TODO B\n        # TODO C\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+      "challenge": {
+        "statement": "Viết apply_interest(self): tính interest = số dư × lãi suất của class (BankAccount.interest_rate), cộng interest vào self.__balance rồi return interest (số tiền lãi, không phải số dư mới).",
+        "motivation": "Lãi suất là biến class nên đổi một chỗ là mọi tài khoản đổi theo. Trả về số tiền lãi giúp nơi gọi ghi sổ khoản lãi vừa phát sinh mà không phải tính lại.",
+        "small": {
+          "caption": "Cộng lãi cho tài khoản 1000 đồng",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nprint(acc.apply_interest())\nprint(acc.balance)",
+          "output": "20.0\n1020.0",
+          "note": null
+        },
+        "project": {
+          "caption": "Cuối kỳ chạy lãi cho tài khoản rỗng",
+          "input": "acc = BankAccount(\"An\", 0)\nprint(acc.apply_interest())\nprint(acc.balance)",
+          "output": "0.0\n0.0",
+          "note": "Số dư 0 thì lãi 0; kết quả là float vì phép nhân với 0.02."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-apply-interest-a",
+          "label": "A",
+          "title": "Tính tiền lãi",
+          "prompt": "Gán interest bằng số dư nhân với lãi suất của class.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "interest = self.__balance * BankAccount.interest_rate",
+            "interest = self.__balance * self.interest_rate"
+          ],
+          "expected_output": "Đã tính lãi.",
+          "explanation": "Biến class đọc được qua tên class (BankAccount.interest_rate) hoặc qua self. Nhân với số dư hiện tại để ra tiền lãi.",
+          "hints": [
+            "Phép nhân giữa số dư và lãi suất.",
+            "Lãi suất là biến class interest_rate.",
+            "interest = self.__balance * BankAccount.interest_rate"
+          ],
+          "vocab": [
+            "interest_rate",
+            "*"
+          ]
+        },
+        {
+          "id": "bank-apply-interest-b",
+          "label": "B",
+          "title": "Cộng lãi vào số dư",
+          "prompt": "Cộng interest vào số dư private.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.__balance += interest"
+          ],
+          "expected_output": "Đã cộng lãi.",
+          "explanation": "+= cập nhật số dư tại chỗ; từ giờ lần tính lãi sau sẽ tính trên số dư mới (lãi kép).",
+          "hints": [
+            "Dùng toán tử +=.",
+            "Thuộc tính private là self.__balance.",
+            "self.__balance += interest"
+          ],
+          "vocab": [
+            "+=",
+            "self"
+          ]
+        },
+        {
+          "id": "bank-apply-interest-c",
+          "label": "C",
+          "title": "Trả về tiền lãi",
+          "prompt": "Trả về số tiền lãi vừa cộng.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return interest"
+          ],
+          "expected_output": "Đã trả về lãi.",
+          "explanation": "Trả về interest (không phải số dư mới) để nơi gọi biết khoản lãi vừa phát sinh.",
+          "hints": [
+            "Dùng return.",
+            "Giá trị trả về là biến interest.",
+            "return interest"
+          ],
+          "vocab": [
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "acc.apply_interest()",
+            "expect": {
+              "return": 20.0
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[acc.apply_interest(), acc.balance]",
+            "expect": {
+              "return": [
+                20.0,
+                1020.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"An\", 0)"
+            ],
+            "call": "[acc.apply_interest(), acc.balance]",
+            "expect": {
+              "return": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"Mai\", 500.0)"
+            ],
+            "call": "[acc.apply_interest(), acc.apply_interest(), acc.balance]",
+            "expect": {
+              "return": [
+                10.0,
+                10.200000000000001,
+                520.2
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "BankAccount.interest_rate = 0.1",
+              "try:\n    r = acc.apply_interest()\nfinally:\n    BankAccount.interest_rate = 0.02"
+            ],
+            "call": "[r, acc.balance]",
+            "expect": {
+              "return": [
+                100.0,
+                1100.0
+              ]
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)"
+            ],
+            "call": "[BankAccount.interest_rate, acc.apply_interest() > 0]",
+            "expect": {
+              "return": [
+                0.02,
+                true
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "bank-display-info": {
+      "id": "bank-display-info",
+      "title": "In thông tin tài khoản",
+      "class_name": "BankAccount",
+      "function_name": "display_info",
+      "params": [],
+      "template": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        # TODO A\n        # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết display_info(self) in đúng 3 dòng: \"Account Owner: <tên>\", \"Balance: $<số dư>\" và \"Interest Rate: <lãi suất tính theo %>%\". Lãi suất 0.02 phải hiện là 2.0% (nhân 100).",
+        "motivation": "Đây là \"bản sao kê\" của tài khoản. Dùng f-string để ghép giá trị vào chuỗi, và nhớ đổi lãi suất từ số thập phân sang phần trăm trước khi in.",
+        "small": {
+          "caption": "In sao kê cho John Doe",
+          "input": "acc = BankAccount(\"John Doe\", 1000.0)\nacc.display_info()",
+          "output": "Account Owner: John Doe\nBalance: $1000.0\nInterest Rate: 2.0%",
+          "note": null
+        },
+        "project": {
+          "caption": "In sao kê sau khi nạp thêm",
+          "input": "acc = BankAccount(\"Mai\", 250.5)\nacc.deposit(100.0)\nacc.display_info()",
+          "output": "Account Owner: Mai\nBalance: $350.5\nInterest Rate: 2.0%",
+          "note": "Số dư lấy giá trị hiện tại nên phản ánh cả lần nạp 100."
+        }
+      },
+      "blocks": [
+        {
+          "id": "bank-display-info-a",
+          "label": "A",
+          "title": "Dòng tên chủ tài khoản",
+          "prompt": "In \"Account Owner: \" theo sau là tên chủ tài khoản.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "print(f\"Account Owner: {self.__owner_name}\")",
+            "print(f'Account Owner: {self.__owner_name}')",
+            "print(f\"Account Owner: {self.owner_name}\")"
+          ],
+          "expected_output": "Đã in tên.",
+          "explanation": "f-string cho phép nhúng biểu thức trong dấu {} thẳng vào chuỗi.",
+          "hints": [
+            "Dùng print với f-string.",
+            "Nhúng self.__owner_name vào trong {}.",
+            "print(f\"Account Owner: {self.__owner_name}\")"
+          ],
+          "vocab": [
+            "print",
+            "f-string"
+          ]
+        },
+        {
+          "id": "bank-display-info-b",
+          "label": "B",
+          "title": "Dòng số dư",
+          "prompt": "In \"Balance: $\" theo sau là số dư hiện tại.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "print(f\"Balance: ${self.__balance}\")",
+            "print(f'Balance: ${self.__balance}')",
+            "print(f\"Balance: ${self.balance}\")"
+          ],
+          "expected_output": "Đã in số dư.",
+          "explanation": "Ký tự $ nằm ngoài dấu {} nên là chữ thường trong chuỗi; chỉ phần trong {} được tính giá trị.",
+          "hints": [
+            "Dấu $ viết trực tiếp trước dấu {.",
+            "Nhúng self.__balance vào trong {}.",
+            "print(f\"Balance: ${self.__balance}\")"
+          ],
+          "vocab": [
+            "print",
+            "f-string"
+          ]
+        },
+        {
+          "id": "bank-display-info-c",
+          "label": "C",
+          "title": "Dòng lãi suất phần trăm",
+          "prompt": "In \"Interest Rate: \" theo sau là lãi suất nhân 100 và ký tự %.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+            "print(f'Interest Rate: {BankAccount.interest_rate * 100}%')",
+            "print(f\"Interest Rate: {self.interest_rate * 100}%\")"
+          ],
+          "expected_output": "Đã in lãi suất.",
+          "explanation": "Lãi suất lưu dạng thập phân (0.02) nên nhân 100 mới ra 2.0 để hiển thị phần trăm. Ký tự % đặt ngoài {}.",
+          "hints": [
+            "Nhân interest_rate với 100 ngay trong {}.",
+            "Ký tự % viết sau dấu }.",
+            "print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")"
+          ],
+          "vocab": [
+            "print",
+            "interest_rate"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BankAccount:\n    interest_rate = 0.02\n\n    def __init__(self, owner_name, initial_balance):\n        self.__owner_name = owner_name\n        if initial_balance < 0:\n            raise ValueError(\"Initial balance cannot be negative\")\n        self.__balance = initial_balance\n\n    @property\n    def owner_name(self):\n        return self.__owner_name\n\n    @property\n    def balance(self):\n        return self.__balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            print(\"Balance cannot be negative\")\n            return\n        self.__balance = value\n\n    def deposit(self, amount):\n        if amount <= 0:\n            print(\"Deposit amount must be positive\")\n            return False\n        self.__balance += amount\n        return True\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            print(\"Withdrawal amount must be positive\")\n            return False\n        if amount > self.__balance:\n            print(\"Insufficient funds\")\n            return False\n        self.__balance -= amount\n        return True\n\n    def apply_interest(self):\n        interest = self.__balance * BankAccount.interest_rate\n        self.__balance += interest\n        return interest\n\n    def display_info(self):\n        print(f\"Account Owner: {self.__owner_name}\")\n        print(f\"Balance: ${self.__balance}\")\n        print(f\"Interest Rate: {BankAccount.interest_rate * 100}%\")",
+        "cases": [
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.display_info()"
+            ],
+            "call": "buf.getvalue()",
+            "expect": {
+              "return": "Account Owner: John Doe\nBalance: $1000.0\nInterest Rate: 2.0%\n"
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"Mai\", 250.5)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.display_info()"
+            ],
+            "call": "buf.getvalue()",
+            "expect": {
+              "return": "Account Owner: Mai\nBalance: $250.5\nInterest Rate: 2.0%\n"
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.display_info()"
+            ],
+            "call": "len(buf.getvalue().splitlines())",
+            "expect": {
+              "return": 3
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    ret = acc.display_info()"
+            ],
+            "call": "ret",
+            "expect": {
+              "return": null
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "acc.deposit(500.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.display_info()"
+            ],
+            "call": "buf.getvalue().splitlines()[1]",
+            "expect": {
+              "return": "Balance: $1500.0"
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"Zero\", 0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "with contextlib.redirect_stdout(buf):\n    acc.display_info()"
+            ],
+            "call": "buf.getvalue().splitlines()[1]",
+            "expect": {
+              "return": "Balance: $0"
+            }
+          },
+          {
+            "steps": [
+              "acc = BankAccount(\"John Doe\", 1000.0)",
+              "import io, contextlib",
+              "buf = io.StringIO()",
+              "BankAccount.interest_rate = 0.05",
+              "try:\n    with contextlib.redirect_stdout(buf):\n        acc.display_info()\nfinally:\n    BankAccount.interest_rate = 0.02"
+            ],
+            "call": "buf.getvalue().splitlines()[2]",
+            "expect": {
+              "return": "Interest Rate: 5.0%"
             }
           }
         ]

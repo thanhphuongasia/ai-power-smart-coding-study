@@ -1,0 +1,3 @@
+ M mobile/ios/Runner.xcodeproj/project.pbxproj
+ M planning/crew/_index.md
+?? planning/crew/2026-10-11-python-oop-bank/

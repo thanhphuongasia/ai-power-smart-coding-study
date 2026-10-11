@@ -259,6 +259,12 @@ def test_scenario_class_without_method():
     assert r["error"]["message"] == "Không tìm thấy method Counter.add() trong code"
 
 
+def test_scenario_property_counts_as_member():
+    code = "class Counter:\n    @property\n    def add(self):\n        return 7\n"
+    r = scen([{"call": "Counter().add", "expect": {"return": 7}}], code=code)
+    assert r["status"] == "passed", r
+
+
 def test_scenario_state_does_not_leak_between_cases():
     case = {"steps": ["c = Counter()"], "call": "c.add(1)", "expect": {"return": 1}}
     leak = {"call": "'c' in dir()", "expect": {"return": False}}
