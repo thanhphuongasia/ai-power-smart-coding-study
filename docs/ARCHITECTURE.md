@@ -24,6 +24,7 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
 | features/review, stats, practice, admin, shell | ôn tập, thống kê, luyện, quản trị, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) | docs/ARCHITECTURE.md:1 |
+| deploy | triển khai lên VPS dùng chung: nginx cổng 8090 phục vụ web tĩnh và chuyển `/content`, `/run` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` — deploy/deploy.sh:1, deploy/README.md:11-20 | docs/modules/deploy.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
 
 ## backend — chấm bài bằng Python thật
@@ -60,7 +61,7 @@ class CodeRunner(Protocol):
 
 Không chống gian lận: code học viên chạy cùng tiến trình với harness, nên cố tình in dòng kết quả
 giả là tự lừa mình (chấp nhận cho app học). Không có xác thực người dùng; backend chỉ lưu nội dung học
-(không lưu tiến độ). Mặc định chỉ chạy local (`127.0.0.1:8000`) và cần Postgres
+(không lưu tiến độ). Mặc định chạy local (`127.0.0.1:8000`; trên VPS xem mục deploy) và cần Postgres
 (`DATABASE_URL`, backend/app/db.py:11-15).
 
 ## Luồng nội dung — content.json → Postgres → /content → cache trong app
@@ -334,12 +335,73 @@ Material thay vì elevation 0 tường minh ở hai chỗ này (mobile/lib/share
 đã ghi Minor trong Backlog, chưa sửa tại thời điểm run này kết thúc.
 
 
+## deploy — web + API cùng một origin trên VPS
+
+### Là gì
+
+Phần triển khai đưa app lên một VPS dùng chung với dịch vụ khác để có một link thử trên trình duyệt.
+Trình duyệt chỉ nói chuyện với một địa chỉ duy nhất (cổng 8090 của nginx). nginx trả file web Flutter đã
+build sẵn, và chuyển đúng hai đường dẫn của backend (`/content`, `/run`) vào uvicorn đang nghe ở
+`127.0.0.1:8100`. Vì web và API cùng "origin" (cùng giao thức, host, cổng) nên trình duyệt không áp luật
+chặn gọi chéo nguồn (CORS) và backend không phải cấu hình gì thêm. Chi tiết vận hành xem
+`docs/modules/deploy.md`.
+
+### Cách hoạt động
+
+Đường đi của một request:
+
+```text
+trình duyệt --HTTP--> nginx :8090
+  nếu /content hoặc /run -> uvicorn 127.0.0.1:8100 -> Postgres smart_coding_study
+                                                   -> Judge0 CE công khai (chỉ /run)
+  còn lại                -> /opt/smart-coding-study/web (file tĩnh, fallback index.html)
+```
+
+| Thứ | Ở đâu | file:dòng |
+| --- | --- | --- |
+| Địa chỉ công khai + cổng mặc định, truyền vào bản build web làm `API_URL` | biến `PUBLIC_URL` | deploy/deploy.sh:13, deploy/deploy.sh:18 |
+| Build web ở máy dev (VPS không có Flutter), rồi rsync lên server | bước 1-2 của script | deploy/deploy.sh:17-28 |
+| User hệ thống riêng `smartcs`, không shell | `useradd` nếu chưa có | deploy/deploy.sh:40 |
+| Role + DB Postgres riêng; mật khẩu sinh trên server, đi qua stdin của psql | `openssl rand` + `pg` | deploy/deploy.sh:44-61 |
+| Bí mật chỉ nằm ở `/etc/smart-coding-study.env` (root:smartcs, 640), ghi file tạm rồi `mv` | `ENV_FILE` | deploy/deploy.sh:37-57 |
+| Migration rồi nạp nội dung mỗi lần deploy | `alembic upgrade head`, `app.load_content` | deploy/deploy.sh:70-72 |
+| Cài unit systemd, `enable` + `restart` | `smart-coding-study-api` | deploy/deploy.sh:79-82 |
+| nginx: `nginx -t` trước, lỗi thì trả site cũ và dừng, sạch mới `reload` | khối nginx | deploy/deploy.sh:85-94 |
+| Smoke test: `/content` qua 8100 và 8090, `/` qua 8090 | `curl -fsS` | deploy/deploy.sh:96-103 |
+
+Cấu hình nginx (deploy/nginx/smart-coding-study.conf:18-39) chỉ mở đúng hai route API bằng `location =`, mọi
+đường dẫn khác rơi vào `try_files ... /index.html` để router của web hoạt động:
+
+```nginx
+location = /run {
+    proxy_pass http://127.0.0.1:8100;
+    ...
+    proxy_read_timeout 18s;
+}
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+Unit systemd (deploy/systemd/smart-coding-study-api.service:7-19) chạy uvicorn bằng user `smartcs`, nạp env từ
+file bí mật, và siết quyền: `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome`,
+`ReadOnlyPaths=/opt/smart-coding-study`. Ba mốc thời gian lồng nhau: HTTP timeout của runner 15s, nginx
+`proxy_read_timeout` 18s (conf:31), client app 20s (mobile/lib/data/judge_client.dart:63). Body: nginx cho tới
+80k (conf:10), lớn hơn giới hạn 64KB của backend để chính backend trả 413 (backend/app/main.py:34).
+
+### Ranh giới
+
+Chỉ chạm tài nguyên tên `smart-coding-study`/`smartcs` vì VPS dùng chung (deploy/deploy.sh:7-9). Không có
+HTTPS hay domain, không mật khẩu và không giới hạn tốc độ trên `/run`: ai có link đều chạy được code, và code
+được chuyển tới Judge0 công khai nên IP VPS có thể bị Judge0 chặn nếu bị lạm dụng (deploy/README.md:36-41).
+Không có CI deploy: chỉ chạy tay từ máy có Flutter và SSH tới host `vps`.
+
 ## Giới hạn đã biết
 
 Tiến độ chưa bền: không có Hive hay SQLite, nên tiến độ, draft code, hint và ô đã xem lời giải sống trong
 `ProgressController` và mất khi app bị kill (Hive thuộc issue #5). Về máy chấm, code học viên được gửi tới Judge0 CE
 công khai của bên thứ ba, giới hạn theo IP: đủ cho dev local, không đủ production và không dùng cho dữ liệu nhạy cảm
-(backend/app/runner.py:1-9). Hệ thống chỉ chạy local — iOS simulator gọi `127.0.0.1`; điện thoại thật và Android
+(backend/app/runner.py:1-9). Bản web đã chạy trên VPS (xem mục deploy), còn mobile native chỉ chạy local — iOS simulator gọi `127.0.0.1`; điện thoại thật và Android
 emulator (`10.0.2.2`, cleartext) chưa làm, và harness không chống gian lận (xem mục backend ở trên,
 planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md:192-200).
 
@@ -358,3 +420,9 @@ Phần chưa tự quan sát: `flutter run` trên simulator hay thiết bị th�
 widget test tạm dùng `JudgeClient` thật gọi backend thật + Judge0 thật, chưa phải bấm tay trên simulator
 (planning/crew/2026-10-11-exercise-tabs-judge/STATUS.md:28-31); phần "xem Solution → Stats không tính sạch" chỉ có
 widget test, chưa chạy e2e.
+
+Deploy VPS (run 2026-10-11-deploy-vps-web): `/run` có thể trả 504 khi tải cao vì hàng đợi Semaphore(4)
+(backend/app/main.py:36) cộng 15s Judge0 vượt `proxy_read_timeout` 18s; cổng 8090/8100 lặp ở ba file
+(deploy/deploy.sh:13, deploy/README.md:9, deploy/systemd/smart-coding-study-api.service:12) và chỉ smoke test
+bắt được lệch; thư mục tạm `/root/.smart-coding-study-deploy` không tự dọn nếu script chết giữa chừng
+(deploy/deploy.sh:22). Review chéo bằng model họ khác không chạy được (Codex timeout 2 lần).

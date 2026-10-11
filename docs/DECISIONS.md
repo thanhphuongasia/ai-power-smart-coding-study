@@ -349,6 +349,31 @@ Android release thiếu `INTERNET` và `10.0.2.2` (ngoài phạm vi run).
 **Nguồn**: mobile/lib/data/content_repository.dart:9-17; mobile/lib/data/judge_client.dart:7,65;
 backend/README.md:22-23; planning/crew/2026-10-11-content-api-postgres/STATUS.md (Backlog SEAM).
 
+### Deploy lên VPS dùng chung: một origin qua nginx, backend riêng user, bí mật một file
+
+**Quyết định** (run 2026-10-11-deploy-vps-web):
+- Web Flutter và API cùng origin `http://<ip>:8090`: nginx phục vụ web tĩnh, chỉ proxy `= /content` và
+  `= /run` vào uvicorn `127.0.0.1:8100` — không CORS (deploy/nginx/smart-coding-study.conf:18-39).
+- Backend chạy dưới user hệ thống `smartcs` (không shell), systemd siết quyền (`NoNewPrivileges`,
+  `ProtectSystem=strict`, `ReadOnlyPaths`...) (deploy/systemd/smart-coding-study-api.service:7-19).
+- DB và role Postgres riêng (`smart_coding_study`/`smartcs`); mọi bí mật chỉ ở
+  `/etc/smart-coding-study.env` (root:smartcs, 640), mật khẩu sinh trên server và đi qua stdin psql
+  (deploy/deploy.sh:37-61).
+- `deploy.sh` idempotent: env/DB chỉ tạo khi chưa có; nginx `nginx -t` trước, lỗi thì trả site cũ và không
+  reload (deploy/deploy.sh:45,59,85-94).
+- Build web ở máy dev vì VPS không có Flutter (deploy/deploy.sh:17-18).
+
+**Vì sao**: VPS dùng chung với dịch vụ khác nên mọi thứ phải cô lập theo tên `smart-coding-study`/`smartcs`
+và không được làm hỏng nginx chung; cùng origin loại bỏ cấu hình CORS và cho đúng một link thử.
+Review chặn hai lỗi trước khi deploy: mật khẩu lộ qua argv/log và thư mục `/tmp` dùng chung
+(commit 7d8a5f5, 458ce00).
+
+**Rủi ro đã chấp nhận (tạm thời)**: link công khai, không mật khẩu, không `limit_req` trên `/run`, code
+chuyển tới Judge0 công khai nên IP VPS có thể bị chặn; HTTP thường, chưa domain/HTTPS
+(deploy/README.md:36-41). Không có second opinion khác họ model (Codex timeout 2 lần).
+
+**Nguồn**: deploy/deploy.sh:1-108; deploy/README.md:11-41; planning/crew/2026-10-11-deploy-vps-web/DEVIATIONS.md,
+reviews/SEAM.md.
 ### Module lồng nhau = `topics.parent_id` + `position` theo thứ tự duyệt trước (preorder)
 
 **Quyết định**: module con là hàng `topics` tự tham chiếu qua `parent_id` (FK về `topics.id`, CASCADE, nullable);
