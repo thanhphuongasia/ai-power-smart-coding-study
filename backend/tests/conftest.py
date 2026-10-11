@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Iterator
@@ -18,6 +19,7 @@ from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import database_url
+from app.load_content import load_content
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_DATABASE_URL = os.environ.get(
@@ -73,3 +75,21 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
     session.close()
     transaction.rollback()
     connection.close()
+
+
+CONTENT_PATH = os.path.join(BACKEND_DIR, "content", "content.json")
+
+
+@pytest.fixture(scope="session")
+def content_data() -> dict:
+    """Nội dung thật trong repo (nguồn soạn), dùng chung cho mọi test."""
+    with open(CONTENT_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture()
+def loaded_session(db_session: Session, content_data: dict) -> Session:
+    """`db_session` đã nạp content.json (rollback sau test như db_session)."""
+    load_content(db_session, content_data)
+    db_session.flush()
+    return db_session

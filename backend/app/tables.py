@@ -17,6 +17,7 @@ class Base(DeclarativeBase):
 
 class Theme(Base):
     __tablename__ = "themes"
+    __table_args__ = (UniqueConstraint("position", name="uq_themes_position"),)
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     position: Mapped[int] = mapped_column(Integer)
@@ -27,6 +28,7 @@ class Theme(Base):
 
 class Topic(Base):
     __tablename__ = "topics"
+    __table_args__ = (UniqueConstraint("theme_id", "position", name="uq_topics_theme_position"),)
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     theme_id: Mapped[str] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), index=True)
@@ -37,6 +39,7 @@ class Topic(Base):
 
 class CodeFile(Base):
     __tablename__ = "code_files"
+    __table_args__ = (UniqueConstraint("topic_id", "position", name="uq_code_files_topic_position"),)
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     topic_id: Mapped[str] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"), index=True)
@@ -64,9 +67,12 @@ class Exercise(Base):
 
 class FileExercise(Base):
     __tablename__ = "file_exercises"
+    __table_args__ = (UniqueConstraint("file_id", "position", name="uq_file_exercises_file_position"),)
 
     file_id: Mapped[str] = mapped_column(ForeignKey("code_files.id", ondelete="CASCADE"), primary_key=True)
-    exercise_id: Mapped[str] = mapped_column(ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True)
+    exercise_id: Mapped[str] = mapped_column(
+        ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
     position: Mapped[int] = mapped_column(Integer)
 
 
@@ -74,7 +80,10 @@ class Block(Base):
     """Một ô TODO của bài."""
 
     __tablename__ = "blocks"
-    __table_args__ = (UniqueConstraint("exercise_id", "label", name="uq_blocks_exercise_label"),)
+    __table_args__ = (
+        UniqueConstraint("exercise_id", "label", name="uq_blocks_exercise_label"),
+        UniqueConstraint("exercise_id", "position", name="uq_blocks_exercise_position"),
+    )
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     exercise_id: Mapped[str] = mapped_column(ForeignKey("exercises.id", ondelete="CASCADE"), index=True)

@@ -1,4 +1,5 @@
-"""API chấm bài: `POST /run` ghép harness + test case của bài rồi gửi cho máy chấm.
+"""API: `GET /content` (nội dung học từ Postgres, xem content_api.py) và `POST /run` (ghép
+harness + test case của bài trong DB rồi gửi cho máy chấm).
 
 Chạy: `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000` (xem README.md).
 """
@@ -13,18 +14,22 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.orm import Session
 
 from app import harness
+from app.content_api import read_judge
+from app.content_api import router as content_router
+from app.db import get_session
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
 
 logger = logging.getLogger("judge")
 
 APP_DIR = Path(__file__).parent
 HARNESS_SOURCE = (APP_DIR / "harness.py").read_text(encoding="utf-8")
-EXERCISES: dict[str, dict] = json.loads((APP_DIR / "exercises.json").read_text(encoding="utf-8"))
 MAX_CODE_CHARS = 8000
 # 8000 ký tự UTF-8 tối đa ~32KB, cộng JSON escape: 64KB là đủ rộng cho request hợp lệ.
 MAX_BODY_BYTES = 64 * 1024
@@ -33,7 +38,8 @@ _RUN_SLOTS = asyncio.Semaphore(4)
 # Tạo lúc import: CODE_RUNNER sai thì server không khởi động được, thay vì 500 ở request đầu.
 _RUNNER = runner_from_env()
 
-app = FastAPI(title="Smart Coding Study judge")
+app = FastAPI(title="Smart Coding Study")
+app.include_router(content_router)
 
 
 @app.middleware("http")
@@ -87,13 +93,18 @@ def get_runner() -> CodeRunner:
 
 
 @app.post("/run", response_model=RunResponse)
-async def run(request: RunRequest, runner: CodeRunner = Depends(get_runner)) -> RunResponse:
-    exercise = EXERCISES.get(request.exercise_id)
-    if exercise is None:
+async def run(
+    request: RunRequest,
+    runner: CodeRunner = Depends(get_runner),
+    session: Session = Depends(get_session),
+) -> RunResponse:
+    # Session SQLAlchemy là sync: tra DB trong threadpool để không chặn event loop.
+    judge = await run_in_threadpool(read_judge, session, request.exercise_id)
+    if judge is None:
         raise HTTPException(status_code=404, detail="exercise_not_found")
 
     payload = json.dumps(
-        {"code": request.code, "function": exercise["function"], "cases": exercise["cases"]},
+        {"code": request.code, "function": judge.function, "cases": judge.cases},
         ensure_ascii=False,
     )
     started = time.monotonic()

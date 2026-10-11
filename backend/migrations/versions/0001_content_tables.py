@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("tags", TEXT_ARRAY, nullable=False),
+        sa.UniqueConstraint("position", name="uq_themes_position"),
     )
     op.create_table(
         "topics",
@@ -38,6 +39,7 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
+        sa.UniqueConstraint("theme_id", "position", name="uq_topics_theme_position"),
     )
     op.create_index("ix_topics_theme_id", "topics", ["theme_id"])
     op.create_table(
@@ -46,6 +48,7 @@ def upgrade() -> None:
         sa.Column("topic_id", sa.String(100), sa.ForeignKey("topics.id", ondelete="CASCADE"), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
+        sa.UniqueConstraint("topic_id", "position", name="uq_code_files_topic_position"),
     )
     op.create_index("ix_code_files_topic_id", "code_files", ["topic_id"])
     op.create_table(
@@ -64,7 +67,9 @@ def upgrade() -> None:
         sa.Column("file_id", sa.String(100), sa.ForeignKey("code_files.id", ondelete="CASCADE"), primary_key=True),
         sa.Column("exercise_id", sa.String(100), sa.ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True),
         sa.Column("position", sa.Integer(), nullable=False),
+        sa.UniqueConstraint("file_id", "position", name="uq_file_exercises_file_position"),
     )
+    op.create_index("ix_file_exercises_exercise_id", "file_exercises", ["exercise_id"])
     op.create_table(
         "blocks",
         sa.Column("id", sa.String(100), primary_key=True),
@@ -80,6 +85,7 @@ def upgrade() -> None:
         sa.Column("hints", TEXT_ARRAY, nullable=False),
         sa.Column("vocab", TEXT_ARRAY, nullable=False),
         sa.UniqueConstraint("exercise_id", "label", name="uq_blocks_exercise_label"),
+        sa.UniqueConstraint("exercise_id", "position", name="uq_blocks_exercise_position"),
     )
     op.create_index("ix_blocks_exercise_id", "blocks", ["exercise_id"])
     op.create_table(
