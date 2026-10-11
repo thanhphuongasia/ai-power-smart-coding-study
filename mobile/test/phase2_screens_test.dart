@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
+import 'support/content_fixture.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
   tester.view.physicalSize = const Size(412, 915);
@@ -17,6 +18,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...contentOverrides,
         clockProvider.overrideWithValue(() => DateTime(2026, 3, 10, 9)),
       ],
       child: const SmartCodingStudyApp(),

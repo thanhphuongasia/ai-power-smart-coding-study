@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_controller.dart';
@@ -21,7 +21,8 @@ class ThemeDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = ref.watch(progressProvider);
-    final theme = seedThemes.firstWhere(
+    final content = ref.watch(contentIndexProvider);
+    final theme = content.themes.firstWhere(
       (t) => t.id == themeId,
       orElse: () => throw StateError('Không tìm thấy theme với id: $themeId'),
     );

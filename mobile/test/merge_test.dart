@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/merge.dart';
 import 'package:smart_coding_study/domain/models.dart';
 
@@ -26,7 +26,7 @@ Block _block(String label, int indent) => Block(
     );
 
 void main() {
-  final split = exerciseById('split-chunks');
+  final split = testContent.exerciseById('split-chunks');
 
   test('ghép lời giải split-chunks ra đúng chuỗi tham chiếu', () {
     expect(mergeCells(split, _cells(split)).code, _splitSolution);

@@ -4,7 +4,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../domain/progression.dart';
 import 'session_controller.dart';
@@ -29,7 +29,8 @@ final sessionProvider = NotifierProvider.autoDispose
 /// dùng để gợi ý "tiếp tục" ở màn Home.
 final inProgressExerciseProvider = Provider<Exercise?>((ref) {
   final progress = ref.watch(progressProvider);
-  for (final theme in seedThemes) {
+  final content = ref.watch(contentIndexProvider);
+  for (final theme in content.themes) {
     for (final topic in theme.topics) {
       for (final file in topic.files) {
         for (final exercise in file.exercises) {
@@ -43,10 +44,11 @@ final inProgressExerciseProvider = Provider<Exercise?>((ref) {
 
 /// Bài [exerciseId] đã mở chưa (INV-08) — theo [isExerciseUnlocked].
 final exerciseUnlockedProvider = Provider.family<bool, String>((ref, id) {
+  final content = ref.watch(contentIndexProvider);
   final progress = ref.watch(progressProvider);
   final passed = {
     for (final e in progress.entries)
       if (e.value.passed) e.key,
   };
-  return isExerciseUnlocked(id, passed);
+  return isExerciseUnlocked(content, id, passed);
 });

@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../app/theme_mode.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../browse/exercise_row.dart';
@@ -17,11 +17,12 @@ class PracticeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(contentIndexProvider);
     final progress = ref.watch(progressProvider);
     final started = <Exercise>[];
     final fresh = <Exercise>[];
     final done = <Exercise>[];
-    for (final exercise in uniqueExercises()) {
+    for (final exercise in content.uniqueExercises()) {
       final p = progress[exercise.id];
       if (p?.passed ?? false) {
         done.add(exercise);
@@ -36,7 +37,7 @@ class PracticeScreen extends ConsumerWidget {
       if (items.isEmpty) return;
       yield SectionLabel('$label · ${items.length}');
       for (final exercise in items) {
-        final at = locateExercise(exercise.id);
+        final at = content.locateExercise(exercise.id);
         yield ExerciseRow(
           key: Key('practice-${exercise.id}'),
           exercise: exercise,

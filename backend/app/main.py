@@ -1,4 +1,5 @@
-"""API chấm bài: `POST /run` ghép harness + test case của bài rồi gửi cho máy chấm.
+"""API: `GET /content` (nội dung học từ Postgres, xem content_api.py) và `POST /run` (ghép
+harness + test case của bài trong DB rồi gửi cho máy chấm).
 
 Chạy: `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000` (xem README.md).
 """
@@ -13,18 +14,21 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.exc import OperationalError
 
 from app import harness
+from app.content_api import ContentNotLoaded, JudgeLookup, get_judge_lookup
+from app.content_api import router as content_router
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
 
 logger = logging.getLogger("judge")
 
 APP_DIR = Path(__file__).parent
 HARNESS_SOURCE = (APP_DIR / "harness.py").read_text(encoding="utf-8")
-EXERCISES: dict[str, dict] = json.loads((APP_DIR / "exercises.json").read_text(encoding="utf-8"))
 MAX_CODE_CHARS = 8000
 # 8000 ký tự UTF-8 tối đa ~32KB, cộng JSON escape: 64KB là đủ rộng cho request hợp lệ.
 MAX_BODY_BYTES = 64 * 1024
@@ -33,7 +37,8 @@ _RUN_SLOTS = asyncio.Semaphore(4)
 # Tạo lúc import: CODE_RUNNER sai thì server không khởi động được, thay vì 500 ở request đầu.
 _RUNNER = runner_from_env()
 
-app = FastAPI(title="Smart Coding Study judge")
+app = FastAPI(title="Smart Coding Study")
+app.include_router(content_router)
 
 
 @app.middleware("http")
@@ -59,6 +64,18 @@ async def _invalid_request(request: Request, exc: RequestValidationError) -> JSO
     # chứa surrogate lẻ ("\ud800" là JSON hợp lệ nhưng không mã hoá UTF-8 được).
     fields = sorted({".".join(str(part) for part in error["loc"][1:]) for error in exc.errors()})
     return JSONResponse(status_code=422, content={"detail": "invalid_request", "fields": fields})
+
+
+@app.exception_handler(OperationalError)
+async def _database_unavailable(request: Request, exc: OperationalError) -> JSONResponse:
+    # DB chết / không kết nối được: 503 có nghĩa thay vì 500, không lộ chi tiết kết nối.
+    logger.warning("database unavailable on %s: %s", request.url.path, type(exc.orig).__name__)
+    return JSONResponse(status_code=503, content={"detail": "database_unavailable"})
+
+
+@app.exception_handler(ContentNotLoaded)
+async def _content_not_loaded(request: Request, exc: ContentNotLoaded) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "content_not_loaded"})
 
 
 class RunError(BaseModel):
@@ -87,13 +104,19 @@ def get_runner() -> CodeRunner:
 
 
 @app.post("/run", response_model=RunResponse)
-async def run(request: RunRequest, runner: CodeRunner = Depends(get_runner)) -> RunResponse:
-    exercise = EXERCISES.get(request.exercise_id)
-    if exercise is None:
+async def run(
+    request: RunRequest,
+    runner: CodeRunner = Depends(get_runner),
+    lookup_judge: JudgeLookup = Depends(get_judge_lookup),
+) -> RunResponse:
+    # Tra DB (sync) trong threadpool để không chặn event loop; kết nối trả lại pool trước khi
+    # chờ máy chấm.
+    judge = await run_in_threadpool(lookup_judge, request.exercise_id)
+    if judge is None:
         raise HTTPException(status_code=404, detail="exercise_not_found")
 
     payload = json.dumps(
-        {"code": request.code, "function": exercise["function"], "cases": exercise["cases"]},
+        {"code": request.code, "function": judge.function, "cases": judge.cases},
         ensure_ascii=False,
     )
     started = time.monotonic()

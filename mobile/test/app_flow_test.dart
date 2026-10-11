@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/data/judge_client.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
 
@@ -55,6 +55,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...contentOverrides,
             clockProvider.overrideWithValue(() => clock),
             judgeClientProvider.overrideWithValue(judge),
           ],
@@ -74,7 +75,7 @@ void main() {
       expect(find.byKey(const Key('run-button')), findsOneWidget);
 
       // Gõ cả 3 ô bằng đáp án đúng.
-      final exercise = exerciseById('split-chunks');
+      final exercise = testContent.exerciseById('split-chunks');
       for (final b in exercise.blocks) {
         await tester.enterText(
           find.byKey(Key('cell-${b.label}-field')),

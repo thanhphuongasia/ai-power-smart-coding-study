@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/judge_client.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/merge.dart';
 import 'package:smart_coding_study/features/exercise/code_tab.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
@@ -26,7 +26,7 @@ class FakeJudge implements JudgeClient {
 }
 
 const _id = 'split-chunks';
-final _ex = exerciseById(_id);
+final _ex = testContent.exerciseById(_id);
 
 const _passed = JudgeResult(
   status: JudgeStatus.passed,
@@ -68,7 +68,7 @@ Future<_H> _pump(
   t.view.viewInsets = FakeViewPadding(bottom: keyboard);
   addTearDown(t.view.reset);
   final container = ProviderContainer(
-    overrides: [judgeClientProvider.overrideWithValue(judge)],
+    overrides: [...contentOverrides, judgeClientProvider.overrideWithValue(judge)],
   );
   addTearDown(container.dispose);
   for (final e in drafts.entries) {

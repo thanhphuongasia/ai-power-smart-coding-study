@@ -18,7 +18,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import EXERCISES, app, get_runner
+from tests.conftest import CONTENT_PATH
+
+from app.content_api import get_judge_lookup, read_judge
+from app.db import get_session
+from app.main import app, get_runner
 from app.runner import Execution, Judge0Runner, RunnerUnavailable
 
 
@@ -50,12 +54,17 @@ def client_with(runner) -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def _reset_overrides():
+def _db_and_reset_overrides(loaded_session):
+    """/run tra bài trong Postgres test đã nạp content.json."""
+    app.dependency_overrides[get_session] = lambda: loaded_session
+    app.dependency_overrides[get_judge_lookup] = lambda: (lambda i: read_judge(loaded_session, i))
     yield
     app.dependency_overrides.clear()
 
 
-SPLIT = EXERCISES["split-chunks"]["solution"]
+with open(CONTENT_PATH, encoding="utf-8") as _f:
+    SOLUTIONS = {k: e["judge"]["solution"] for k, e in json.load(_f)["exercises"].items()}
+SPLIT = SOLUTIONS["split-chunks"]
 
 
 def post(client: TestClient, code: str, exercise_id: str = "split-chunks"):
@@ -65,9 +74,9 @@ def post(client: TestClient, code: str, exercise_id: str = "split-chunks"):
 # ---------- /run ----------
 
 
-@pytest.mark.parametrize("exercise_id", sorted(EXERCISES))
+@pytest.mark.parametrize("exercise_id", sorted(SOLUTIONS))
 def test_reference_solution_passes(exercise_id):
-    response = post(client_with(LocalRunner()), EXERCISES[exercise_id]["solution"], exercise_id)
+    response = post(client_with(LocalRunner()), SOLUTIONS[exercise_id], exercise_id)
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "passed", body

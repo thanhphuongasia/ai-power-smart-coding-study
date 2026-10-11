@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/theme.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/features/exercise/exercise_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
@@ -20,7 +20,7 @@ Future<ProviderContainer> _pump(
   late ProviderContainer container;
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: [...contentOverrides, ...overrides],
       child: Builder(
         builder: (context) {
           container = ProviderScope.containerOf(context);
@@ -69,7 +69,7 @@ void main() {
     t,
   ) async {
     await _pump(t, 'clean-text');
-    final ex = exerciseById('clean-text').challenge;
+    final ex = testContent.exerciseById('clean-text').challenge;
     await t.ensureVisible(find.byKey(const Key('example-switch')));
     await t.pump();
     expect(find.text(ex.project.input), findsOneWidget);
@@ -85,7 +85,7 @@ void main() {
     final c = await _pump(t, 'clean-text');
     await t.tap(find.text('Solution'));
     await t.pumpAndSettle();
-    final block = exerciseById('clean-text').blocks.first;
+    final block = testContent.exerciseById('clean-text').blocks.first;
 
     expect(find.byKey(const Key('solution-code-A')), findsNothing);
     expect(

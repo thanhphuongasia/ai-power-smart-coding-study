@@ -7,7 +7,13 @@ import pytest
 
 APP = Path(__file__).resolve().parent.parent / "app"
 HARNESS = APP / "harness.py"
-EXERCISES = json.loads((APP / "exercises.json").read_text(encoding="utf-8"))
+# Phần chấm của từng bài, lấy từ nguồn soạn content.json (cùng shape exercises.json cũ).
+EXERCISES = {
+    key: {"function": e["function_name"], "solution": e["judge"]["solution"], "cases": e["judge"]["cases"]}
+    for key, e in json.loads(
+        (APP.parent / "content" / "content.json").read_text(encoding="utf-8")
+    )["exercises"].items()
+}
 
 sys.path.insert(0, str(APP))
 from harness import RESULT_PREFIX, parse_result  # noqa: E402

@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import 'content_repository.dart' show apiBaseUrl;
+
 enum JudgeStatus { passed, failed, error, timeout, unavailable }
 
 class JudgeError {
@@ -60,14 +62,7 @@ class JudgeClient {
     Uri? baseUrl,
     this._timeout = const Duration(seconds: 20),
   }) : _http = httpClient ?? http.Client(),
-       _baseUrl =
-           baseUrl ??
-           Uri.parse(
-             const String.fromEnvironment(
-               'JUDGE_URL',
-               defaultValue: 'http://127.0.0.1:8000',
-             ),
-           );
+       _baseUrl = baseUrl ?? apiBaseUrl();
 
   final Duration _timeout;
   final http.Client _http;

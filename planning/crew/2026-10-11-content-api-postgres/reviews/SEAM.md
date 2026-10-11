@@ -1,0 +1,31 @@
+# SEAM review — 2026-10-11-content-api-postgres
+
+Đã chạy lại: `backend pytest` = 86 passed, 2 skipped (Judge0 live, exercises.json đã xoá); `flutter test` = 290 passed; `flutter analyze` sạch.
+Đã so payload thật `curl localhost:8000/content` (version sha256:c22b6dff…) với `backend/content/content.json`: themes + exercises (bỏ judge) bằng nhau, cùng thứ tự; 0 chỗ khớp `judge|cases|solution`.
+
+INV-01: CÒN ĐÚNG — backend/app/content_api.py:93 · mobile/lib/domain/models.dart:282 · mobile/lib/domain/content.dart:15 — từng key/kiểu của payload thật (theme/topic/file/exercise/block/challenge, note null|str, indent_level int, mảng toàn chuỗi, hints đúng 3) khớp fromJson; server không trả field thừa, app không đòi field thiếu (xem M1: chỉ đúng với dữ liệu hiện tại, load không kiểm shape).
+INV-02: CÒN ĐÚNG — backend/app/content_api.py:114 · backend/tests/test_content_api.py:50 — _exercise_payload liệt kê tường minh các field, không có judge_solution/judge_cases; curl thật 0 chỗ khớp.
+INV-03: CÒN ĐÚNG — backend/app/main.py:114 · backend/app/content_api.py:143 · backend/app/load_content.py:102 — /run tra bảng exercises qua read_judge, /content đọc cùng bảng; exercises.json đã xoá (không còn tham chiếu ngoài planning).
+INV-04: CÒN ĐÚNG — backend/content/content.json:1 · mobile/test/content_contract_test.dart:130 · backend/tests/test_harness.py:38 — mergeCells(đáp án đầu) == judge.solution từng ký tự (test đọc content.json, xanh) và solution pass cases trong harness.
+INV-05: CÒN ĐÚNG — mobile/test/content_contract_test.dart:74 · mobile/lib/domain/merge.dart:1 · backend/content/content.json:1 — marker `# TODO <label>` đúng 1 lần, thụt 4×indent_level cho cả 5 bài; test xanh.
+INV-06: CÒN ĐÚNG — backend/app/load_content.py:97 · backend/app/load_content.py:155 · backend/tests/test_load_content.py:65 — xoá 7 bảng + insert + version trong một session, commit một lần, rollback khi lỗi; nạp 2 lần ra cùng version (e2e: c22b6dff… trước và sau sửa title).
+INV-07: CÒN ĐÚNG — mobile/lib/data/content_providers.dart:11 · mobile/lib/main.dart:14 · mobile/lib/features/exercise/session_controller.dart:79 — 12 file lib đọc nội dung chỉ qua contentIndexProvider; grep seedThemes/exerciseById/uniqueExercises ngoài content.dart chỉ là gọi method trên Content; không còn tiêu đề/id bài trong lib ngoài id demo ở demo_seed.dart.
+INV-08: CÒN ĐÚNG — mobile/lib/data/content_repository.dart:82 · mobile/test/content_repository_test.dart:128 — parse được mới ghi cache (ghi đè mỗi lần online), lỗi mạng/HTTP≠200/JSON hỏng thì đọc cache; cache hỏng bị xoá.
+INV-09: CÒN ĐÚNG — mobile/lib/app/content_gate.dart:21 · mobile/lib/main.dart:18 · mobile/lib/app/router.dart:21 — gate bọc cả MaterialApp.router nên router/deep link chỉ dựng sau khi có nội dung; cây Column cố định giữa cache/network (content_gate_test F1).
+INV-10: CÒN ĐÚNG — mobile/lib/features/exercise/session_controller.dart:79 · mobile/lib/data/content_providers.dart:29 · mobile/test/progression_test.dart:161 — ProgressController dùng ref.read, refresh() không dựng lại controller; test updateOverrides giữ passed + draft (xem m2 về totalBlocks/label khi server sửa bài).
+
+## Phát hiện khác
+
+M1 · Major · backend/app/load_content.py:44-85 ↔ mobile/lib/domain/models.dart:226-238 · `validate` không kiểm shape `challenge` (jsonb đi thẳng vào DB, load_content.py:109) lẫn kiểu field block (indent_level, hints...). Lỗi soạn (vd thiếu `challenge.small.caption`, `indent_level: "1"`) vẫn nạp được, /content trả 200, rồi `Content.fromJson` ném FormatException trên TOÀN BỘ payload; repository (content_repository.dart:84) nuốt lỗi như mất mạng → mọi máy rơi về cache cũ với banner "không kết nối được máy chủ" (hoặc màn lỗi nếu chưa có cache). Một field sai kéo cả app. Dữ liệu hiện tại hợp lệ (đã kiểm) nên không phải VỠ. Sửa: validate ở load kiểm đúng field/kiểu Dart đòi; test: content.json thiếu field → load_content ValueError và DB giữ nguyên.
+M2 · Major (nền tảng, ngoài INV) · mobile/macos/Runner/DebugProfile.entitlements:1 · Release.entitlements:1 · thiếu `com.apple.security.network.client` (chỉ có network.server) → app macOS sandbox không gọi được API; trước run này app vẫn dùng được nhờ seed, giờ chưa có cache thì kẹt màn lỗi. Android: INTERNET chỉ có ở debug/profile manifest (mobile/android/app/src/{debug,profile}/AndroidManifest.xml), bản release không có quyền mạng; emulator không với tới 127.0.0.1 của host (cần 10.0.2.2/API_URL). README chỉ nêu iOS simulator; nếu chỉ target iOS thì bỏ qua, nếu không thì thêm entitlement/quyền và ghi README. e2e iOS không phát hiện được.
+m1 · Minor · mobile/lib/data/content_repository.dart:77-86 · mọi lỗi (503 content_not_loaded, 503 database_unavailable, 200 sai schema) đều thành "dùng cache" cùng banner "không kết nối được máy chủ" (content_gate.dart:114); app không phân biệt detail của server. Không sai hành vi, chỉ lời nhắn gây hiểu nhầm (nhất là ca M1).
+m2 · Minor · mobile/lib/features/exercise/session_controller.dart:85 · `totalBlocks` chốt lúc tạo ExerciseProgress; server đổi số ô của bài đã passed rồi Thử lại thì completedBlocks sai; draft/hint khoá theo label nên đổi label mồ côi (plan đã ghi giới hạn id). Test: updateOverrides với bài đổi số ô.
+m3 · Minor · mobile/lib/features/exercise/exercise_screen.dart:200 · Thử lại ở banner khi đang mở bài mà server đã xoá/đổi id → locateExercise ném StateError (màn đỏ). Hiếm.
+m4 · Minor · backend/app/db.py:19 ↔ mobile/lib/data/content_repository.dart:45 · connect_timeout DB 5s = timeout client /content 5s: DB chết thì client timeout cùng lúc server định trả 503; kết quả cuối vẫn là rơi về cache. Judge: client 20s (judge_client.dart:63) > Judge0 15s (runner.py:75) + DB 5s, vừa sát ở ca xấu nhất.
+
+## Không kiểm được
+- `Content.fromJson` trên payload thật chỉ kiểm bằng so key/kiểu (Python) + test Dart trên content.json (bằng payload thật về dữ liệu); không chạy Dart parse trực tiếp lên bytes curl.
+- Không bấm tay luồng làm bài trên simulator; không kiểm macOS/Android thật, chỉ đọc entitlements/manifest.
+- Không nạp lại DB dev (bị cấm); ca nạp lỗi dựa vào test_load_content.
+
+Kết luận: không INV nào VỠ. M1 và M2 nên orchestrator quyết trước khi mở PR (M1 sửa nhỏ ở validate; M2 chỉ cần nếu hỗ trợ macOS/Android).

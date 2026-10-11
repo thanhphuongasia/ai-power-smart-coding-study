@@ -6,7 +6,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
+import '../../data/demo_seed.dart';
+import '../../domain/content.dart';
 import '../../domain/models.dart';
 import '../stats/activity.dart';
 import 'session_providers.dart';
@@ -72,20 +74,39 @@ class ExerciseProgress {
 class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
   @override
   Map<String, ExerciseProgress> build() {
+    // ref.read, KHÔNG watch (INV-10): nội dung đổi không được dựng lại
+    // controller và xoá tiến độ.
+    final content = ref.read(contentIndexProvider);
     final ids = {...seedPassedExercises, ...seedDrafts.keys};
     return {
       for (final id in ids)
-        id: ExerciseProgress(
-          passed: seedPassedExercises.contains(id),
-          totalBlocks: exerciseById(id).blocks.length,
-          drafts: Map.of(seedDrafts[id] ?? const {}),
-        ),
+        // Id demo không có trong nội dung server → bỏ qua (không crash).
+        if (_blockCount(content, id) case final total?)
+          id: ExerciseProgress(
+            passed: seedPassedExercises.contains(id),
+            totalBlocks: total,
+            drafts: Map.of(seedDrafts[id] ?? const {}),
+          ),
     };
+  }
+
+  static int? _blockCount(Content content, String id) {
+    try {
+      return content.exerciseById(id).blocks.length;
+    } on StateError {
+      return null;
+    }
   }
 
   ExerciseProgress _progressOf(String exerciseId) {
     return state[exerciseId] ??
-        ExerciseProgress(totalBlocks: exerciseById(exerciseId).blocks.length);
+        ExerciseProgress(
+          totalBlocks: ref
+              .read(contentIndexProvider)
+              .exerciseById(exerciseId)
+              .blocks
+              .length,
+        );
   }
 
   /// Đánh dấu cả bài đã pass (backend trả `passed`). Idempotent: đã passed thì

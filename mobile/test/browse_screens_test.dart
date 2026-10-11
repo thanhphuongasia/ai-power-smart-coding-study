@@ -12,6 +12,7 @@ import 'package:smart_coding_study/features/browse/theme_detail_screen.dart';
 import 'package:smart_coding_study/features/browse/topic_detail_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/practice/practice_screen.dart';
+import 'support/content_fixture.dart';
 
 GoRouter _buildTestRouter([String initialLocation = '/']) {
   return GoRouter(
@@ -51,6 +52,7 @@ Future<ProviderContainer> _pumpApp(
   late ProviderContainer container;
   await tester.pumpWidget(
     ProviderScope(
+      overrides: contentOverrides,
       child: Builder(
         builder: (context) {
           container = ProviderScope.containerOf(context);

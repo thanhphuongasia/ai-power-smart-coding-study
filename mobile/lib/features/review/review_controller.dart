@@ -4,7 +4,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
+import '../../data/demo_seed.dart';
 import '../../domain/models.dart';
 import '../exercise/session_providers.dart';
 import '../stats/activity.dart';
@@ -107,9 +108,10 @@ final reviewScheduleProvider =
 /// Mọi thẻ hiện có: mọi ô của bài đã `passed` (INV-06) — bài chưa pass chưa
 /// sinh thẻ nào, kể cả khi có draft.
 final reviewCardsProvider = Provider<List<ReviewCard>>((ref) {
+  final content = ref.watch(contentIndexProvider);
   final progress = ref.watch(progressProvider);
   return [
-    for (final exercise in uniqueExercises())
+    for (final exercise in content.uniqueExercises())
       if (progress[exercise.id]?.passed ?? false)
         for (var i = 0; i < exercise.blocks.length; i++)
           ReviewCard(exercise: exercise, blockIndex: i),

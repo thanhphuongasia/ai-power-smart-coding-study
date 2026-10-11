@@ -4,7 +4,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/seed.dart';
+import '../../data/demo_seed.dart';
 import '../../domain/models.dart';
 
 class AdminController extends Notifier<List<PendingContent>> {

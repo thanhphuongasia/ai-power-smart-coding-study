@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
 
 import '../../app/theme.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import 'challenge_tab.dart';
@@ -111,7 +111,8 @@ class _UnlockedView extends ConsumerStatefulWidget {
 class _UnlockedViewState extends ConsumerState<_UnlockedView> {
   bool _idleDialogOpen = false;
 
-  Exercise get _exercise => exerciseById(widget.exerciseId);
+  Exercise get _exercise =>
+      ref.read(contentIndexProvider).exerciseById(widget.exerciseId);
 
   @override
   void initState() {
@@ -194,8 +195,9 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final content = ref.watch(contentIndexProvider);
     final exercise = _exercise;
-    final located = locateExercise(widget.exerciseId);
+    final located = content.locateExercise(widget.exerciseId);
     final session = ref.watch(sessionProvider(widget.exerciseId));
     final draftCount = _draftCount(
       ref.watch(progressProvider.select((m) => m[widget.exerciseId])),

@@ -1,0 +1,774 @@
+{
+  "version": "source",
+  "themes": [
+    {
+      "id": "rag",
+      "name": "Semantic RAG system",
+      "description": "Xây hệ thống truy xuất tăng cường (RAG) từ những bước nhỏ nhất: chia nhỏ văn bản, tiền xử lý dữ liệu trước khi đưa vào embedding.",
+      "tags": [
+        "python",
+        "rag",
+        "nlp"
+      ],
+      "topics": [
+        {
+          "id": "rag-chunking",
+          "name": "Chunking",
+          "description": "Chia văn bản dài thành các đoạn nhỏ để đưa vào mô hình embedding.",
+          "files": [
+            {
+              "id": "rag-chunker-py",
+              "name": "chunker.py",
+              "exercise_ids": [
+                "split-chunks",
+                "overlap-chunks"
+              ]
+            },
+            {
+              "id": "rag-preprocessor-py",
+              "name": "preprocessor.py",
+              "exercise_ids": [
+                "clean-text"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "doc-system",
+      "name": "Document system",
+      "description": "Xây dựng hệ thống quản lý tài liệu: lưu trữ, tìm kiếm và tổ chức file theo thư mục.",
+      "tags": [
+        "python",
+        "file-system"
+      ],
+      "topics": [
+        {
+          "id": "doc-text-processing",
+          "name": "Text processing",
+          "description": "Cắt nội dung tài liệu thành đoạn nhỏ trước khi đánh chỉ mục.",
+          "files": [
+            {
+              "id": "doc-chunker-py",
+              "name": "chunker.py",
+              "exercise_ids": [
+                "split-chunks"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "doc-storage",
+          "name": "Storage",
+          "description": "Lưu trữ và đọc metadata của tài liệu.",
+          "files": [
+            {
+              "id": "doc-storage-py",
+              "name": "storage.py",
+              "exercise_ids": [
+                "save-document"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "twitter-feed",
+      "name": "Twitter feed",
+      "description": "Xây dựng bảng tin đơn giản kiểu Twitter: đăng bài và đếm lượt thích.",
+      "tags": [
+        "python",
+        "social"
+      ],
+      "topics": [
+        {
+          "id": "feed-basics",
+          "name": "Feed basics",
+          "description": "Các thao tác cơ bản trên một bài đăng.",
+          "files": [
+            {
+              "id": "feed-post-py",
+              "name": "post.py",
+              "exercise_ids": [
+                "like-post"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exercises": {
+    "split-chunks": {
+      "id": "split-chunks",
+      "title": "Cắt văn bản thành các đoạn cố định",
+      "function_name": "split_chunks",
+      "params": [
+        "text",
+        "size"
+      ],
+      "template": "def split_chunks(text, size):\n    chunks = []\n    # TODO A\n        # TODO B\n    # TODO C",
+      "challenge": {
+        "statement": "Viết hàm split_chunks(text, size) cắt chuỗi text thành các đoạn dài tối đa size ký tự, theo thứ tự, rồi trả về danh sách các đoạn.",
+        "motivation": "Mô hình embedding chỉ nhận đoạn văn ngắn. Hệ thống RAG phải cắt tài liệu dài thành từng đoạn nhỏ trước khi lập chỉ mục để tìm kiếm.",
+        "small": {
+          "caption": "Cắt \"hello world\" thành đoạn 4 ký tự",
+          "input": "print(split_chunks(\"hello world\", 4))",
+          "output": "['hell', 'o wo', 'rld']",
+          "note": "Đoạn cuối ngắn hơn size vẫn được giữ."
+        },
+        "project": {
+          "caption": "Cắt sổ tay nhân sự (HR handbook) để đưa vào RAG",
+          "input": "handbook = \"Nhân viên được nghỉ phép 12 ngày/năm. Phép chưa dùng hết được cộng dồn sang quý 1 năm sau.\"\nprint(split_chunks(handbook, 30))",
+          "output": "['Nhân viên được nghỉ phép 12 ng', 'ày/năm. Phép chưa dùng hết đượ', 'c cộng dồn sang quý 1 năm sau.']",
+          "note": "Cắt cứng theo ký tự nên có thể cắt giữa từ; bài sau sẽ xử lý bằng overlap."
+        }
+      },
+      "blocks": [
+        {
+          "id": "split-chunks-a",
+          "label": "A",
+          "title": "Vòng lặp theo bước size",
+          "prompt": "Duyệt chỉ số i từ 0 đến len(text), mỗi lần nhảy size.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "for i in range(0, len(text), size):"
+          ],
+          "expected_output": "Đã tạo vòng lặp.",
+          "explanation": "range(0, len(text), size) tạo các chỉ số 0, size, 2*size... nên mỗi vòng bắt đầu đúng đầu một đoạn.",
+          "hints": [
+            "Lặp qua các chỉ số bắt đầu đoạn, cách nhau size.",
+            "Dùng range(0, len(text), size).",
+            "for i in range(0, len(text), size):"
+          ],
+          "vocab": [
+            "for",
+            "range",
+            "len"
+          ]
+        },
+        {
+          "id": "split-chunks-b",
+          "label": "B",
+          "title": "Cắt và thêm vào danh sách",
+          "prompt": "Cắt text[i:i + size] rồi thêm vào chunks.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "chunks.append(text[i:i + size])"
+          ],
+          "expected_output": "Đã cắt text thành các đoạn theo size.",
+          "explanation": "text[i:i + size] lấy tối đa size ký tự từ vị trí i; append đưa đoạn đó vào danh sách kết quả.",
+          "hints": [
+            "Cắt đoạn từ i đến i + size rồi thêm vào danh sách.",
+            "Dùng text[i:i + size] và append.",
+            "chunks.append(text[i:i + size])"
+          ],
+          "vocab": [
+            "append",
+            "chunks",
+            "text"
+          ]
+        },
+        {
+          "id": "split-chunks-c",
+          "label": "C",
+          "title": "Trả về kết quả",
+          "prompt": "Trả về danh sách chunks.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "return chunks"
+          ],
+          "expected_output": "['...', '...', '...']",
+          "explanation": "return nằm ngoài vòng for nên chỉ chạy một lần, sau khi đã cắt xong mọi đoạn.",
+          "hints": [
+            "Hàm cần trả kết quả ra ngoài bằng return.",
+            "Biến chứa kết quả là chunks.",
+            "return chunks"
+          ],
+          "vocab": [
+            "return",
+            "chunks"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "def split_chunks(text, size):\n    chunks = []\n    for i in range(0, len(text), size):\n        chunks.append(text[i:i + size])\n    return chunks",
+        "cases": [
+          {
+            "args": [
+              "hello world",
+              4
+            ],
+            "expect": {
+              "return": [
+                "hell",
+                "o wo",
+                "rld"
+              ]
+            }
+          },
+          {
+            "args": [
+              "",
+              3
+            ],
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "args": [
+              "abc",
+              5
+            ],
+            "expect": {
+              "return": [
+                "abc"
+              ]
+            }
+          },
+          {
+            "args": [
+              "abcdef",
+              3
+            ],
+            "expect": {
+              "return": [
+                "abc",
+                "def"
+              ]
+            }
+          },
+          {
+            "args": [
+              "abcdefg",
+              1
+            ],
+            "expect": {
+              "return": [
+                "a",
+                "b",
+                "c",
+                "d",
+                "e",
+                "f",
+                "g"
+              ]
+            }
+          },
+          {
+            "args": [
+              "Nhân viên được nghỉ phép 12 ngày/năm. Phép chưa dùng hết được cộng dồn sang quý 1 năm sau.",
+              30
+            ],
+            "expect": {
+              "return": [
+                "Nhân viên được nghỉ phép 12 ng",
+                "ày/năm. Phép chưa dùng hết đượ",
+                "c cộng dồn sang quý 1 năm sau."
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "overlap-chunks": {
+      "id": "overlap-chunks",
+      "title": "Cắt đoạn có phần chồng lấn (overlap)",
+      "function_name": "overlap_chunks",
+      "params": [
+        "text",
+        "size",
+        "overlap"
+      ],
+      "template": "def overlap_chunks(text, size, overlap):\n    chunks = []\n    # TODO A\n        # TODO B\n    # TODO C",
+      "challenge": {
+        "statement": "Viết hàm overlap_chunks(text, size, overlap) cắt text thành các đoạn dài tối đa size ký tự, mỗi đoạn lặp lại overlap ký tự cuối của đoạn trước.",
+        "motivation": "Cắt cứng có thể làm đứt câu giữa chừng. Cho các đoạn chồng lên nhau một chút thì ý nằm ở ranh giới vẫn xuất hiện trọn vẹn trong ít nhất một đoạn.",
+        "small": {
+          "caption": "Cắt \"abcdefghij\", đoạn 4 ký tự, chồng 1 ký tự",
+          "input": "print(overlap_chunks(\"abcdefghij\", 4, 1))",
+          "output": "['abcd', 'defg', 'ghij', 'j']",
+          "note": "Mỗi đoạn bắt đầu cách đoạn trước size - overlap = 3 ký tự."
+        },
+        "project": {
+          "caption": "Cắt sổ tay nhân sự để câu không bị đứt ở ranh giới",
+          "input": "handbook = \"Nhân viên được nghỉ phép 12 ngày/năm. Phép chưa dùng hết được cộng dồn sang quý 1 năm sau.\"\nprint(overlap_chunks(handbook, 30, 10))",
+          "output": "['Nhân viên được nghỉ phép 12 ng', 'phép 12 ngày/năm. Phép chưa dù', 'ép chưa dùng hết được cộng dồn', 'c cộng dồn sang quý 1 năm sau.', '1 năm sau.']",
+          "note": "Cụm \"phép 12 ngày/năm\" nay xuất hiện trọn trong đoạn thứ hai."
+        }
+      },
+      "blocks": [
+        {
+          "id": "overlap-chunks-a",
+          "label": "A",
+          "title": "Vòng lặp với bước size - overlap",
+          "prompt": "Duyệt i từ 0 đến len(text), mỗi lần nhảy size - overlap.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "for i in range(0, len(text), size - overlap):"
+          ],
+          "expected_output": "Đã tạo vòng lặp.",
+          "explanation": "Bước nhảy nhỏ hơn size nên đoạn sau bắt đầu sớm hơn chỗ đoạn trước kết thúc, tạo phần chồng lấn overlap ký tự.",
+          "hints": [
+            "Bước nhảy phải nhỏ hơn size để các đoạn chồng lên nhau.",
+            "Bước nhảy tính bằng size - overlap.",
+            "for i in range(0, len(text), size - overlap):"
+          ],
+          "vocab": [
+            "range",
+            "overlap",
+            "len"
+          ]
+        },
+        {
+          "id": "overlap-chunks-b",
+          "label": "B",
+          "title": "Cắt và thêm vào danh sách",
+          "prompt": "Cắt text[i:i + size] rồi thêm vào chunks.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "chunks.append(text[i:i + size])"
+          ],
+          "expected_output": "Đã cắt text thành các đoạn có chồng lấn.",
+          "explanation": "Mỗi đoạn vẫn dài tối đa size ký tự, chỉ có vị trí bắt đầu là dịch theo bước nhỏ hơn.",
+          "hints": [
+            "Cắt đoạn từ i đến i + size rồi thêm vào danh sách.",
+            "Dùng text[i:i + size] và append.",
+            "chunks.append(text[i:i + size])"
+          ],
+          "vocab": [
+            "append",
+            "chunks",
+            "text"
+          ]
+        },
+        {
+          "id": "overlap-chunks-c",
+          "label": "C",
+          "title": "Trả về kết quả",
+          "prompt": "Trả về danh sách chunks.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "return chunks"
+          ],
+          "expected_output": "['...', '...', '...']",
+          "explanation": "return nằm ngoài vòng for để chỉ trả kết quả sau khi đã cắt hết.",
+          "hints": [
+            "Hàm cần trả kết quả ra ngoài bằng return.",
+            "Biến chứa kết quả là chunks.",
+            "return chunks"
+          ],
+          "vocab": [
+            "return",
+            "chunks"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "def overlap_chunks(text, size, overlap):\n    chunks = []\n    for i in range(0, len(text), size - overlap):\n        chunks.append(text[i:i + size])\n    return chunks",
+        "cases": [
+          {
+            "args": [
+              "hello world",
+              5,
+              1
+            ],
+            "expect": {
+              "return": [
+                "hello",
+                "o wor",
+                "rld"
+              ]
+            }
+          },
+          {
+            "args": [
+              "",
+              4,
+              1
+            ],
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "args": [
+              "abcdefgh",
+              4,
+              2
+            ],
+            "expect": {
+              "return": [
+                "abcd",
+                "cdef",
+                "efgh",
+                "gh"
+              ]
+            }
+          },
+          {
+            "args": [
+              "abc",
+              5,
+              2
+            ],
+            "expect": {
+              "return": [
+                "abc"
+              ]
+            }
+          },
+          {
+            "args": [
+              "abcdef",
+              3,
+              0
+            ],
+            "expect": {
+              "return": [
+                "abc",
+                "def"
+              ]
+            }
+          },
+          {
+            "args": [
+              "Nhân viên được nghỉ phép 12 ngày/năm. Phép chưa dùng hết được cộng dồn sang quý 1 năm sau.",
+              30,
+              5
+            ],
+            "expect": {
+              "return": [
+                "Nhân viên được nghỉ phép 12 ng",
+                "12 ngày/năm. Phép chưa dùng hế",
+                "ng hết được cộng dồn sang quý ",
+                " quý 1 năm sau."
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "clean-text": {
+      "id": "clean-text",
+      "title": "Chuẩn hoá văn bản trước khi chunking",
+      "function_name": "clean_text",
+      "params": [
+        "text"
+      ],
+      "template": "def clean_text(text):\n    # TODO A",
+      "challenge": {
+        "statement": "Viết hàm clean_text(text) trả về text sau khi bỏ khoảng trắng và xuống dòng thừa ở đầu và cuối.",
+        "motivation": "Văn bản lấy từ PDF hay web thường dính khoảng trắng, xuống dòng thừa. Làm sạch trước khi chunking giúp các đoạn không chứa rác và embedding chính xác hơn.",
+        "small": {
+          "caption": "Bỏ khoảng trắng hai đầu",
+          "input": "print(repr(clean_text(\"  hello  \")))",
+          "output": "'hello'",
+          "note": null
+        },
+        "project": {
+          "caption": "Làm sạch tiêu đề đọc từ một file PDF",
+          "input": "title = \"\\n  Chính sách nghỉ phép năm 2026  \\n\"\nprint(repr(clean_text(title)))",
+          "output": "'Chính sách nghỉ phép năm 2026'",
+          "note": "Khoảng trắng ở giữa chuỗi được giữ nguyên."
+        }
+      },
+      "blocks": [
+        {
+          "id": "clean-text-a",
+          "label": "A",
+          "title": "Trả về text đã strip",
+          "prompt": "Trả về text sau khi bỏ khoảng trắng thừa ở đầu và cuối.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "return text.strip()"
+          ],
+          "expected_output": "Đã chuẩn hoá text (bỏ khoảng trắng thừa).",
+          "explanation": "strip() là hàm có sẵn của chuỗi: cắt khoảng trắng và xuống dòng ở hai đầu, trả về chuỗi mới.",
+          "hints": [
+            "Python có sẵn hàm strip() cho chuỗi.",
+            "Nhớ return kết quả ra ngoài.",
+            "return text.strip()"
+          ],
+          "vocab": [
+            "strip",
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "def clean_text(text):\n    return text.strip()",
+        "cases": [
+          {
+            "args": [
+              "  hello  "
+            ],
+            "expect": {
+              "return": "hello"
+            }
+          },
+          {
+            "args": [
+              ""
+            ],
+            "expect": {
+              "return": ""
+            }
+          },
+          {
+            "args": [
+              "\n\tabc \n"
+            ],
+            "expect": {
+              "return": "abc"
+            }
+          },
+          {
+            "args": [
+              "no-space"
+            ],
+            "expect": {
+              "return": "no-space"
+            }
+          },
+          {
+            "args": [
+              "   "
+            ],
+            "expect": {
+              "return": ""
+            }
+          },
+          {
+            "args": [
+              "  Nhân viên  nghỉ phép  "
+            ],
+            "expect": {
+              "return": "Nhân viên  nghỉ phép"
+            }
+          }
+        ]
+      }
+    },
+    "save-document": {
+      "id": "save-document",
+      "title": "Lưu tài liệu vào danh sách",
+      "function_name": "save_document",
+      "params": [
+        "store",
+        "document"
+      ],
+      "template": "def save_document(store, document):\n    # TODO A",
+      "challenge": {
+        "statement": "Viết hàm save_document(store, document) thêm document vào cuối danh sách store. Hàm sửa trực tiếp store, không cần return.",
+        "motivation": "Hệ thống quản lý tài liệu cần nơi lưu những file đã tải lên. Thêm vào danh sách là bước nền tảng của mọi thao tác lưu trữ.",
+        "small": {
+          "caption": "Lưu một file vào danh sách rỗng",
+          "input": "store = []\nsave_document(store, \"doc1.pdf\")\nprint(store)",
+          "output": "['doc1.pdf']",
+          "note": null
+        },
+        "project": {
+          "caption": "Thêm báo cáo mới vào kho tài liệu đã có",
+          "input": "store = [\"hop-dong.pdf\"]\nsave_document(store, \"bao-cao-q3.docx\")\nprint(store)",
+          "output": "['hop-dong.pdf', 'bao-cao-q3.docx']",
+          "note": "Tài liệu cũ được giữ, tài liệu mới nằm cuối."
+        }
+      },
+      "blocks": [
+        {
+          "id": "save-document-a",
+          "label": "A",
+          "title": "Thêm document vào store",
+          "prompt": "Thêm document vào cuối danh sách store.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "store.append(document)"
+          ],
+          "expected_output": "Đã lưu document vào store.",
+          "explanation": "append thêm phần tử vào cuối list và sửa trực tiếp list đó, nên hàm không cần return.",
+          "hints": [
+            "store là một danh sách (list).",
+            "Thêm phần tử vào cuối list bằng append.",
+            "store.append(document)"
+          ],
+          "vocab": [
+            "append",
+            "store"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "def save_document(store, document):\n    store.append(document)",
+        "cases": [
+          {
+            "args": [
+              [],
+              "doc1"
+            ],
+            "expect": {
+              "arg": 0,
+              "value": [
+                "doc1"
+              ]
+            }
+          },
+          {
+            "args": [
+              [
+                "a"
+              ],
+              "b"
+            ],
+            "expect": {
+              "arg": 0,
+              "value": [
+                "a",
+                "b"
+              ]
+            }
+          },
+          {
+            "args": [
+              [],
+              ""
+            ],
+            "expect": {
+              "arg": 0,
+              "value": [
+                ""
+              ]
+            }
+          },
+          {
+            "args": [
+              [
+                "a",
+                "b"
+              ],
+              "c"
+            ],
+            "expect": {
+              "arg": 0,
+              "value": [
+                "a",
+                "b",
+                "c"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "like-post": {
+      "id": "like-post",
+      "title": "Tăng lượt thích cho bài đăng",
+      "function_name": "like_post",
+      "params": [
+        "post"
+      ],
+      "template": "def like_post(post):\n    # TODO A",
+      "challenge": {
+        "statement": "Viết hàm like_post(post) tăng giá trị post[\"likes\"] lên 1. Hàm sửa trực tiếp post, không cần return.",
+        "motivation": "Mỗi lần người dùng bấm thích, mạng xã hội phải cộng thêm một lượt thích cho bài đăng. Đây là thao tác cập nhật đếm cơ bản nhất của một bảng tin.",
+        "small": {
+          "caption": "Bài có 5 lượt thích",
+          "input": "post = {\"likes\": 5}\nlike_post(post)\nprint(post)",
+          "output": "{'likes': 6}",
+          "note": null
+        },
+        "project": {
+          "caption": "Bấm thích một bài đăng trên bảng tin",
+          "input": "post = {\"id\": 42, \"text\": \"Hello Hanoi!\", \"likes\": 120}\nlike_post(post)\nprint(post)",
+          "output": "{'id': 42, 'text': 'Hello Hanoi!', 'likes': 121}",
+          "note": "Các trường khác của bài đăng không đổi."
+        }
+      },
+      "blocks": [
+        {
+          "id": "like-post-a",
+          "label": "A",
+          "title": "Tăng số lượt thích",
+          "prompt": "Tăng post[\"likes\"] lên 1.",
+          "indent_level": 1,
+          "accepted_answers": [
+            "post[\"likes\"] += 1"
+          ],
+          "expected_output": "Đã tăng lượt thích lên 1.",
+          "explanation": "Toán tử += cộng thêm 1 vào giá trị hiện tại của khoá \"likes\" ngay trên dict post.",
+          "hints": [
+            "post là một dict có khoá \"likes\".",
+            "Dùng toán tử += để tăng giá trị.",
+            "post[\"likes\"] += 1"
+          ],
+          "vocab": [
+            "likes",
+            "dict"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "def like_post(post):\n    post[\"likes\"] += 1",
+        "cases": [
+          {
+            "args": [
+              {
+                "likes": 0
+              }
+            ],
+            "expect": {
+              "arg": 0,
+              "value": {
+                "likes": 1
+              }
+            }
+          },
+          {
+            "args": [
+              {
+                "likes": 41
+              }
+            ],
+            "expect": {
+              "arg": 0,
+              "value": {
+                "likes": 42
+              }
+            }
+          },
+          {
+            "args": [
+              {
+                "likes": 0,
+                "title": "x"
+              }
+            ],
+            "expect": {
+              "arg": 0,
+              "value": {
+                "likes": 1,
+                "title": "x"
+              }
+            }
+          },
+          {
+            "args": [
+              {
+                "likes": -1
+              }
+            ],
+            "expect": {
+              "arg": 0,
+              "value": {
+                "likes": 0
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
