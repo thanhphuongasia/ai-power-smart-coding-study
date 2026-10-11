@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart' hide Block;
 import 'package:highlight/highlight.dart' as hl;
 
 import '../../app/theme.dart';
+import '../../data/content_providers.dart';
 import '../../data/judge_client.dart';
 import '../../domain/answer_checker.dart';
 import '../../domain/merge.dart';
@@ -160,7 +161,10 @@ class _CodeTabState extends ConsumerState<CodeTab>
   }
 
   void _next() {
-    final next = nextExerciseAfter(_exercise.id);
+    final next = nextExerciseAfter(
+      ref.read(contentIndexProvider),
+      _exercise.id,
+    );
     if (next != null) {
       context.pushReplacement('/exercise/${next.id}');
     } else if (context.canPop()) {
@@ -291,7 +295,10 @@ class _CodeTabState extends ConsumerState<CodeTab>
   }
 
   Widget _passedBar() {
-    final next = nextExerciseAfter(_exercise.id);
+    final next = nextExerciseAfter(
+      ref.read(contentIndexProvider),
+      _exercise.id,
+    );
     return Row(
       children: [
         GhostButton(

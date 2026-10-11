@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/content_providers.dart';
 import '../../data/seed.dart';
 import '../../domain/models.dart';
 import '../stats/activity.dart';
@@ -72,12 +73,15 @@ class ExerciseProgress {
 class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
   @override
   Map<String, ExerciseProgress> build() {
+    // ref.read, KHÔNG watch (INV-10): nội dung đổi không được dựng lại
+    // controller và xoá tiến độ.
+    final content = ref.read(contentIndexProvider);
     final ids = {...seedPassedExercises, ...seedDrafts.keys};
     return {
       for (final id in ids)
         id: ExerciseProgress(
           passed: seedPassedExercises.contains(id),
-          totalBlocks: exerciseById(id).blocks.length,
+          totalBlocks: content.exerciseById(id).blocks.length,
           drafts: Map.of(seedDrafts[id] ?? const {}),
         ),
     };
@@ -85,7 +89,13 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
 
   ExerciseProgress _progressOf(String exerciseId) {
     return state[exerciseId] ??
-        ExerciseProgress(totalBlocks: exerciseById(exerciseId).blocks.length);
+        ExerciseProgress(
+          totalBlocks: ref
+              .read(contentIndexProvider)
+              .exerciseById(exerciseId)
+              .blocks
+              .length,
+        );
   }
 
   /// Đánh dấu cả bài đã pass (backend trả `passed`). Idempotent: đã passed thì

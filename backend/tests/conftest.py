@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -16,10 +17,21 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.db import database_url
+
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+psycopg://localhost:5432/smart_coding_study_test"
 )
+
+
+def _guard_test_database(url: str) -> None:
+    """Fixture DROP toàn bộ bảng: chỉ cho chạy trên DB tên `*_test`, khác DATABASE_URL của app."""
+    name = make_url(url).database or ""
+    if not re.fullmatch(r"[a-z0-9_]+_test", name):
+        raise RuntimeError(f"TEST_DATABASE_URL phải trỏ DB tên dạng '<tên>_test', đang là {name!r}")
+    if make_url(url) == make_url(database_url()):
+        raise RuntimeError("TEST_DATABASE_URL trùng DATABASE_URL — từ chối chạy test phá dữ liệu")
 
 
 def _ensure_database(url: str) -> None:
@@ -41,6 +53,7 @@ def alembic_config(url: str) -> Config:
 
 @pytest.fixture(scope="session")
 def db_engine() -> Iterator[Engine]:
+    _guard_test_database(TEST_DATABASE_URL)
     _ensure_database(TEST_DATABASE_URL)
     config = alembic_config(TEST_DATABASE_URL)
     command.downgrade(config, "base")

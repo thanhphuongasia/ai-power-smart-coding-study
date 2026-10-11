@@ -6,11 +6,11 @@
 /// Không khoá xuyên file/topic.
 library;
 
-import '../data/seed.dart';
+import 'content.dart';
 import 'models.dart';
 
-Iterable<CodeFile> _allFiles() sync* {
-  for (final theme in seedThemes) {
+Iterable<CodeFile> _allFiles(Content content) sync* {
+  for (final theme in content.themes) {
     for (final topic in theme.topics) {
       yield* topic.files;
     }
@@ -18,11 +18,15 @@ Iterable<CodeFile> _allFiles() sync* {
 }
 
 /// Bài [exerciseId] đã mở chưa, biết tập bài đã passed [passed].
-/// Bài đã passed luôn mở. Id không có trong seed (và chưa passed) thì khoá.
-bool isExerciseUnlocked(String exerciseId, Set<String> passed) {
+/// Bài đã passed luôn mở. Id không có trong [content] (và chưa passed) thì khoá.
+bool isExerciseUnlocked(
+  Content content,
+  String exerciseId,
+  Set<String> passed,
+) {
   // Bài đã pass luôn mở, kể cả khi bài trước chưa pass (khớp ExerciseRow).
   if (passed.contains(exerciseId)) return true;
-  for (final file in _allFiles()) {
+  for (final file in _allFiles(content)) {
     final index = file.exercises.indexWhere((e) => e.id == exerciseId);
     if (index < 0) continue;
     if (index == 0 || passed.contains(file.exercises[index - 1].id)) {
@@ -34,8 +38,8 @@ bool isExerciseUnlocked(String exerciseId, Set<String> passed) {
 
 /// Bài kế tiếp trong cùng `CodeFile` ĐẦU TIÊN chứa [exerciseId]; null nếu là
 /// bài cuối file (hoặc không tìm thấy).
-Exercise? nextExerciseAfter(String exerciseId) {
-  for (final file in _allFiles()) {
+Exercise? nextExerciseAfter(Content content, String exerciseId) {
+  for (final file in _allFiles(content)) {
     final index = file.exercises.indexWhere((e) => e.id == exerciseId);
     if (index < 0) continue;
     return index + 1 < file.exercises.length ? file.exercises[index + 1] : null;

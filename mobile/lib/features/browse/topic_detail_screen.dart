@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
+import '../../domain/content.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_providers.dart';
@@ -20,7 +21,8 @@ class TopicDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = ref.watch(progressProvider);
-    final located = _locateTopic(topicId);
+    final content = ref.watch(contentIndexProvider);
+    final located = _locateTopic(content, topicId);
     final theme = located.theme;
     final topic = located.topic;
 
@@ -38,7 +40,7 @@ class TopicDetailScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(AppSpace.s4),
                 children: [
                   for (final file in topic.files) ...[
-                    _FileHeader(file: file),
+                    _FileHeader(file: file, content: content),
                     const SizedBox(height: AppSpace.s2),
                     for (final exercise in file.exercises) ...[
                       ExerciseRow(
@@ -59,8 +61,11 @@ class TopicDetailScreen extends ConsumerWidget {
   }
 }
 
-({StudyTheme theme, Topic topic}) _locateTopic(String topicId) {
-  for (final theme in seedThemes) {
+({StudyTheme theme, Topic topic}) _locateTopic(
+  Content content,
+  String topicId,
+) {
+  for (final theme in content.themes) {
     for (final topic in theme.topics) {
       if (topic.id == topicId) {
         return (theme: theme, topic: topic);
@@ -73,15 +78,16 @@ class TopicDetailScreen extends ConsumerWidget {
 /// Tên file; nếu file còn được dùng ở theme khác thì hiện nhãn "Dùng ở N
 /// theme" và chạm để mở màn File cross-cut.
 class _FileHeader extends StatelessWidget {
-  const _FileHeader({required this.file});
+  const _FileHeader({required this.file, required this.content});
 
   final CodeFile file;
+  final Content content;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final themeCount =
-        locateFilesNamed(file.name).map((u) => u.theme.id).toSet().length;
+        content.locateFilesNamed(file.name).map((u) => u.theme.id).toSet().length;
     final name = Text(file.name, style: AppText.code.copyWith(color: p.ink));
     if (themeCount < 2) return name;
 

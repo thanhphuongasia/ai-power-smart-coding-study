@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../app/theme_mode.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../shared/widgets.dart';
 import '../browse/home_screen.dart' show completedBlocksIn, totalBlocksIn;
 import '../exercise/session_providers.dart';
@@ -24,7 +24,8 @@ class StatsScreen extends ConsumerWidget {
     final dueCount = ref.watch(dueCardsProvider).length;
     final today = dayOf(ref.read(clockProvider)());
 
-    final exercises = uniqueExercises();
+    final content = ref.watch(contentIndexProvider);
+    final exercises = content.uniqueExercises();
     final doneBlocks = completedBlocksIn(exercises, progress);
     // INV-06/07: chỉ đếm ô của bài đã passed; ô sạch = không dùng gợi ý VÀ
     // chưa xem lời giải. hintsUsed/solutionViewed key theo nhãn ô (A/B/C).
@@ -85,7 +86,7 @@ class StatsScreen extends ConsumerWidget {
                   _Heatmap(activity: activity, today: today),
                   const SizedBox(height: AppSpace.s6),
                   const SectionLabel('Mức thành thạo theo chủ đề nhỏ'),
-                  for (final theme in seedThemes)
+                  for (final theme in content.themes)
                     for (final topic in theme.topics) ...[
                       _MasteryRow(
                         label: topic.name,

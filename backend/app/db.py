@@ -15,7 +15,8 @@ def database_url() -> str:
     return os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
 
 
-engine = create_engine(database_url(), pool_pre_ping=True)
+# Tạo lazy: chưa mở kết nối lúc import. connect_timeout để request không treo khi DB chết.
+engine = create_engine(database_url(), pool_pre_ping=True, connect_args={"connect_timeout": 5})
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

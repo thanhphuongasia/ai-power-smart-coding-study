@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_providers.dart';
 import 'exercise_row.dart';
@@ -22,7 +22,8 @@ class FileCrossCutScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final progress = ref.watch(progressProvider);
-    final usages = locateFilesNamed(fileName);
+    final content = ref.watch(contentIndexProvider);
+    final usages = content.locateFilesNamed(fileName);
     final themeCount = usages.map((u) => u.theme.id).toSet().length;
     final exerciseIds = {
       for (final u in usages)

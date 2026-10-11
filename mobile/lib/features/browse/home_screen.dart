@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../app/theme_mode.dart';
-import '../../data/seed.dart';
+import '../../data/content_providers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_controller.dart';
@@ -19,6 +19,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(contentIndexProvider);
     final progress = ref.watch(progressProvider);
     final inProgress = ref.watch(inProgressExerciseProvider);
 
@@ -47,7 +48,7 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: AppSpace.s6),
             ],
             const SectionLabel('Chủ đề'),
-            for (final theme in seedThemes) ...[
+            for (final theme in content.themes) ...[
               _ThemeCard(theme: theme, progress: progress),
               const SizedBox(height: AppSpace.s4),
             ],

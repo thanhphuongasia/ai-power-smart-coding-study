@@ -1,31 +1,47 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smart_coding_study/data/content_providers.dart';
 import 'package:smart_coding_study/data/seed.dart';
+import 'package:smart_coding_study/domain/content.dart';
+import 'package:smart_coding_study/domain/models.dart';
+import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/domain/progression.dart';
+
+final content = Content(version: 'seed', themes: seedThemes);
 
 void main() {
   group('isExerciseUnlocked', () {
     test('overlap-chunks khoá khi split-chunks chưa pass, mở khi đã pass', () {
-      expect(isExerciseUnlocked('overlap-chunks', {}), isFalse);
-      expect(isExerciseUnlocked('overlap-chunks', {'clean-text'}), isFalse);
-      expect(isExerciseUnlocked('overlap-chunks', {'split-chunks'}), isTrue);
+      expect(isExerciseUnlocked(content, 'overlap-chunks', {}), isFalse);
+      expect(
+        isExerciseUnlocked(content, 'overlap-chunks', {'clean-text'}),
+        isFalse,
+      );
+      expect(
+        isExerciseUnlocked(content, 'overlap-chunks', {'split-chunks'}),
+        isTrue,
+      );
     });
 
     test('bài đã passed luôn mở dù bài trước chưa pass (INV-08)', () {
-      expect(isExerciseUnlocked('overlap-chunks', {'overlap-chunks'}), isTrue);
+      expect(
+        isExerciseUnlocked(content, 'overlap-chunks', {'overlap-chunks'}),
+        isTrue,
+      );
     });
 
     test('split-chunks luôn mở (bài đầu file doc-chunker-py)', () {
-      expect(isExerciseUnlocked('split-chunks', {}), isTrue);
+      expect(isExerciseUnlocked(content, 'split-chunks', {}), isTrue);
     });
 
     test('bài đầu mỗi file khác luôn mở', () {
-      expect(isExerciseUnlocked('clean-text', {}), isTrue);
-      expect(isExerciseUnlocked('save-document', {}), isTrue);
-      expect(isExerciseUnlocked('like-post', {}), isTrue);
+      expect(isExerciseUnlocked(content, 'clean-text', {}), isTrue);
+      expect(isExerciseUnlocked(content, 'save-document', {}), isTrue);
+      expect(isExerciseUnlocked(content, 'like-post', {}), isTrue);
     });
 
     test('id không có trong seed → khoá', () {
-      expect(isExerciseUnlocked('khong-co', {}), isFalse);
+      expect(isExerciseUnlocked(content, 'khong-co', {}), isFalse);
     });
 
     test('seed: mọi bài không đầu file đều khoá khi chưa pass gì', () {
@@ -41,7 +57,7 @@ void main() {
                 ),
               );
               if (firstElsewhere) continue;
-              expect(isExerciseUnlocked(id, {}), isFalse, reason: id);
+              expect(isExerciseUnlocked(content, id, {}), isFalse, reason: id);
             }
           }
         }
@@ -51,15 +67,118 @@ void main() {
 
   group('nextExerciseAfter', () {
     test('next của split-chunks = overlap-chunks', () {
-      expect(nextExerciseAfter('split-chunks')?.id, 'overlap-chunks');
+      expect(nextExerciseAfter(content, 'split-chunks')?.id, 'overlap-chunks');
     });
 
     test('bài cuối file → null', () {
-      expect(nextExerciseAfter('overlap-chunks'), isNull);
+      expect(nextExerciseAfter(content, 'overlap-chunks'), isNull);
     });
 
     test('id không tồn tại → null', () {
-      expect(nextExerciseAfter('khong-co'), isNull);
+      expect(nextExerciseAfter(content, 'khong-co'), isNull);
+    });
+  });
+
+  group('contentIndexProvider (INV-07, INV-10)', () {
+    const newBlock = Block(
+      id: 'nb-a',
+      title: 'A',
+      prompt: 'p',
+      indentLevel: 0,
+      acceptedAnswers: ['x'],
+      expectedOutput: '',
+      hints: [],
+      vocab: [],
+      label: 'A',
+    );
+    const newExercise = Exercise(
+      id: 'brand-new',
+      title: 'Brand new',
+      functionName: 'brand_new',
+      params: [],
+      blocks: [newBlock],
+    );
+
+    // Seed + một bài mới nối sau clean-text (bài đầu file, đã passed trong seed).
+    Content withNewExercise() {
+      var added = false;
+      final themes = [
+        for (final t in seedThemes)
+          StudyTheme(
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            tags: t.tags,
+            topics: [
+              for (final tp in t.topics)
+                Topic(
+                  id: tp.id,
+                  name: tp.name,
+                  description: tp.description,
+                  files: [
+                    for (final f in tp.files)
+                      if (!added && f.exercises.first.id == 'clean-text')
+                        () {
+                          added = true;
+                          return CodeFile(
+                            id: f.id,
+                            name: f.name,
+                            exercises: [...f.exercises, newExercise],
+                          );
+                        }()
+                      else
+                        f,
+                  ],
+                ),
+            ],
+          ),
+      ];
+      return Content(version: 'v2', themes: themes);
+    }
+
+    test('override content có bài mới → unlocked/inProgress thấy bài mới', () {
+      final container = ProviderContainer(
+        overrides: [contentIndexProvider.overrideWithValue(withNewExercise())],
+      );
+      addTearDown(container.dispose);
+
+      // clean-text passed trong seed → bài ngay sau nó mở.
+      expect(container.read(exerciseUnlockedProvider('brand-new')), isTrue);
+
+      container.read(progressProvider.notifier).markPassed('split-chunks');
+      container
+          .read(progressProvider.notifier)
+          .saveDraft('brand-new', 'A', 'x = 1');
+      expect(container.read(inProgressExerciseProvider)?.id, 'brand-new');
+    });
+
+    test('seed mặc định không có bài mới → khoá', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(exerciseUnlockedProvider('brand-new')), isFalse);
+    });
+
+    test('đổi content không xoá tiến độ đã markPassed (INV-10)', () {
+      final container = ProviderContainer(
+        overrides: [contentIndexProvider.overrideWithValue(content)],
+      );
+      addTearDown(container.dispose);
+
+      container.read(progressProvider.notifier).markPassed('split-chunks');
+      container
+          .read(progressProvider.notifier)
+          .saveDraft('overlap-chunks', 'A', 'draft');
+      expect(container.read(progressProvider)['split-chunks']?.passed, isTrue);
+
+      container.updateOverrides([
+        contentIndexProvider.overrideWithValue(withNewExercise()),
+      ]);
+
+      final progress = container.read(progressProvider);
+      expect(progress['split-chunks']?.passed, isTrue);
+      expect(progress['clean-text']?.passed, isTrue);
+      expect(progress['overlap-chunks']?.drafts['A'], 'draft');
+      expect(container.read(exerciseUnlockedProvider('brand-new')), isTrue);
     });
   });
 }
