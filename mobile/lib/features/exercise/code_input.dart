@@ -9,8 +9,14 @@ const _mono = 'JetBrains Mono';
 const _barHeight = 48.0;
 const _keyHeight = 40.0;
 const _tab = '    ';
-const _borderRadius = 12.0;
-const _placeholder = 'Nhập code';
+// Kiểu ô Jupyter/IDE: góc gần vuông, cột số dòng, chữ mono vừa đủ đọc.
+const _borderRadius = 4.0;
+const _placeholder = '# viết code ở đây';
+const _fontSize = 15.0;
+const _lineHeight = 1.45;
+const _gutterWidth = 30.0;
+// CodeField tự đệm trái 8px trước gutter (code_field.dart, không chỉnh được).
+const _fieldLeftPad = 8.0;
 
 /// Phím ký hiệu, theo thứ tự hay dùng. Tab tách riêng vì chèn 4 space.
 const List<String> _symbols = ['(', ')', '[', ']', ':', '=', '.', ',', '"'];
@@ -254,71 +260,93 @@ class _CodeInputState extends State<CodeInput> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final bounded = constraints.maxHeight.isFinite;
-      final codeField = CodeTheme(
-        data: CodeThemeData(styles: _codeStyles(scheme)),
-        child: CodeField(
-          key: Key('${widget.keyPrefix}-field'),
-          controller: _controller,
-          focusNode: _focus,
-          expands: bounded,
-          minLines: bounded ? null : 3,
-          gutterStyle: GutterStyle.none,
-          background: scheme.surfaceContainer,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          textStyle:
-              const TextStyle(fontFamily: _mono, fontSize: 16, height: 1.5),
-        ),
-      );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bounded = constraints.maxHeight.isFinite;
+        final codeField = CodeTheme(
+          data: CodeThemeData(styles: _codeStyles(scheme)),
+          child: CodeField(
+            key: Key('${widget.keyPrefix}-field'),
+            controller: _controller,
+            focusNode: _focus,
+            expands: bounded,
+            minLines: bounded ? null : 2,
+            gutterStyle: GutterStyle(
+              // Gutter tự trừ 16+16px cho cột lỗi và cột gập dù đã tắt.
+              width: _gutterWidth + 32,
+              margin: 8,
+              showErrors: false,
+              showFoldingHandles: false,
+              textStyle: TextStyle(
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
+            background: Color.alphaBlend(
+              scheme.onSurface.withValues(alpha: 0.04),
+              scheme.surface,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            textStyle: const TextStyle(
+              fontFamily: _mono,
+              fontSize: _fontSize,
+              height: _lineHeight,
+            ),
+          ),
+        );
 
-      // Lớp hiển thị thuần tuý, không đụng controller (INV-04) — chỉ đọc
-      // text để quyết định hiện/ẩn, không bao giờ ghi lại.
-      final showPlaceholder = _controller.text.isEmpty;
-      final stacked = Stack(
-        children: [
-          codeField,
-          if (showPlaceholder)
-            IgnorePointer(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
-                child: Text(
-                  _placeholder,
-                  style: TextStyle(
-                    fontFamily: _mono,
-                    fontSize: 16,
-                    height: 1.5,
-                    color: scheme.onSurfaceVariant,
+        // Lớp hiển thị thuần tuý, không đụng controller (INV-04) — chỉ đọc
+        // text để quyết định hiện/ẩn, không bao giờ ghi lại.
+        final showPlaceholder = _controller.text.isEmpty;
+        final stacked = Stack(
+          children: [
+            codeField,
+            if (showPlaceholder)
+              IgnorePointer(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    _fieldLeftPad + _gutterWidth,
+                    16,
+                    8,
+                    0,
+                  ),
+                  child: Text(
+                    _placeholder,
+                    style: TextStyle(
+                      fontFamily: _mono,
+                      fontSize: _fontSize,
+                      height: _lineHeight,
+                      fontStyle: FontStyle.italic,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-      );
+          ],
+        );
 
-      // Viền phản ứng theo focus; Container tự bù padding bằng đúng độ dày
-      // viền (1↔2px) nên kích thước tổng thể không đổi khi focus/blur.
-      final field = AnimatedBuilder(
-        animation: _focus,
-        child: stacked,
-        builder: (context, child) {
-          final focused = _focus.hasFocus;
-          return Container(
-            key: Key('${widget.keyPrefix}-border'),
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: focused ? scheme.primary : scheme.outline,
-                width: focused ? 2 : 1,
+        // Viền phản ứng theo focus; Container tự bù padding bằng đúng độ dày
+        // viền (1↔2px) nên kích thước tổng thể không đổi khi focus/blur.
+        final field = AnimatedBuilder(
+          animation: _focus,
+          child: stacked,
+          builder: (context, child) {
+            final focused = _focus.hasFocus;
+            return Container(
+              key: Key('${widget.keyPrefix}-border'),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: focused ? scheme.primary : scheme.outline,
+                  width: focused ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(_borderRadius),
               ),
-              borderRadius: BorderRadius.circular(_borderRadius),
-            ),
-            child: child,
-          );
-        },
-      );
+              child: child,
+            );
+          },
+        );
 
-      if (!widget.showBars) return field;
+        if (!widget.showBars) return field;
 
         return Column(
           mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
@@ -335,7 +363,8 @@ class _CodeInputState extends State<CodeInput> {
             ),
           ],
         );
-    });
+      },
+    );
   }
 }
 
@@ -455,19 +484,19 @@ bool _isWordChar(String c) {
 }
 
 Map<String, TextStyle> _codeStyles(ColorScheme scheme) => {
-      'root': TextStyle(
-        color: scheme.onSurface,
-        backgroundColor: scheme.surfaceContainer,
-      ),
-      'keyword': TextStyle(color: scheme.primary),
-      'built_in': TextStyle(color: scheme.primary),
-      'literal': TextStyle(color: scheme.primary),
-      'number': TextStyle(color: scheme.primary),
-      'string': TextStyle(color: scheme.onSurfaceVariant),
-      'comment': TextStyle(color: scheme.outline, fontStyle: FontStyle.italic),
-      'title': TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
-      'params': TextStyle(color: scheme.onSurface),
-    };
+  'root': TextStyle(
+    color: scheme.onSurface,
+    backgroundColor: scheme.surfaceContainer,
+  ),
+  'keyword': TextStyle(color: scheme.primary),
+  'built_in': TextStyle(color: scheme.primary),
+  'literal': TextStyle(color: scheme.primary),
+  'number': TextStyle(color: scheme.primary),
+  'string': TextStyle(color: scheme.onSurfaceVariant),
+  'comment': TextStyle(color: scheme.outline, fontStyle: FontStyle.italic),
+  'title': TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
+  'params': TextStyle(color: scheme.onSurface),
+};
 
 class _Bar extends StatelessWidget {
   const _Bar({required this.children});
@@ -520,8 +549,10 @@ class _Key extends StatelessWidget {
           customBorder: shape,
           onTap: onTap,
           child: ConstrainedBox(
-            constraints:
-                BoxConstraints(minWidth: minWidth, minHeight: _keyHeight),
+            constraints: BoxConstraints(
+              minWidth: minWidth,
+              minHeight: _keyHeight,
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(
@@ -547,20 +578,20 @@ class _Key extends StatelessWidget {
 /// popup gợi ý desktop (thanh gợi ý của [CodeInput] thay thế).
 class _PythonCodeController extends CodeController {
   _PythonCodeController({required String text})
-      : super(
-          text: text,
-          language: python,
-          params: const EditorParams(tabSpaces: 4),
-          modifiers: const [
-            IndentModifier(),
-            TabModifier(),
-            _PairModifier('(', ')'),
-            _PairModifier('[', ']'),
-            _PairModifier('{', '}'),
-            _PairModifier('"', '"'),
-            _PairModifier("'", "'"),
-          ],
-        );
+    : super(
+        text: text,
+        language: python,
+        params: const EditorParams(tabSpaces: 4),
+        modifiers: const [
+          IndentModifier(),
+          TabModifier(),
+          _PairModifier('(', ')'),
+          _PairModifier('[', ']'),
+          _PairModifier('{', '}'),
+          _PairModifier('"', '"'),
+          _PairModifier("'", "'"),
+        ],
+      );
 
   static const _pairs = {'(': ')', '[': ']', '{': '}', '"': '"', "'": "'"};
   static const _closers = {')', ']', '}', '"', "'"};
@@ -602,8 +633,7 @@ class _PythonCodeController extends CodeController {
     }
     var k = r < d ? r : d;
     while (k > 0 &&
-        !(s.endsWith(old.text.substring(p, p + k)) &&
-            _closesOutside(s, k))) {
+        !(s.endsWith(old.text.substring(p, p + k)) && _closesOutside(s, k))) {
       k--;
     }
     if (k == 0) return null;
@@ -692,8 +722,11 @@ class _PairModifier extends CodeModifier {
     if (open == close && sel.start > 0 && _isWordChar(text[sel.start - 1])) {
       return null;
     }
-    return replace(text, sel.start, sel.end, '$open$close').copyWith(
-      selection: TextSelection.collapsed(offset: sel.start + 1),
-    );
+    return replace(
+      text,
+      sel.start,
+      sel.end,
+      '$open$close',
+    ).copyWith(selection: TextSelection.collapsed(offset: sel.start + 1));
   }
 }

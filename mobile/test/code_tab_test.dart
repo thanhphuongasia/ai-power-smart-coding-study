@@ -68,7 +68,10 @@ Future<_H> _pump(
   t.view.viewInsets = FakeViewPadding(bottom: keyboard);
   addTearDown(t.view.reset);
   final container = ProviderContainer(
-    overrides: [...contentOverrides, judgeClientProvider.overrideWithValue(judge)],
+    overrides: [
+      ...contentOverrides,
+      judgeClientProvider.overrideWithValue(judge),
+    ],
   );
   addTearDown(container.dispose);
   for (final e in drafts.entries) {
@@ -105,26 +108,122 @@ Future<void> _run(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
+/// Chạm bản xem trước của ô → màn soạn code toàn màn hình.
+Future<void> _openEditor(WidgetTester t, String label) async {
+  await t.tap(find.byKey(Key('cell-$label-field')));
+  await t.pumpAndSettle();
+}
+
 Color _frameColor(WidgetTester t, String label) {
   final box = t.widget<Container>(find.byKey(Key('cell-$label-frame')));
   return ((box.decoration as BoxDecoration).border as Border).top.color;
 }
 
 void main() {
-  testWidgets('notebook: ô khoá + 3 ô TODO + ghi chú + nút Gợi ý/Run', (
-    t,
-  ) async {
+  testWidgets('notebook: seed A xong ⇒ A thu gọn ✓, B mở, C khoá', (t) async {
     await _pump(t, FakeJudge((_) async => _passed));
     expect(find.byKey(const Key('locked-cell')), findsWidgets);
     expect(find.text('có sẵn'), findsWidgets);
-    for (final l in ['A', 'B', 'C']) {
-      expect(find.byKey(Key('cell-$l-field')), findsOneWidget);
-    }
-    expect(find.text('trong hàm'), findsWidgets);
+    expect(find.byKey(const Key('cell-A-collapsed')), findsOneWidget);
+    expect(find.byKey(const Key('cell-A-field')), findsNothing);
+    expect(find.byKey(const Key('cell-B-field')), findsOneWidget);
+    expect(find.byKey(const Key('cell-C-locked')), findsOneWidget);
+    expect(find.byKey(const Key('cell-C-field')), findsNothing);
+    expect(find.text('Làm xong ô B để mở'), findsOneWidget);
     expect(find.text('trong vòng for'), findsOneWidget);
     expect(find.byKey(const Key('indent-note')), findsOneWidget);
-    expect(find.text('Gợi ý ô A'), findsOneWidget);
+    expect(find.text('Gợi ý ô B'), findsOneWidget);
     expect(find.text('Run tất cả'), findsOneWidget);
+  });
+
+  testWidgets('chạm ô ⇒ màn soạn toàn màn hình chỉ có editor + phím; Xong '
+      'quay lại notebook', (t) async {
+    await _pump(t, FakeJudge((_) async => _passed), keyboard: 300);
+    expect(find.byKey(const Key('symbol-(')), findsNothing);
+    await _openEditor(t, 'B');
+    expect(find.byKey(const Key('editor-field')), findsOneWidget);
+    expect(find.byKey(const Key('symbol-(')), findsOneWidget);
+    expect(find.text('Cắt và thêm vào danh sách'), findsOneWidget);
+    expect(find.byKey(const Key('run-button')), findsNothing);
+    expect(find.byKey(const Key('locked-cell')), findsNothing);
+    expect(t.takeException(), isNull);
+
+    await t.tap(find.byKey(const Key('editor-done')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('editor-field')), findsNothing);
+    expect(find.byKey(const Key('run-button')), findsOneWidget);
+  });
+
+  testWidgets('B khớp ⇒ màn soạn chuyển sang C (focus); C khớp ⇒ đóng, '
+      'notebook thu gọn hết', (t) async {
+    final h = await _pump(t, FakeJudge((_) async => _passed));
+    await _openEditor(t, 'B');
+    await t.enterText(find.byKey(const Key('editor-field')), 'chunks.append(');
+    await t.pump();
+    expect(find.text('Cắt và thêm vào danh sách'), findsOneWidget);
+
+    await t.enterText(
+      find.byKey(const Key('editor-field')),
+      'chunks.append(text[i : i+size])', // khác khoảng trắng vẫn khớp
+    );
+    await t.pumpAndSettle();
+    expect(find.text('Trả về kết quả'), findsOneWidget);
+    expect(find.byKey(const Key('editor-advanced')), findsOneWidget);
+    final c = find.descendant(
+      of: find.byKey(const Key('editor-field')),
+      matching: find.byType(EditableText),
+    );
+    expect(t.widget<EditableText>(c).controller.text, '');
+    expect(t.widget<EditableText>(c).focusNode.hasFocus, isTrue);
+    expect(h.progress!.drafts['B'], 'chunks.append(text[i : i+size])');
+
+    await t.enterText(find.byKey(const Key('editor-field')), 'return chunks');
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('editor-field')), findsNothing);
+    for (final l in ['A', 'B', 'C']) {
+      expect(find.byKey(Key('cell-$l-collapsed')), findsOneWidget);
+    }
+  });
+
+  testWidgets('chạm ô đã xong ⇒ mở lại sửa được; ô đang mở thu gọn', (t) async {
+    await _pump(t, FakeJudge((_) async => _passed));
+    await t.tap(find.byKey(const Key('cell-A-collapsed')));
+    await t.pump();
+    expect(find.byKey(const Key('cell-A-field')), findsOneWidget);
+    expect(find.byKey(const Key('cell-B-field')), findsNothing);
+    expect(find.byKey(const Key('cell-B-collapsed')), findsOneWidget);
+
+    // Sửa A thành sai ⇒ B, C khoá lại.
+    await _openEditor(t, 'A');
+    await t.enterText(find.byKey(const Key('editor-field')), 'for i in');
+    await t.pump();
+    await t.tap(find.byKey(const Key('editor-done')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('cell-B-locked')), findsOneWidget);
+    expect(find.byKey(const Key('cell-C-locked')), findsOneWidget);
+  });
+
+  testWidgets('bài đã passed ⇒ không khoá ô nào dù khác đáp án mẫu', (t) async {
+    final h = await _pump(
+      t,
+      FakeJudge((_) async => _passed),
+      drafts: {'A': 'for j in range(0, len(text), size):'},
+    );
+    expect(find.byKey(const Key('cell-B-locked')), findsOneWidget);
+    h.container.read(progressProvider.notifier).markPassed(_id);
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(
+      UncontrolledProviderScope(
+        container: h.container,
+        child: MaterialApp(
+          theme: buildAppTheme(brightness: Brightness.light),
+          home: Scaffold(body: CodeTab(exercise: _ex)),
+        ),
+      ),
+    );
+    await t.pump();
+    expect(find.byKey(const Key('cell-B-locked')), findsNothing);
+    expect(find.byKey(const Key('cell-B-collapsed')), findsOneWidget);
   });
 
   testWidgets('ô trống chặn Run: không gọi judge, báo ô và viền đỏ', (t) async {
@@ -134,7 +233,8 @@ void main() {
     expect(judge.calls, isEmpty);
     expect(find.text('Ô B, C còn trống'), findsOneWidget);
     expect(_frameColor(t, 'B'), isNot(Colors.transparent));
-    expect(_frameColor(t, 'A'), Colors.transparent);
+    expect(find.byKey(const Key('cell-A-collapsed')), findsOneWidget);
+    expect(find.byKey(const Key('cell-C-locked')), findsOneWidget);
     expect(h.progress?.passed ?? false, isFalse);
   });
 
@@ -186,9 +286,10 @@ void main() {
     );
     final h = await _pump(t, judge, drafts: cells);
     await _run(t);
+    // Ô lỗi tự mở dù đã khớp đáp án; ô khác vẫn thu gọn.
     expect(_frameColor(t, 'B'), isNot(Colors.transparent));
-    expect(_frameColor(t, 'A'), Colors.transparent);
-    expect(_frameColor(t, 'C'), Colors.transparent);
+    expect(find.byKey(const Key('cell-A-collapsed')), findsOneWidget);
+    expect(find.byKey(const Key('cell-C-collapsed')), findsOneWidget);
     expect(find.text('Lỗi ở ô B: invalid syntax'), findsOneWidget);
     expect(find.text('Lỗi cú pháp'), findsOneWidget);
     expect(h.progress?.passed ?? false, isFalse);
@@ -207,7 +308,7 @@ void main() {
     await _run(t);
     expect(find.byKey(const Key('run-error-locked')), findsOneWidget);
     for (final l in ['A', 'B', 'C']) {
-      expect(_frameColor(t, l), Colors.transparent);
+      expect(find.byKey(Key('cell-$l-collapsed')), findsOneWidget);
       expect(find.byKey(Key('cell-$l-error')), findsNothing);
     }
   });
@@ -289,9 +390,10 @@ void main() {
 
   testWidgets('draft lưu theo label và còn nguyên khi dựng lại tab', (t) async {
     final h = await _pump(t, FakeJudge((_) async => _passed));
-    await t.enterText(find.byKey(const Key('cell-C-field')), 'return chunks');
+    await _openEditor(t, 'B');
+    await t.enterText(find.byKey(const Key('editor-field')), 'chunks.append(');
     await t.pump();
-    expect(h.progress!.drafts['C'], 'return chunks');
+    expect(h.progress!.drafts['B'], 'chunks.append(');
 
     await t.pumpWidget(const SizedBox());
     await t.pumpWidget(
@@ -304,11 +406,19 @@ void main() {
       ),
     );
     await t.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('cell-B-field')),
+        matching: find.textContaining('chunks.append(', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    await _openEditor(t, 'B');
     final field = find.descendant(
-      of: find.byKey(const Key('cell-C-field')),
+      of: find.byKey(const Key('editor-field')),
       matching: find.byType(EditableText),
     );
-    expect(t.widget<EditableText>(field).controller.text, 'return chunks');
+    expect(t.widget<EditableText>(field).controller.text, 'chunks.append(');
   });
 
   testWidgets('mở tab có draft rồi focus ô ngay: không ném lỗi; Gợi ý ≤3', (
@@ -319,17 +429,22 @@ void main() {
       FakeJudge((_) async => _passed),
       drafts: _solution(),
     );
-    await t.tap(find.byKey(const Key('cell-B-field')));
+    // Đủ đáp án ⇒ mọi ô thu gọn; chạm để mở rồi focus.
+    await t.tap(find.byKey(const Key('cell-B-collapsed')));
     await t.pump();
-    expect(t.takeException(), isNull);
     expect(find.text('Gợi ý ô B'), findsOneWidget);
+    await _openEditor(t, 'B');
+    expect(t.takeException(), isNull);
 
+    // Gợi ý ngay trong màn soạn, tối đa 3.
     for (var i = 0; i < 4; i++) {
-      final btn = find.byKey(const Key('hint-button'));
-      await t.tap(btn);
+      await t.tap(find.byKey(const Key('editor-hint')));
       await t.pump();
     }
     expect(h.progress!.hintsUsed['B'], 3);
+    expect(find.byKey(const Key('editor-hint-2')), findsOneWidget);
+    await t.tap(find.byKey(const Key('editor-done')));
+    await t.pumpAndSettle();
     expect(find.byKey(const Key('hint-B-0')), findsOneWidget);
     expect(find.byKey(const Key('hint-B-2')), findsOneWidget);
     expect(find.byKey(const Key('hint-A-0')), findsNothing);
@@ -345,8 +460,9 @@ void main() {
     expect(t.takeException(), isNull);
     await t.tap(find.byKey(const Key('edit-again')));
     await t.pump();
-    await t.tap(find.byKey(const Key('cell-A-field')));
+    await t.tap(find.byKey(const Key('cell-A-collapsed')));
     await t.pump();
+    await _openEditor(t, 'A');
     expect(t.takeException(), isNull);
   });
 }

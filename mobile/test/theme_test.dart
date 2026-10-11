@@ -169,11 +169,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       expect(find.byType(SurfaceCard), findsOneWidget);
@@ -183,9 +179,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: TagChip('tag'),
-          ),
+          home: const Scaffold(body: TagChip('tag')),
         ),
       );
       expect(find.byType(TagChip), findsOneWidget);
@@ -195,33 +189,31 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: ResultBadge(passed: true),
-          ),
+          home: const Scaffold(body: ResultBadge(passed: true)),
         ),
       );
       expect(find.byType(ResultBadge), findsOneWidget);
     });
 
-    testWidgets('ResultBadge shows correct text for passed', (WidgetTester tester) async {
+    testWidgets('ResultBadge shows correct text for passed', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: ResultBadge(passed: true),
-          ),
+          home: const Scaffold(body: ResultBadge(passed: true)),
         ),
       );
       expect(find.text('Đúng'), findsOneWidget);
     });
 
-    testWidgets('ResultBadge shows correct text for failed', (WidgetTester tester) async {
+    testWidgets('ResultBadge shows correct text for failed', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: ResultBadge(passed: false),
-          ),
+          home: const Scaffold(body: ResultBadge(passed: false)),
         ),
       );
       expect(find.text('Chưa đúng'), findsOneWidget);
@@ -231,63 +223,55 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: TimerPill(
-              Duration.zero,
-            ),
-          ),
+          home: Scaffold(body: TimerPill(Duration.zero)),
         ),
       );
       expect(find.byType(TimerPill), findsOneWidget);
     });
 
-    testWidgets('ThinProgressBar pumps without error', (WidgetTester tester) async {
+    testWidgets('ThinProgressBar pumps without error', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: ThinProgressBar(
-              value: 0.5,
-            ),
-          ),
+          home: Scaffold(body: ThinProgressBar(value: 0.5)),
         ),
       );
       expect(find.byType(ThinProgressBar), findsOneWidget);
     });
 
-    testWidgets('ScreenHeader pumps without error', (WidgetTester tester) async {
+    testWidgets('ScreenHeader pumps without error', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: ScreenHeader(
-              title: 'Test',
-            ),
-          ),
+          home: const Scaffold(body: ScreenHeader(title: 'Test')),
         ),
       );
       expect(find.byType(ScreenHeader), findsOneWidget);
     });
 
-    testWidgets('SectionLabel pumps without error', (WidgetTester tester) async {
+    testWidgets('SectionLabel pumps without error', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: SectionLabel('label'),
-          ),
+          home: const Scaffold(body: SectionLabel('label')),
         ),
       );
       expect(find.byType(SectionLabel), findsOneWidget);
     });
 
-    testWidgets('PrimaryButton pumps without error', (WidgetTester tester) async {
+    testWidgets('PrimaryButton pumps without error', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: PrimaryButton(label: 'Test'),
-          ),
+          home: const Scaffold(body: PrimaryButton(label: 'Test')),
         ),
       );
       expect(find.byType(PrimaryButton), findsOneWidget);
@@ -297,9 +281,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: GhostButton(label: 'Test'),
-          ),
+          home: const Scaffold(body: GhostButton(label: 'Test')),
         ),
       );
       expect(find.byType(GhostButton), findsOneWidget);
@@ -309,9 +291,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: HintButton(used: 0),
-          ),
+          home: const Scaffold(body: HintButton(used: 0)),
         ),
       );
       expect(find.byType(HintButton), findsOneWidget);
@@ -321,12 +301,12 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: PrimaryButton(label: 'Test'),
-          ),
+          home: const Scaffold(body: PrimaryButton(label: 'Test')),
         ),
       );
-      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton).first);
+      final button = tester.widget<ElevatedButton>(
+        find.byType(ElevatedButton).first,
+      );
       expect(button.style?.elevation?.resolve({}), 0);
     });
 
@@ -334,105 +314,120 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: const Scaffold(
-            body: HintButton(used: 0),
-          ),
+          home: const Scaffold(body: HintButton(used: 0)),
         ),
       );
-      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton).last);
+      final button = tester.widget<ElevatedButton>(
+        find.byType(ElevatedButton).last,
+      );
       expect(button.style?.elevation?.resolve({}), 0);
     });
 
-    testWidgets('SurfaceCard default has surfaceRaised background', (WidgetTester tester) async {
+    testWidgets('SurfaceCard default has surfaceRaised background', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       final material = tester.widget<Material>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
+        find
+            .descendant(
+              of: find.byType(SurfaceCard),
+              matching: find.byType(Material),
+            )
+            .first,
       );
       expect(material.color, AppColors.surfaceRaised);
     });
 
-    testWidgets('SurfaceCard default has outline border', (WidgetTester tester) async {
+    testWidgets('SurfaceCard default has outline border', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       final material = tester.widget<Material>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
+        find
+            .descendant(
+              of: find.byType(SurfaceCard),
+              matching: find.byType(Material),
+            )
+            .first,
       );
       final shape = material.shape as RoundedRectangleBorder;
       expect(shape.side.color, AppColors.outline);
       expect(shape.side.width, 1);
     });
 
-    testWidgets('SurfaceCard highlighted has primary border', (WidgetTester tester) async {
+    testWidgets('SurfaceCard highlighted has primary border', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: SurfaceCard(
-              highlighted: true,
-              child: const Text('Test'),
-            ),
+            body: SurfaceCard(highlighted: true, child: const Text('Test')),
           ),
         ),
       );
       final material = tester.widget<Material>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
+        find
+            .descendant(
+              of: find.byType(SurfaceCard),
+              matching: find.byType(Material),
+            )
+            .first,
       );
       final shape = material.shape as RoundedRectangleBorder;
       expect(shape.side.color, AppColors.primary);
       expect(shape.side.width, 1);
     });
 
-    testWidgets('SurfaceCard Material has elevation 0', (WidgetTester tester) async {
+    testWidgets('SurfaceCard Material has elevation 0', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       final material = tester.widget<Material>(
-        find.descendant(of: find.byType(SurfaceCard), matching: find.byType(Material)).first,
+        find
+            .descendant(
+              of: find.byType(SurfaceCard),
+              matching: find.byType(Material),
+            )
+            .first,
       );
       expect(material.elevation, 0);
     });
 
-    testWidgets('SurfaceCard with onTap has InkWell with proper Material wrapper', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              onTap: () {},
-              child: const Text('Test'),
+    testWidgets(
+      'SurfaceCard with onTap has InkWell with proper Material wrapper',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(),
+            home: Scaffold(
+              body: SurfaceCard(onTap: () {}, child: const Text('Test')),
             ),
           ),
-        ),
-      );
-      expect(find.byType(InkWell), findsOneWidget);
-      expect(find.byType(Material), findsWidgets);
-    });
+        );
+        expect(find.byType(InkWell), findsOneWidget);
+        expect(find.byType(Material), findsWidgets);
+      },
+    );
 
-    testWidgets('SurfaceCard with onTap triggers callback on tap', (WidgetTester tester) async {
+    testWidgets('SurfaceCard with onTap triggers callback on tap', (
+      WidgetTester tester,
+    ) async {
       bool tapped = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -451,15 +446,14 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('SurfaceCard with onTap wraps Semantics with button flag', (WidgetTester tester) async {
+    testWidgets('SurfaceCard with onTap wraps Semantics with button flag', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: SurfaceCard(
-              onTap: () {},
-              child: const Text('Test'),
-            ),
+            body: SurfaceCard(onTap: () {}, child: const Text('Test')),
           ),
         ),
       );
@@ -472,15 +466,13 @@ void main() {
       expect(find.byType(InkWell), findsOneWidget);
     });
 
-    testWidgets('SurfaceCard without onTap has Semantics with no button flag', (WidgetTester tester) async {
+    testWidgets('SurfaceCard without onTap has Semantics with no button flag', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       final handle = tester.ensureSemantics();
@@ -491,15 +483,14 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('ScreenHeader back button has tooltip', (WidgetTester tester) async {
+    testWidgets('ScreenHeader back button has tooltip', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: ScreenHeader(
-              title: 'Test',
-              onBack: () {},
-            ),
+            body: ScreenHeader(title: 'Test', onBack: () {}),
           ),
         ),
       );
@@ -507,15 +498,14 @@ void main() {
       expect(iconButton.tooltip, 'Quay lại');
     });
 
-    testWidgets('ScreenHeader back button has accessible tap size', (WidgetTester tester) async {
+    testWidgets('ScreenHeader back button has accessible tap size', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: ScreenHeader(
-              title: 'Test',
-              onBack: () {},
-            ),
+            body: ScreenHeader(title: 'Test', onBack: () {}),
           ),
         ),
       );
@@ -529,15 +519,13 @@ void main() {
       expect(iconButton.tooltip, 'Quay lại');
     });
 
-    testWidgets('SurfaceCard without onTap still renders InkWell', (WidgetTester tester) async {
+    testWidgets('SurfaceCard without onTap still renders InkWell', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          home: Scaffold(
-            body: SurfaceCard(
-              child: const Text('Test'),
-            ),
-          ),
+          home: Scaffold(body: SurfaceCard(child: const Text('Test'))),
         ),
       );
       expect(find.byType(InkWell), findsOneWidget);
@@ -557,7 +545,8 @@ void main() {
 
     test('inputDecorationTheme focused border has 2px primary width', () {
       final theme = buildAppTheme();
-      final border = theme.inputDecorationTheme.focusedBorder as OutlineInputBorder;
+      final border =
+          theme.inputDecorationTheme.focusedBorder as OutlineInputBorder;
       expect(border.borderSide.width, 2);
       expect(border.borderSide.color, AppColors.primary);
     });

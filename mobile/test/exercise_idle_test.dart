@@ -33,7 +33,10 @@ Future<ProviderContainer> _pumpScreen(
   late ProviderContainer container;
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [...contentOverrides, clockProvider.overrideWithValue(() => fakeClock.now)],
+      overrides: [
+        ...contentOverrides,
+        clockProvider.overrideWithValue(() => fakeClock.now),
+      ],
       child: Builder(
         builder: (context) {
           container = ProviderScope.containerOf(context);
@@ -119,20 +122,19 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Không chạm gì 121s → idle dialog hiện (giữ hành vi cũ)',
-    (tester) async {
-      final fakeClock = _FakeClock();
-      await _pumpScreen(tester, fakeClock);
+  testWidgets('Không chạm gì 121s → idle dialog hiện (giữ hành vi cũ)', (
+    tester,
+  ) async {
+    final fakeClock = _FakeClock();
+    await _pumpScreen(tester, fakeClock);
 
-      await _advance(tester, fakeClock, const Duration(seconds: 121));
-      await tester.pump();
+    await _advance(tester, fakeClock, const Duration(seconds: 121));
+    await tester.pump();
 
-      expect(find.text(_idleDialogTitle), findsOneWidget);
+    expect(find.text(_idleDialogTitle), findsOneWidget);
 
-      await _drainEditorTimer(tester);
-    },
-  );
+    await _drainEditorTimer(tester);
+  });
 
   testWidgets(
     'Idle dialog: đếm ngược 60s, "Tiếp tục" đóng dialog và về active',

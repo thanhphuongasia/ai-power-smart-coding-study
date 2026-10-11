@@ -3,27 +3,28 @@ import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/merge.dart';
 import 'package:smart_coding_study/domain/models.dart';
 
-const _splitSolution = 'def split_chunks(text, size):\n'
+const _splitSolution =
+    'def split_chunks(text, size):\n'
     '    chunks = []\n'
     '    for i in range(0, len(text), size):\n'
     '        chunks.append(text[i:i + size])\n'
     '    return chunks';
 
 Map<String, String> _cells(Exercise e) => {
-      for (final b in e.blocks) b.label: b.acceptedAnswers.first,
-    };
+  for (final b in e.blocks) b.label: b.acceptedAnswers.first,
+};
 
 Block _block(String label, int indent) => Block(
-      id: 'x-$label',
-      title: '',
-      prompt: '',
-      indentLevel: indent,
-      acceptedAnswers: const [''],
-      expectedOutput: '',
-      hints: const ['', '', ''],
-      vocab: const ['x'],
-      label: label,
-    );
+  id: 'x-$label',
+  title: '',
+  prompt: '',
+  indentLevel: indent,
+  acceptedAnswers: const [''],
+  expectedOutput: '',
+  hints: const ['', '', ''],
+  vocab: const ['x'],
+  label: label,
+);
 
 void main() {
   final split = testContent.exerciseById('split-chunks');
@@ -75,9 +76,10 @@ void main() {
     final segs = templateSegments(split);
     expect(segs.length, 4);
     expect((segs[0] as LockedSegment).code.split('\n').length, 2);
-    expect(
-      segs.skip(1).map((s) => (s as TodoSegment).block.label).toList(),
-      ['A', 'B', 'C'],
-    );
+    expect(segs.skip(1).map((s) => (s as TodoSegment).block.label).toList(), [
+      'A',
+      'B',
+      'C',
+    ]);
   });
 }

@@ -4,13 +4,23 @@ import 'package:smart_coding_study/features/exercise/completion_engine.dart';
 const _known = ['text', 'size', 'chunks'];
 const _vocab = ['range', 'len', 'append'];
 
-List<String> labels(String before, {List<String> known = _known, List<String> vocab = _vocab, int limit = 8}) =>
-    suggest(textBeforeCursor: before, knownIdentifiers: known, vocab: vocab, limit: limit)
-        .map((s) => s.label)
-        .toList();
+List<String> labels(
+  String before, {
+  List<String> known = _known,
+  List<String> vocab = _vocab,
+  int limit = 8,
+}) => suggest(
+  textBeforeCursor: before,
+  knownIdentifiers: known,
+  vocab: vocab,
+  limit: limit,
+).map((s) => s.label).toList();
 
-Suggestion first(String before) =>
-    suggest(textBeforeCursor: before, knownIdentifiers: _known, vocab: _vocab).first;
+Suggestion first(String before) => suggest(
+  textBeforeCursor: before,
+  knownIdentifiers: _known,
+  vocab: _vocab,
+).first;
 
 void main() {
   group('prefix', () {
@@ -31,8 +41,11 @@ void main() {
         vocab: const ['range'],
       );
       expect(got.map((s) => s.label), ['result', 'range', 'return']);
-      expect(got.map((s) => s.kind),
-          [SuggestionKind.known, SuggestionKind.vocab, SuggestionKind.keyword]);
+      expect(got.map((s) => s.kind), [
+        SuggestionKind.known,
+        SuggestionKind.vocab,
+        SuggestionKind.keyword,
+      ]);
     });
 
     test('within a group: exact case first, then shorter', () {
@@ -43,8 +56,10 @@ void main() {
     });
 
     test('keeps original order on full ties', () {
-      expect(labels('a', known: const ['ab', 'aa', 'ac'], vocab: const [])
-          .take(3), ['ab', 'aa', 'ac']);
+      expect(
+        labels('a', known: const ['ab', 'aa', 'ac'], vocab: const []).take(3),
+        ['ab', 'aa', 'ac'],
+      );
     });
 
     test('drops exact match of the word being typed', () {
@@ -54,9 +69,16 @@ void main() {
 
     test('dedupes across groups, highest group wins', () {
       final got = suggest(
-          textBeforeCursor: 'ra', knownIdentifiers: const [], vocab: const ['range']);
+        textBeforeCursor: 'ra',
+        knownIdentifiers: const [],
+        vocab: const ['range'],
+      );
       expect(got, [
-        const Suggestion(label: 'range', insertText: 'range(', kind: SuggestionKind.vocab),
+        const Suggestion(
+          label: 'range',
+          insertText: 'range(',
+          kind: SuggestionKind.vocab,
+        ),
       ]);
     });
 
@@ -104,18 +126,35 @@ void main() {
 
     test('after "in " → range( then known', () {
       final got = suggest(
-          textBeforeCursor: 'for i in ', knownIdentifiers: _known, vocab: _vocab);
+        textBeforeCursor: 'for i in ',
+        knownIdentifiers: _known,
+        vocab: _vocab,
+      );
       expect(got.first.insertText, 'range(');
       expect(got.map((s) => s.label), ['range', 'text', 'size', 'chunks']);
     });
 
     test('blank line start → known + for, return, if', () {
       expect(labels(''), ['text', 'size', 'chunks', 'for', 'return', 'if']);
-      expect(labels('def f():\n    '), ['text', 'size', 'chunks', 'for', 'return', 'if']);
+      expect(labels('def f():\n    '), [
+        'text',
+        'size',
+        'chunks',
+        'for',
+        'return',
+        'if',
+      ]);
     });
 
     test('inside call args → known then vocab', () {
-      expect(labels('range(0, '), ['text', 'size', 'chunks', 'range', 'len', 'append']);
+      expect(labels('range(0, '), [
+        'text',
+        'size',
+        'chunks',
+        'range',
+        'len',
+        'append',
+      ]);
     });
 
     test('after a dot → block vocab (methods)', () {
@@ -123,7 +162,14 @@ void main() {
     });
 
     test('word "for" inside identifier is not the for-context', () {
-      expect(labels('before '), ['text', 'size', 'chunks', 'range', 'len', 'append']);
+      expect(labels('before '), [
+        'text',
+        'size',
+        'chunks',
+        'range',
+        'len',
+        'append',
+      ]);
     });
 
     test('inside an open string or comment → nothing', () {
@@ -133,7 +179,11 @@ void main() {
     });
 
     test('empty known + vocab still offers keywords on blank line', () {
-      expect(labels('', known: const [], vocab: const []), ['for', 'return', 'if']);
+      expect(labels('', known: const [], vocab: const []), [
+        'for',
+        'return',
+        'if',
+      ]);
     });
   });
 }
