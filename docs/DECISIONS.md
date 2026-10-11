@@ -62,6 +62,8 @@ vào lưu trữ bền vững — mất tiến độ khi kill app là chấp nh�
 
 **Còn đúng tới khi nào**: tới phase 2 (issue #5) — đã liệt kê Hive là việc cần làm ở đó.
 
+**Đã lỗi thời (commit c17baa1)**: tiến độ giờ lưu trên server theo user, không còn chỉ ở RAM — xem mục "Tiến độ theo user lưu trên server" cuối file.
+
 ### ~~Run = so khớp đáp án đã chuẩn hoá, không chạy Python thật~~ (SUPERSEDED)
 
 **SUPERSEDED bởi run 2026-10-11-exercise-tabs-judge (commit 8b2ce52)**: Run giờ gửi code đã ghép lên
@@ -260,6 +262,8 @@ bị lần nạp sau ghi đè — nguồn soạn là `content.json`. Chưa có m
 backend/app/main.py:106-114; backend/README.md:1-60; mobile/lib/data/demo_seed.dart:1-8;
 planning/crew/2026-10-11-content-api-postgres/PLAN.md, "Quyết định thiết kế" 1, 2, 6, 7.
 
+**Đã đổi một phần (commit c17baa1)**: `content.json` không còn là nguồn soạn — DB là nguồn chính, admin sửa qua `/api/admin/content`, deploy chỉ nạp khi DB rỗng; đã có màn soạn nội dung; `demo_seed.dart` bị xoá. Xem "DB là nguồn chính của nội dung" cuối file. Phần còn lại (Postgres + Alembic + SQLAlchemy sync) vẫn đúng.
+
 ### Nạp nội dung: thay toàn bộ trong một transaction, kiểm hình dạng bằng pydantic
 
 **Quyết định**: `python -m app.load_content [path]` đọc `content.json`, kiểm, xoá hết bảng nội dung rồi
@@ -278,6 +282,8 @@ kiểm id/quan hệ, nên `content.json` sai kiểu vẫn nạp được, `/cont
 
 **Nguồn**: backend/app/load_content.py:1-5,37-39,46-95,98-156,159-173; backend/app/content_schema.py:1-102;
 planning/crew/2026-10-11-content-api-postgres/DEVIATIONS.md (dòng "Plan không có T-10").
+
+**Bổ sung (commit c17baa1)**: `load_content` giờ cũng là đường ghi duy nhất của admin, có khoá `pg_advisory_xact_lock` và bộ luật nội dung mở rộng (`content_rules.py`); CLI bắt buộc `--if-empty` hoặc `--force`.
 
 ### `GET /content` công khai, không trả `judge`; đọc lại khi version đổi giữa chừng
 
@@ -374,6 +380,8 @@ chuyển tới Judge0 công khai nên IP VPS có thể bị chặn; HTTP thườ
 
 **Nguồn**: deploy/deploy.sh:1-108; deploy/README.md:11-41; planning/crew/2026-10-11-deploy-vps-web/DEVIATIONS.md,
 reviews/SEAM.md.
+
+**Bổ sung (commit c17baa1)**: nginx proxy thêm `location /api/` và `location /api/admin/`; deploy nạp nội dung chỉ khi DB rỗng và seed user; link không còn "không mật khẩu" cho phần `/api/*` (nhưng `/content`, `/run` vẫn công khai; vẫn HTTP thường).
 ### Module lồng nhau = `topics.parent_id` + `position` theo thứ tự duyệt trước (preorder)
 
 **Quyết định**: module con là hàng `topics` tự tham chiếu qua `parent_id` (FK về `topics.id`, CASCADE, nullable);
@@ -538,3 +546,45 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: tốn công review; harness không có timeout riêng — mutant `while pending … continue` lặp vô hạn, chỉ dừng nhờ giới hạn runner/Judge0 (backend/app/runner.py:75; Backlog của run).
 
 **Nguồn**: planning/crew/2026-10-11-reservation-rules-outbox/reviews/T-01.md:3-5, reviews/T-02.md:3-5, STATUS.md Backlog.
+
+### Tài khoản: email + mật khẩu argon2id, token Bearer opaque lưu sha256
+
+**Quyết định** (run 2026-10-11-users-progress-admin, commit c17baa1): mật khẩu băm argon2id (`argon2-cffi`), mật khẩu mới ≥10 ký tự. Phiên là token ngẫu nhiên `secrets.token_urlsafe(32)` gửi qua `Authorization: Bearer`; bảng `user_sessions` chỉ lưu sha256 của token, hạn 30 ngày. Đổi mật khẩu bắt buộc mật khẩu cũ và thu hồi các phiên KHÁC. Đăng nhập sai quá 5 lần/15 phút theo (IP, email) hoặc 30 lần/IP thì 429, đếm trong RAM. Không token/hết hạn → 401, không đủ role → 403, kiểm ở server mỗi request (role đọc lại từ DB). `/run` và `/content` vẫn công khai; `/run` kèm token sai thì chấm như khách.
+
+**Vì sao**: token opaque thu hồi được ngay và không cần quản lý khoá ký như JWT; lộ bảng phiên không lộ token dùng lại được. Throttle trong RAM đủ cho một process uvicorn.
+
+**Đánh đổi đã chấp nhận**: HTTP thường nên mật khẩu/token chưa mã hoá khi truyền (user chốt "link test HTTP", cần domain + HTTPS trước khi dùng thật); token ở localStorage (web) lộ nếu XSS; throttle mất khi restart; user chỉ tạo qua `seed_users`, chưa có quản lý user.
+
+**Nguồn**: backend/app/auth.py:1-281; backend/app/seed_users.py:1-79; deploy/README.md:70-73; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 1, 2), DEVIATIONS.md (SEC-01).
+
+### Tiến độ theo user lưu trên server; `passed` chỉ do server ghi; không FK tới bài
+
+**Quyết định**: bảng `user_progress` khoá `(user_id, exercise_id)` với `exercise_id` là chuỗi KHÔNG có khoá ngoại tới `exercises`; `user_state` giữ lịch ôn và activity. `PUT /api/progress/{id}` không nhận `passed` (`extra="forbid"`, `passed` không nằm trong `set_`); chỉ `/run` ghi `passed=true` khi máy chấm trả passed cho user có token hợp lệ. App tải snapshot lúc đăng nhập (AuthGate chặn tới khi xong), đẩy thay đổi: draft gom 800 ms, còn lại đẩy ngay; lỗi mạng giữ local. Đồng bộ "mới nhất thắng".
+
+**Vì sao**: `load_content` xoá-rồi-ghi toàn bộ nội dung; FK cascade sẽ xoá sạch tiến độ mỗi lần admin lưu (INV-04). Cho client tự khai `passed` thì gửi request tay là "xong bài" (INV-05).
+
+**Đánh đổi đã chấp nhận**: tiến độ có thể mồ côi (id/nhãn bị đổi hoặc xoá): server ẩn id lạ, client bỏ nhãn lạ. "Xong bài" có thể lệch local/server khi token hết hạn đúng lúc Run (`/run` không trả 401). Code học viên in giả dòng "passed" vẫn được ghi (harness cùng tiến trình) — chấp nhận vì tiến độ chỉ ảnh hưởng chính người đó, bác bỏ finding external của run.
+
+**Nguồn**: backend/app/progress.py:28-44,108-111,179-256; backend/app/tables.py:153-184; backend/app/main.py:178-184; mobile/lib/features/exercise/session_controller.dart:74-110; planning/crew/2026-10-11-users-progress-admin/PLAN.md (INV-04, INV-05), DEVIATIONS.md (bác bỏ external T-01 F1), reviews/SEAM.md.
+
+### DB là nguồn chính của nội dung; một đường ghi; deploy không ghi đè
+
+**Quyết định**: Postgres là nguồn chính. Cả CLI và `PUT /api/admin/content` đi qua `load_content` (validate + thay toàn bộ trong một transaction dưới `pg_advisory_xact_lock`). `PUT` kiểm `base_version` (sha256 toàn bộ nội dung, kể cả `judge`) dưới cùng khoá; lệch thì 409. `deploy.sh` chạy `load_content --if-empty`; ghi đè có chủ ý dùng `--force`; sửa bằng file thì `export_content` → sửa → `--force`. Luật nội dung port từ test Dart sang `content_rules.py` để chạy trên mọi bộ nội dung. Server không chạy lời giải mẫu khi Lưu.
+
+**Vì sao**: admin sửa thẳng DB thì deploy ghi đè sẽ xoá việc của họ; luật chỉ ở test Dart thì admin lưu được bài mà học viên gõ đúng vẫn bị chấm sai (INV-06). Không chạy code ở server admin để tránh thực thi code ngoài máy chấm.
+
+**Phương án đã bỏ / lệch plan**: (1) luật "mọi module có ≥1 bài" của Dart không port — server cho module rỗng để admin xoá bài cuối hoặc dựng khung trước (luật "theme có ≥1 module" thì có, sau review); (2) thêm cờ tắt luật cho fixture test — bỏ, sửa fixture cho đủ luật; (3) vòng 4 review T-03 — user chọn đóng sau 3 vòng, orchestrator tự sửa lỗi CPU của kiểm sơ đồ và thêm test hiệu năng (<1s ở payload xấu nhất); (4) bác bỏ external "bài mồ côi lọt validate" vì bài không thuộc file nào là thiết kế được hỗ trợ.
+
+**Đánh đổi đã chấp nhận**: sửa `content.json` rồi deploy không còn tác dụng; không có lịch sử phiên bản; luật nội dung có hai bản cài (Dart/Python), không test so trực tiếp; thêm luật chỉ có ở server (id ≤100 ký tự, trần số lượng/độ dài).
+
+**Nguồn**: backend/app/load_content.py:1-48,293-420; backend/app/admin_api.py:1-124; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; deploy/deploy.sh:70-79; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, INV-06), DEVIATIONS.md.
+
+### Mật khẩu ban đầu chỉ vào file root 0600, không in ra, không qua chat
+
+**Quyết định**: `seed_users` tạo `test@gmail.com` (learner) và `phuongtt.tech1508@gmail.com` (learner + admin) với mật khẩu ngẫu nhiên, APPEND vào `INITIAL_PASSWORDS_FILE` (VPS: `/etc/smart-coding-study/initial-passwords`, file 0600 mở `O_NOFOLLOW`, thư mục 0700; dev: `backend/.initial-passwords`, gitignore); stdout chỉ in số lượng. Ghi file TRƯỚC khi commit DB. User đã có thì không đổi mật khẩu. Rsync loại file dev và deploy xoá bản dev trên server.
+
+**Vì sao**: mật khẩu không được lọt stdout/log/git/chat/URL (INV-03). Ghi file trước commit: commit lỗi chỉ thừa dòng vô hại, ngược lại ra tài khoản không ai biết mật khẩu.
+
+**Đánh đổi đã chấp nhận**: chủ VPS phải tự đọc file qua ssh rồi đổi mật khẩu và xoá file; nhiều dòng cùng email (seed lỗi giữa chừng) thì dòng cuối đúng. Bác bỏ external T-04 LOW "stdout in đường dẫn file" vì đường dẫn không phải bí mật.
+
+**Nguồn**: backend/app/seed_users.py:1-79; deploy/deploy.sh:27,70-83; deploy/README.md:44-54; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 7, INV-03), DEVIATIONS.md.

@@ -1,6 +1,6 @@
 # Content model (cây nội dung: theme → module lồng nhau → file → bài → ô)
 
-> Hình dạng dữ liệu học đi từ `content.json` tới Postgres, `/content` và app: ai soạn bài hoặc sửa loader/parser cần biết cây này, module con và bài method hoạt động thế nào.
+> Hình dạng dữ liệu học đi từ Postgres (nguồn chính; `content.json` chỉ seed lần đầu và làm bản xuất) tới `/content` và app: ai soạn bài hoặc sửa loader/parser cần biết cây này, module con và bài method hoạt động thế nào.
 
 ## Là gì
 
@@ -8,7 +8,7 @@ Nội dung học là một cây. Theme chứa module (trong code gọi là `topi
 
 ## Dùng khi nào
 
-Khi soạn thêm module/bài trong `backend/content/content.json`, khi sửa loader (`backend/app/load_content.py`), schema (`backend/app/content_schema.py`), `GET /content` (`backend/app/content_api.py`) hoặc parser Dart (`mobile/lib/domain/content.dart`, `models.dart`). Hai phía Python và Dart giữ khớp bằng tay, nên đổi một phía phải đổi phía kia.
+Khi soạn thêm module/bài (qua màn Admin, hoặc qua `content.json` + `export_content`/`load_content --force`, xem `docs/modules/content-admin.md`), khi sửa loader (`backend/app/load_content.py`), schema (`backend/app/content_schema.py`), `GET /content` (`backend/app/content_api.py`) hoặc parser Dart (`mobile/lib/domain/content.dart`, `models.dart`). Hai phía Python và Dart giữ khớp bằng tay, nên đổi một phía phải đổi phía kia.
 
 ## Cách hoạt động
 
@@ -37,7 +37,7 @@ Sơ đồ class: loader kiểm tên class duy nhất, `from`/`to` là class có 
 
 Bài dùng chung nhiều project: cùng tên file và cùng danh sách `exercise_ids` ở hai theme (hiện có `reliability/outbox.py` ở `airline` và `twitter-feed`, backend/content/content.json:498-501,708-711). App gom bằng `locateFilesNamed` (mobile/lib/domain/content.dart:123-132) để hiện nhãn "Dùng ở N theme" (mobile/lib/features/browse/topic_detail_screen.dart:656,710). Tiến độ `passed` khoá theo exercise id nên bài xong ở theme này là xong ở theme kia; thứ tự mở khoá tính theo từng file (mobile/lib/domain/progression.dart:18-30). Mỗi theme dùng chung phải có class của bài trong `diagram` của chính nó, test hợp đồng lặp theo mọi theme chứa bài (mobile/test/content_contract_test.dart:398-410,442-461). Số đếm hiện tại: 22 bài, 17 bài method (backend/tests/test_load_content.py:65, mobile/test/content_contract_test.dart:114-120).
 
-Kiểm lúc nạp: `validate` bắt id trùng, `exercise_ids` trỏ bài không có, label ô trùng, case kịch bản không compile được, và bài `class_name` có case không phải dạng `call` (backend/app/load_content.py:74-132).
+Kiểm lúc nạp: `validate` bắt id trùng, `exercise_ids` trỏ bài không có, label ô trùng, case kịch bản không compile được, và bài `class_name` có case không phải dạng `call` (backend/app/load_content.py:74-132). Luật còn lại chạy cho cả CLI và admin: marker/ghép đáp án == solution/≤3 ô/sơ đồ khớp code (backend/app/content_rules.py:274-310) và trần kích thước (backend/app/load_content.py:169-214); tổng hợp ở `validation_errors` (backend/app/load_content.py:217-283).
 
 ## Ranh giới & đánh đổi
 
@@ -45,9 +45,9 @@ Tên class là thuộc tính của bài, không phải bảng `classes`: chưa c
 
 Cây lồng nhau dùng `parent_id` + `position` preorder thay vì cột đường dẫn hay bảng đóng: đọc cả cây bằng một SELECT mỗi bảng rồi ghép trong bộ nhớ, không cần truy vấn đệ quy ở Postgres. Đổi lại, thứ tự anh em chỉ đúng nếu loader là nơi duy nhất ghi.
 
-Hạ cấp migration 0002 bỏ hai cột và mất quan hệ cha–con cùng `class_name`. Chấp nhận được vì bảng nội dung là bản dẫn xuất của `content.json`, chạy lại `python -m app.load_content` là có đủ (backend/migrations/versions/0002_module_tree_class.py:33-35).
+Hạ cấp migration 0002 bỏ hai cột và mất quan hệ cha–con cùng `class_name`. Chấp nhận được vì bảng nội dung có thể nạp lại từ một bản xuất: `python -m app.export_content` trước khi hạ cấp rồi `load_content --force` sau (DB là nguồn chính từ run users-progress-admin, nên bản `content.json` trong repo có thể cũ hơn DB; backend/migrations/versions/0002_module_tree_class.py:33-35).
 
-Sơ đồ soạn tay, không suy từ code, vì quan hệ (vd FlightService giữ Flight) không có trong code mẫu rút gọn; đổi lại có thể lệch, và test chỉ chặn member không có thật, không chặn nhãn/quan hệ sai nghĩa. Hạ cấp 0003 bỏ cột `diagram`, nạp lại `content.json` là đủ (backend/migrations/versions/0003_theme_diagram.py:37-38).
+Sơ đồ soạn tay, không suy từ code, vì quan hệ (vd FlightService giữ Flight) không có trong code mẫu rút gọn; đổi lại có thể lệch, và test chỉ chặn member không có thật, không chặn nhãn/quan hệ sai nghĩa. Hạ cấp 0003 bỏ cột `diagram`, cần nạp lại từ bản xuất (backend/migrations/versions/0003_theme_diagram.py:37-38).
 
 Không làm: giới hạn độ sâu module; tiến độ theo module (thẻ module chỉ hiện số bài, mobile/lib/features/browse/topic_detail_screen.dart:136-144).
 
@@ -62,7 +62,7 @@ Không làm: giới hạn độ sâu module; tiến độ theo module (thẻ mod
 
 ## Nguồn
 
-- Loader + validate: backend/app/load_content.py:42-132,135-205
+- Loader + validate: backend/app/load_content.py:29-387; luật nội dung backend/app/content_rules.py:1-320
 - Schema: backend/app/content_schema.py:49-73
 - Bảng + migration: backend/app/tables.py:31-67, backend/migrations/versions/0002_module_tree_class.py:22-35
 - Phát cây: backend/app/content_api.py:64-125

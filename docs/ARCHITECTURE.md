@@ -2,7 +2,8 @@
 
 > Repo demo cho ứng dụng học lập trình di động "Smart Coding Study": app Flutter (làm bài code
 > trong ô nhỏ trên điện thoại, autocomplete đủ tốt để không nản) cùng một backend FastAPI nhỏ
-> lưu nội dung học trong Postgres, phát cho app qua `GET /content` và chấm bài bằng Python thật.
+> lưu nội dung học và tiến độ từng user trong Postgres, phát nội dung qua `GET /content`, chấm bài
+> bằng Python thật, có đăng nhập và màn quản trị nội dung cho admin.
 
 ## Bản đồ nhanh
 
@@ -14,17 +15,23 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | --- | --- | --- |
 | backend | API `POST /run`: chạy harness + unit test của bài (đọc từ Postgres) qua máy chấm (Judge0), trả đúng/sai từng test — backend/app/main.py:106 | docs/modules/judge-backend.md:1 |
 | backend/content | `GET /content`: cả cây nội dung học (theme → module lồng nhau → file → bài) từ Postgres, không có phần chấm — backend/app/content_api.py:184 | docs/ARCHITECTURE.md:1 |
-| backend/load_content | nạp `content.json` vào Postgres, thay toàn bộ trong một transaction — backend/app/load_content.py:135 | docs/ARCHITECTURE.md:1 |
-| backend/db + tables | engine/session SQLAlchemy + bảng nội dung (`topics.parent_id`, `exercises.class_name`) + migration Alembic — backend/app/db.py:19, backend/app/tables.py:31, backend/migrations/versions/0002_module_tree_class.py:22 | docs/ARCHITECTURE.md:1 |
+| backend/load_content | đường ghi nội dung DUY NHẤT: validate rồi thay toàn bộ trong một transaction dưới advisory lock; CLI `--if-empty`/`--force` — backend/app/load_content.py:307, backend/app/load_content.py:390 | docs/modules/content-admin.md:1 |
+| backend/content_rules + export_content | luật nội dung port từ Dart chạy ở server; xuất DB ra shape `content.json` — backend/app/content_rules.py:274, backend/app/export_content.py:36 | docs/modules/content-admin.md:1 |
+| backend/admin_api | `/api/admin/content` GET/PUT (version, 409) + `/api/admin/validate`, chỉ role admin — backend/app/admin_api.py:33 | docs/modules/content-admin.md:1 |
+| backend/auth | đăng nhập email+mật khẩu (argon2id), token Bearer lưu sha256, throttle, đổi mật khẩu, `current_user`/`require_admin` — backend/app/auth.py:160, backend/app/auth.py:222 | docs/modules/auth-progress.md:1 |
+| backend/progress | `GET/PUT /api/progress*`, `record_pass` do `/run` gọi — backend/app/progress.py:28, backend/app/progress.py:196 | docs/modules/auth-progress.md:1 |
+| backend/seed_users | tạo 2 tài khoản ban đầu, mật khẩu chỉ vào file root 0600 — backend/app/seed_users.py:45 | docs/modules/deploy.md:1 |
+| backend/db + tables | engine/session SQLAlchemy + bảng nội dung (`topics.parent_id`, `exercises.class_name`) + bảng `users/user_sessions/user_progress/user_state` + migration Alembic — backend/app/db.py:19, backend/app/tables.py:31, backend/app/tables.py:128, backend/migrations/versions/0004_users_progress.py:41 | docs/ARCHITECTURE.md:1 |
 | backend/runner | interface `CodeRunner` + `Judge0Runner` — backend/app/runner.py:42, backend/app/runner.py:56 | docs/modules/judge-backend.md:1 |
 | backend/harness | chương trình chạy trên máy chấm: compile code học viên, chạy từng test case (kể cả case kịch bản gọi method), in một dòng JSON — backend/app/harness.py:48 | docs/modules/judge-backend.md:1 |
 | domain | model bất biến, ghép ô (mobile/lib/domain/merge.dart:80), khoá bài (mobile/lib/domain/progression.dart:22), hàm so chuỗi cũ (mobile/lib/domain/answer_checker.dart:68) | docs/ARCHITECTURE.md:1 |
-| data | tải nội dung + cache (mobile/lib/data/content_repository.dart:40), provider nội dung (mobile/lib/data/content_providers.dart:11), client gọi `/run` (mobile/lib/data/judge_client.dart:59), tiến độ demo (mobile/lib/data/demo_seed.dart:7) | docs/ARCHITECTURE.md:1 |
+| data | tải nội dung + cache (mobile/lib/data/content_repository.dart:40), provider nội dung (mobile/lib/data/content_providers.dart:11), client gọi `/run` (mobile/lib/data/judge_client.dart:59), đăng nhập (mobile/lib/data/auth_repository.dart:61), client gắn Bearer (mobile/lib/data/api_client.dart:59), tiến độ server (mobile/lib/data/progress_api.dart:116), admin (mobile/lib/data/admin_repository.dart:1) | docs/ARCHITECTURE.md:1 |
 | features/exercise | màn bài 3 tab (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
-| features/review, stats, practice, admin, shell | ôn tập, thống kê, luyện, quản trị, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
-| app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) | docs/ARCHITECTURE.md:1 |
-| deploy | triển khai lên VPS dùng chung: nginx cổng 8090 phục vụ web tĩnh và chuyển `/content`, `/run` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` — deploy/deploy.sh:1, deploy/README.md:11-20 | docs/modules/deploy.md:1 |
+| features/review, stats, practice, shell | ôn tập, thống kê, luyện, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
+| features/admin + account | màn Admin (cây nội dung, form sửa bài; mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/exercise_editor.dart:380), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
+| app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
+| deploy | triển khai lên VPS dùng chung: nginx cổng 8090 phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:70-79, deploy/README.md:11-20 | docs/modules/deploy.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
 
 ## backend — chấm bài bằng Python thật
@@ -60,25 +67,26 @@ class CodeRunner(Protocol):
 ### Ranh giới
 
 Không chống gian lận: code học viên chạy cùng tiến trình với harness, nên cố tình in dòng kết quả
-giả là tự lừa mình (chấp nhận cho app học). Không có xác thực người dùng; backend chỉ lưu nội dung học
-(không lưu tiến độ). Mặc định chạy local (`127.0.0.1:8000`; trên VPS xem mục deploy) và cần Postgres
+giả là tự lừa mình (chấp nhận cho app học; hệ quả: server vẫn ghi passed cho kết quả giả, nhưng tiến độ chỉ
+của chính người đó, không xếp hạng). `/run` và `/content` vẫn công khai; đăng nhập, tiến độ và quản trị là
+các API `/api/*` có xác thực (xem hai mục dưới). Mặc định chạy local (`127.0.0.1:8000`; trên VPS xem mục deploy) và cần Postgres
 (`DATABASE_URL`, backend/app/db.py:11-15).
 
 ## Luồng nội dung — content.json → Postgres → /content → cache trong app
 
 ### Là gì
 
-Nội dung học có một nguồn soạn là file `backend/content/content.json`. Lệnh nạp chép nó vào Postgres;
-backend phát lại cho app qua `GET /content`; app lưu bản tải gần nhất trên máy để mở được khi mất
-mạng. Postgres là nguồn chạy thật của cả `/content` lẫn `/run`, nên id bài ở hai API luôn khớp.
-App không còn chứa nội dung học nào (chỉ còn tiến độ demo).
+Postgres là nguồn chính của nội dung học: cả `/content` lẫn `/run` đọc từ đó nên id bài ở hai API luôn khớp.
+File `backend/content/content.json` chỉ còn để seed lần đầu (deploy chỉ nạp khi DB rỗng) và làm bản xuất; admin
+sửa thẳng DB qua `/api/admin/content`. Backend phát nội dung cho app qua `GET /content`; app lưu bản tải gần nhất
+trên máy để mở được khi mất mạng. App không chứa nội dung học nào.
 
 ### Cách hoạt động
 
 | Chặng | Làm gì | file:dòng |
 | --- | --- | --- |
 | Soạn | `content.json` = cây nội dung + `judge: {solution, cases}` mỗi bài; bài method có `class_name` | backend/content/content.json:195,266 |
-| Nạp | kiểm hình dạng (pydantic strict) + id/quan hệ + case kịch bản, xoá hết rồi ghi lại trong một transaction, `version` = sha256 phần công khai | backend/app/load_content.py:49-132,135-205 |
+| Ghi | MỌI đường ghi (CLI và admin PUT) đi qua `load_content`: `validation_errors` (schema, id, case, sơ đồ, trần kích thước + `content_rules`), khoá `pg_advisory_xact_lock`, xoá hết rồi ghi lại trong một transaction, `version` = sha256 phần công khai | backend/app/load_content.py:217-283, backend/app/load_content.py:298-387 |
 | Lưu | bảng `themes/topics/code_files/exercises/file_exercises/blocks/content_meta` | backend/app/tables.py:18-108 |
 | Phát | `GET /content`: 6 SELECT kẹp giữa hai lần đọc `version`, đọc lại (tối đa 3) nếu version đổi giữa chừng; `response_model` không có `judge` | backend/app/content_api.py:44-61,184-186 |
 | Tải + cache | `GET /content` timeout 5s; thành công thì ghi cache; lỗi gì cũng rơi về cache; không có cache thì `ContentUnavailable` (mobile/lib/data/content_repository.dart:58-98) | docs/ARCHITECTURE.md:1 |
@@ -89,12 +97,13 @@ App không còn chứa nội dung học nào (chỉ còn tiến độ demo).
 session.add(ContentMeta(key="version", value=version))
 session.flush()
 ```
-(backend/app/load_content.py:154-155)
+(backend/app/load_content.py:385-386)
 
 ### Ranh giới
 
-Sửa trực tiếp trong DB sẽ bị lần nạp sau ghi đè (backend/README.md:42-44 mô tả cách nạp lại). Đổi `id`
-bài hoặc `label` ô làm tiến độ cũ mồ côi vì tiến độ khoá theo hai thứ đó. `/content` không có
+Sửa `content.json` rồi deploy KHÔNG còn tác dụng khi DB đã có nội dung (`--if-empty` bỏ qua); muốn sửa bằng file thì
+`export_content` → sửa → `load_content --force` (backend/app/load_content.py:407-409, backend/README.md:34-62). Đổi `id`
+bài hoặc `label` ô làm tiến độ cũ mồ côi: tiến độ khoá theo hai thứ đó (bỏ qua id lạ, không mất dữ liệu khác). `/content` không có
 xác thực và không phân trang (trả cả cây một lần). Mọi lỗi `/content` đều hiện cùng một banner
 "dùng nội dung đã lưu" — app không phân biệt mạng hỏng với server trả dữ liệu sai.
 
@@ -191,7 +200,7 @@ Tầng dữ liệu thuần Dart, không phụ thuộc Flutter UI: cấu trúc n�
 exercise → block, một block = một ô TODO) và các hàm thuần (ghép ô, khoá bài). Nội dung hiển thị
 (đề, ví dụ, template, gợi ý, lời giải từng ô) không nằm trong app: app tải từ `GET /content` và
 giữ thành một đối tượng `Content` (cây + hàm tra cứu) mà mọi màn đọc qua `contentIndexProvider`.
-Phần còn lại trong app là `demo_seed.dart`, chỉ có tiến độ demo.
+Tiến độ học không nằm ở tầng này mà đến từ server sau đăng nhập (xem mục Tài khoản + tiến độ).
 
 ### Cách hoạt động
 
@@ -313,8 +322,10 @@ JetBrains Mono) được bundle sẵn dạng file `.ttf` trong `mobile/assets/fo
 
 ### Ranh giới
 
-`router.dart` không có auth guard hay redirect — mọi route mở thẳng, kể cả `/exercise/:exerciseId`
-(việc khoá bài do `ExerciseScreen` tự kiểm, không do router; xem mục features/exercise).
+`router.dart` không có redirect: chặn đăng nhập nằm ở `AuthGate` bọc ngoài toàn app (chưa có phiên thì hiện
+màn Login, chưa tải xong tiến độ thì spinner) (mobile/lib/app/auth_gate.dart:13-36, mobile/lib/main.dart:19). Route mở
+thẳng được khi đã đăng nhập, kể cả `/exercise/:exerciseId` (việc khoá bài do `ExerciseScreen` tự kiểm; xem mục
+features/exercise). Route `/admin` không tự chặn học viên: UI chỉ ẩn nút, server mới từ chối bằng 403.
 
 ## shared — widget dùng chung
 
@@ -337,13 +348,64 @@ Material thay vì elevation 0 tường minh ở hai chỗ này (mobile/lib/share
 đã ghi Minor trong Backlog, chưa sửa tại thời điểm run này kết thúc.
 
 
+## Tài khoản + tiến độ — đăng nhập, token Bearer, tiến độ theo user trên server
+
+### Là gì
+
+App giờ có người dùng. Đăng nhập bằng email và mật khẩu (băm argon2id); server trả một token ngẫu nhiên, app gửi nó trong
+header `Authorization: Bearer` ở mọi lần gọi `/api/*`, còn DB chỉ lưu sha256 của token. Tiến độ học (bài đã xong, bản nháp
+code, gợi ý, ô đã xem lời giải, lịch ôn, chuỗi ngày học) lưu trong Postgres theo user nên tải lại trang hay đổi máy vẫn còn.
+Phân quyền kiểm ở server; UI ẩn nút Admin chỉ để gọn. Chi tiết xem `docs/modules/auth-progress.md`.
+
+### Cách hoạt động
+
+| Chặng | Làm gì | file:dòng |
+| --- | --- | --- |
+| Đăng nhập | 401 `invalid_credentials`; sai 5 lần/15 phút theo (IP, email) hoặc 30 lần/IP thì 429; phiên sống 30 ngày | backend/app/auth.py:222-245, backend/app/auth.py:35-41 |
+| Kiểm quyền | không token hợp lệ: 401 `not_authenticated`; thiếu role admin: 403 `admin_required` | backend/app/auth.py:160-171 |
+| Tiến độ | `GET /api/progress` (ẩn id bài không còn), `PUT /api/progress/{id}` và `/state`; không nhận `passed` | backend/app/progress.py:179-256 |
+| Ghi passed | chỉ `/run` ghi, khi máy chấm trả passed và request có Bearer hợp lệ | backend/app/progress.py:28-44, backend/app/main.py:178-184 |
+| Bảng | `users`, `user_sessions`, `user_progress` (khoá `(user_id, exercise_id)`, KHÔNG FK tới bài), `user_state` | backend/app/tables.py:128-184 |
+| App | `AuthGate` đặt sau `ContentGate`; vào app khi `/api/progress` của đúng phiên đã tải; draft đẩy sau 800 ms, hint/xem lời giải/lịch ôn đẩy ngay (mobile/lib/app/auth_gate.dart:13-36, mobile/lib/features/exercise/session_controller.dart:74-86) | docs/modules/auth-progress.md:1 |
+
+### Ranh giới
+
+Chưa có đăng ký tự do, quản lý user, quên mật khẩu; user chỉ tạo qua `seed_users` (backend/app/seed_users.py:27-30). Đồng bộ "mới nhất thắng", không gộp.
+Bộ đếm đăng nhập sai nằm trong RAM nên mất khi restart và chỉ đúng với một process uvicorn (backend/app/auth.py:5-7).
+Chạy qua HTTP thường nên mật khẩu và token chưa được mã hoá khi truyền (deploy/README.md:70-72).
+
+## Quản trị nội dung — DB là nguồn chính, một đường ghi
+
+### Là gì
+
+Admin sửa nội dung ngay trong app: màn Admin có cây theme → module → file → bài và form sửa từng bài. Bấm "Kiểm tra" chạy bộ luật
+nội dung ở server mà không ghi, bấm "Lưu" ghi cả bộ nội dung kèm số phiên bản đang giữ; nếu người khác đã lưu trước thì server trả 409 để
+không ai âm thầm xoá việc của nhau. CLI và nút Lưu cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
+`docs/modules/content-admin.md`.
+
+### Cách hoạt động
+
+| Chặng | Làm gì | file:dòng |
+| --- | --- | --- |
+| API | `GET /api/admin/content` (có `judge`), `POST /api/admin/validate`, `PUT /api/admin/content` → 200 / 409 / 422; cả router gắn `require_admin` | backend/app/admin_api.py:33, backend/app/admin_api.py:77-124 |
+| Luật | schema + trần kích thước + id/case/sơ đồ + luật port từ Dart (marker, ghép đáp án == solution, ≤3 ô, 3 gợi ý, không ô sau `return`, sơ đồ khớp code) | backend/app/load_content.py:217-283, backend/app/content_rules.py:274-310 |
+| Ghi | kiểm `base_version` rồi `load_content` trong cùng một `pg_advisory_xact_lock` | backend/app/admin_api.py:93-111, backend/app/load_content.py:298-300 |
+| CLI | `load_content --if-empty` (deploy) / `--force`; `export_content` xuất DB ra shape `content.json` | backend/app/load_content.py:390-416, backend/app/export_content.py:36-69 |
+| App | `AdminController` giữ bản nháp và `version`; Lưu thành công thì nạp lại `/content` (mobile/lib/features/admin/admin_controller.dart:456-480) | docs/modules/content-admin.md:1 |
+
+### Ranh giới
+
+Server không chạy lời giải mẫu khi Lưu (không thực thi code ở server admin); việc đó là của nút Run (backend/app/admin_api.py:9). Không có lịch sử phiên bản: khôi phục dùng `export_content` và git.
+Luật nội dung có hai bản cài đặt, Dart (`mergeCells`, preview/test) và Python (`content_rules.py`, server), không có test so trực tiếp nhau (backend/app/content_rules.py:8-11).
+Lưu là thay toàn bộ nội dung, nên học viên đang mở bài giữ bản cũ tới lần tải kế.
+
 ## deploy — web + API cùng một origin trên VPS
 
 ### Là gì
 
 Phần triển khai đưa app lên một VPS dùng chung với dịch vụ khác để có một link thử trên trình duyệt.
 Trình duyệt chỉ nói chuyện với một địa chỉ duy nhất (cổng 8090 của nginx). nginx trả file web Flutter đã
-build sẵn, và chuyển đúng hai đường dẫn của backend (`/content`, `/run`) vào uvicorn đang nghe ở
+build sẵn, và chuyển các đường dẫn của backend (`/content`, `/run`, `/api/*`) vào uvicorn đang nghe ở
 `127.0.0.1:8100`. Vì web và API cùng "origin" (cùng giao thức, host, cổng) nên trình duyệt không áp luật
 chặn gọi chéo nguồn (CORS) và backend không phải cấu hình gì thêm. Chi tiết vận hành xem
 `docs/modules/deploy.md`.
@@ -354,7 +416,7 @@ chặn gọi chéo nguồn (CORS) và backend không phải cấu hình gì thê
 
 ```text
 trình duyệt --HTTP--> nginx :8090
-  nếu /content hoặc /run -> uvicorn 127.0.0.1:8100 -> Postgres smart_coding_study
+  nếu /content, /run hoặc /api/* -> uvicorn 127.0.0.1:8100 -> Postgres smart_coding_study
                                                    -> Judge0 CE công khai (chỉ /run)
   còn lại                -> /opt/smart-coding-study/web (file tĩnh, fallback index.html)
 ```
@@ -366,13 +428,15 @@ trình duyệt --HTTP--> nginx :8090
 | User hệ thống riêng `smartcs`, không shell | `useradd` nếu chưa có | deploy/deploy.sh:40 |
 | Role + DB Postgres riêng; mật khẩu sinh trên server, đi qua stdin của psql | `openssl rand` + `pg` | deploy/deploy.sh:44-61 |
 | Bí mật chỉ nằm ở `/etc/smart-coding-study.env` (root:smartcs, 640), ghi file tạm rồi `mv` | `ENV_FILE` | deploy/deploy.sh:37-57 |
-| Migration rồi nạp nội dung mỗi lần deploy | `alembic upgrade head`, `app.load_content` | deploy/deploy.sh:70-72 |
-| Cài unit systemd, `enable` + `restart` | `smart-coding-study-api` | deploy/deploy.sh:79-82 |
-| nginx: `nginx -t` trước, lỗi thì trả site cũ và dừng, sạch mới `reload` | khối nginx | deploy/deploy.sh:85-94 |
-| Smoke test: `/content` qua 8100 và 8090, `/` qua 8090 | `curl -fsS` | deploy/deploy.sh:96-103 |
+| Migration; nạp nội dung CHỈ khi DB rỗng (DB là nguồn chính, deploy không ghi đè); seed user | `alembic upgrade head`, `app.load_content --if-empty`, `app.seed_users` | deploy/deploy.sh:70-79 |
+| Mật khẩu ban đầu chỉ vào `/etc/smart-coding-study/initial-passwords` (root, 0600, thư mục 0700); log deploy chỉ có số lượng; file dev bị loại khỏi rsync và xoá trên server | `INITIAL_PASSWORDS_FILE` | deploy/deploy.sh:27, deploy/deploy.sh:78-83 |
+| Cài unit systemd, `enable` + `restart` | `smart-coding-study-api` | deploy/deploy.sh:88-92 |
+| nginx: `nginx -t` trước, lỗi thì trả site cũ và dừng, sạch mới `reload` | khối nginx | deploy/deploy.sh:94-104 |
+| Smoke test: `/content` qua 8100 và 8090, `/` qua 8090, `/api/me` không token phải trả 401 | `curl -fsS` | deploy/deploy.sh:106-116 |
 
-Cấu hình nginx (deploy/nginx/smart-coding-study.conf:18-39) chỉ mở đúng hai route API bằng `location =`, mọi
-đường dẫn khác rơi vào `try_files ... /index.html` để router của web hoạt động:
+Cấu hình nginx (deploy/nginx/smart-coding-study.conf:18-49) mở `/content` và `/run` bằng `location =`, thêm
+`location /api/` (timeout 15s) và `location /api/admin/` (body tới 4200k, timeout 60s vì admin gửi cả bộ nội dung);
+mọi đường dẫn khác rơi vào `try_files ... /index.html` để router của web hoạt động:
 
 ```nginx
 location = /run {
@@ -385,23 +449,24 @@ location / {
 }
 ```
 
-Unit systemd (deploy/systemd/smart-coding-study-api.service:7-19) chạy uvicorn bằng user `smartcs`, nạp env từ
+Unit systemd (deploy/systemd/smart-coding-study-api.service:7-19; uvicorn chạy `--proxy-headers` để rate limit theo IP thật, deploy/systemd/smart-coding-study-api.service:12) chạy uvicorn bằng user `smartcs`, nạp env từ
 file bí mật, và siết quyền: `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome`,
 `ReadOnlyPaths=/opt/smart-coding-study`. Ba mốc thời gian lồng nhau: HTTP timeout của runner 15s, nginx
 `proxy_read_timeout` 18s (conf:31), client app 20s (mobile/lib/data/judge_client.dart:63). Body: nginx cho tới
-80k (conf:10), lớn hơn giới hạn 64KB của backend để chính backend trả 413 (backend/app/main.py:34).
+80k (conf:10), lớn hơn giới hạn 64KB của backend để chính backend trả 413 (backend/app/main.py:30-31); riêng `/api/admin/` nginx 4200k, backend 4MB.
 
 ### Ranh giới
 
 Chỉ chạm tài nguyên tên `smart-coding-study`/`smartcs` vì VPS dùng chung (deploy/deploy.sh:7-9). Không có
-HTTPS hay domain, không mật khẩu và không giới hạn tốc độ trên `/run`: ai có link đều chạy được code, và code
-được chuyển tới Judge0 công khai nên IP VPS có thể bị Judge0 chặn nếu bị lạm dụng (deploy/README.md:36-41).
+HTTPS hay domain: mật khẩu và token đăng nhập đi bằng HTTP thường, token lưu localStorage 30 ngày (deploy/README.md:70-72). `/run` vẫn
+công khai và không giới hạn tốc độ: ai có link đều chạy được code, và code được chuyển tới Judge0 công khai nên IP VPS
+có thể bị Judge0 chặn nếu bị lạm dụng (deploy/README.md:66-69).
 Không có CI deploy: chỉ chạy tay từ máy có Flutter và SSH tới host `vps`.
 
 ## Giới hạn đã biết
 
-Tiến độ chưa bền: không có Hive hay SQLite, nên tiến độ, draft code, hint và ô đã xem lời giải sống trong
-`ProgressController` và mất khi app bị kill (Hive thuộc issue #5). Về máy chấm, code học viên được gửi tới Judge0 CE
+Tiến độ đã lưu trên server theo user (xem mục Tài khoản + tiến độ); phần chưa bền là lỗi mạng giữa chừng: thay đổi chỉ được đẩy lại ở
+lần đổi kế tiếp, không flush khi app vào nền. Về máy chấm, code học viên được gửi tới Judge0 CE
 công khai của bên thứ ba, giới hạn theo IP: đủ cho dev local, không đủ production và không dùng cho dữ liệu nhạy cảm
 (backend/app/runner.py:1-9). Bản web đã chạy trên VPS (xem mục deploy), còn mobile native chỉ chạy local — iOS simulator gọi `127.0.0.1`; điện thoại thật và Android
 emulator (`10.0.2.2`, cleartext) chưa làm, và harness không chống gian lận (xem mục backend ở trên,
@@ -428,3 +493,9 @@ Deploy VPS (run 2026-10-11-deploy-vps-web): `/run` có thể trả 504 khi tải
 (deploy/deploy.sh:13, deploy/README.md:9, deploy/systemd/smart-coding-study-api.service:12) và chỉ smoke test
 bắt được lệch; thư mục tạm `/root/.smart-coding-study-deploy` không tự dọn nếu script chết giữa chừng
 (deploy/deploy.sh:22). Review chéo bằng model họ khác không chạy được (Codex timeout 2 lần).
+
+Tài khoản, tiến độ và quản trị (run users-progress-admin, planning/crew/2026-10-11-users-progress-admin/STATUS.md Backlog): HTTP thường;
+code học viên in giả dòng kết quả "passed" thì server vẫn ghi passed (backend/app/main.py:178-184); "xong bài" có thể lệch local/server khi token
+hết hạn đúng lúc Run vì `/run` không trả 401 (reviews/SEAM.md mục 1); PUT tiến độ không tuần tự hoá và không flush khi app vào nền; lịch ôn theo
+`block.id` mồ côi khi admin đổi nhãn ô; form admin chỉ cảnh báo 4 trong 12 luật nội dung; chưa có trang quản lý user. Test backend dùng chung một DB test nên hai
+pytest song song đỏ lẻ tẻ (backend/README.md:54-60). Luồng UI thật trên Chrome/VPS chưa được reviewer tự chạy; e2e chạy bằng script API (20/20) và widget test.

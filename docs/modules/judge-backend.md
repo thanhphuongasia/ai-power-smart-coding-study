@@ -17,7 +17,7 @@ sang tự host mà không đụng API hay app.
 ## Dùng khi nào
 
 App gọi `GET /content` lúc mở (`ContentRepository`) và `POST /run` mỗi lần người học bấm Run ở tab
-Code (`JudgeClient.run`). Chạy local cần Postgres, rồi `alembic upgrade head`, `python -m app.load_content`,
+Code (`JudgeClient.run`). Chạy local cần Postgres, rồi `alembic upgrade head`, `python -m app.load_content --if-empty` (cần thêm `python -m app.seed_users` để có tài khoản đăng nhập),
 `uvicorn app.main:app --host 127.0.0.1 --port 8000` (backend/README.md:12-24); app mặc định trỏ
 `http://127.0.0.1:8000`, đổi bằng `--dart-define=API_URL` (một biến cho cả hai API). Biến môi trường
 backend: `DATABASE_URL`, `CODE_RUNNER`, `JUDGE0_URL`, `JUDGE0_TOKEN` (backend/.env.example).
@@ -78,10 +78,11 @@ Harness tách khỏi máy chấm: máy chấm nào cũng chỉ cần "chạy Pyt
 host Judge0 (đổi `JUDGE0_URL`) hay viết `DockerRunner` mới (cùng `CodeRunner`) đều không đụng
 `main.py` hay harness. Chưa viết `DockerRunner` vì mới có một runner thật.
 
-Không làm: lưu tiến độ người học, xác thực người dùng, chống gian lận (code người học chạy cùng tiến trình với harness nên
+Không làm: quản lý tài khoản (nằm ở `docs/modules/auth-progress.md`), chống gian lận (code người học chạy cùng tiến trình với harness nên
 có thể in dòng kết quả giả — review external gắn Critical, bị bác vì đã khai trong PLAN), hàng chờ
-có timeout tổng. Backend cũng không biết gì về tiến độ người học; "xong bài" do app quyết định từ
-`status == passed`.
+có timeout tổng. `/run` vẫn công khai: không token thì chấm như khách. Có Bearer hợp lệ và máy chấm trả `passed` thì
+server ghi `passed=true` vào tiến độ của user đó (backend/app/main.py:131-146, 178-184); token sai/hết hạn cũng chấm
+như khách, không trả 401. Ghi tiến độ lỗi chỉ log, kết quả chấm vẫn trả về.
 
 Giới hạn tài nguyên mỗi lần chạy gửi kèm: `cpu_time_limit=2`, `wall_time_limit=5`,
 `memory_limit=128000`, timeout HTTP tới máy chấm 15s (backend/app/runner.py:85-92,

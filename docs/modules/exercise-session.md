@@ -88,8 +88,9 @@ bài pass hay chưa do backend quyết định, app không tự suy từ từng 
 
 ## Giới hạn đã biết
 
-- Toàn bộ tiến độ/draft/hint/lời giải sống trong bộ nhớ (Riverpod state), mất khi app bị kill. Hive
-  thuộc issue #5.
+- Tiến độ/draft/hint/lời giải được nạp từ server khi đăng nhập và đẩy lại khi đổi (draft gom 800 ms, hint và xem lời giải
+  đẩy ngay); lỗi mạng giữ local và đẩy lại ở lần đổi kế, không flush khi app vào nền (xem `docs/modules/auth-progress.md`).
+  Không còn tiến độ demo trong app (`demo_seed.dart` đã xoá).
 - `ExerciseProgress(passed: true)` dựng tay mà không đặt `totalBlocks` thì `completedBlocks` = 0
   (planning/crew/2026-10-11-exercise-tabs-judge/STATUS.md:40, Backlog T-06).
 - Draft có nhãn lạ (không thuộc ô nào của bài) vẫn được đếm là "đã viết", và Practice xếp bài khoá có
