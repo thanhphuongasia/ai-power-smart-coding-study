@@ -13,15 +13,15 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | thành phần | vai trò và toạ độ | mục chi tiết |
 | --- | --- | --- |
 | backend | API `POST /run`: chạy harness + unit test của bài (đọc từ Postgres) qua máy chấm (Judge0), trả đúng/sai từng test — backend/app/main.py:106 | docs/modules/judge-backend.md:1 |
-| backend/content | `GET /content`: cả cây nội dung học từ Postgres, không có phần chấm — backend/app/content_api.py:169 | docs/ARCHITECTURE.md:1 |
-| backend/load_content | nạp `content.json` vào Postgres, thay toàn bộ trong một transaction — backend/app/load_content.py:98 | docs/ARCHITECTURE.md:1 |
-| backend/db + tables | engine/session SQLAlchemy + bảng nội dung + migration Alembic — backend/app/db.py:19, backend/app/tables.py:18, backend/migrations/versions/0001_content_tables.py:1 | docs/ARCHITECTURE.md:1 |
+| backend/content | `GET /content`: cả cây nội dung học (theme → module lồng nhau → file → bài) từ Postgres, không có phần chấm — backend/app/content_api.py:184 | docs/ARCHITECTURE.md:1 |
+| backend/load_content | nạp `content.json` vào Postgres, thay toàn bộ trong một transaction — backend/app/load_content.py:135 | docs/ARCHITECTURE.md:1 |
+| backend/db + tables | engine/session SQLAlchemy + bảng nội dung (`topics.parent_id`, `exercises.class_name`) + migration Alembic — backend/app/db.py:19, backend/app/tables.py:31, backend/migrations/versions/0002_module_tree_class.py:22 | docs/ARCHITECTURE.md:1 |
 | backend/runner | interface `CodeRunner` + `Judge0Runner` — backend/app/runner.py:42, backend/app/runner.py:56 | docs/modules/judge-backend.md:1 |
-| backend/harness | chương trình chạy trên máy chấm: compile code học viên, chạy từng test case, in một dòng JSON — backend/app/harness.py:48 | docs/modules/judge-backend.md:1 |
+| backend/harness | chương trình chạy trên máy chấm: compile code học viên, chạy từng test case (kể cả case kịch bản gọi method), in một dòng JSON — backend/app/harness.py:48 | docs/modules/judge-backend.md:1 |
 | domain | model bất biến, ghép ô (mobile/lib/domain/merge.dart:80), khoá bài (mobile/lib/domain/progression.dart:22), hàm so chuỗi cũ (mobile/lib/domain/answer_checker.dart:68) | docs/ARCHITECTURE.md:1 |
 | data | tải nội dung + cache (mobile/lib/data/content_repository.dart:40), provider nội dung (mobile/lib/data/content_providers.dart:11), client gọi `/run` (mobile/lib/data/judge_client.dart:59), tiến độ demo (mobile/lib/data/demo_seed.dart:7) | docs/ARCHITECTURE.md:1 |
 | features/exercise | màn bài 3 tab (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
-| features/browse | duyệt Home → Theme → Topic → danh sách bài có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
+| features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
 | features/review, stats, practice, admin, shell | ôn tập, thống kê, luyện, quản trị, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) | docs/ARCHITECTURE.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
@@ -30,7 +30,7 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 
 ### Là gì
 
-Backend là một server FastAPI nhỏ với hai việc. Một: phát nội dung học (theme → topic → file → bài →
+Backend là một server FastAPI nhỏ với hai việc. Một: phát nội dung học (theme → module, module lồng nhau được → file → bài →
 ô TODO) cho app qua `GET /content`, đọc từ Postgres. Hai: nhận `{exercise_id, code}` từ app, chạy
 code đó cùng các test case của bài bằng Python thật rồi trả kết quả từng test. Test case và lời
 giải tham chiếu nằm trong cùng Postgres nhưng không bao giờ ra khỏi `/content`, nên app không sửa
@@ -43,8 +43,8 @@ khai. Chi tiết xem `docs/modules/judge-backend.md`.
 | Bước | Ai làm | file:dòng |
 | --- | --- | --- |
 | Kiểm body (≤64KB, có Content-Length) và `code` ≤ 8000 ký tự | middleware + `RunRequest` | backend/app/main.py:39-53 |
-| Tra bài trong Postgres bằng session ngắn (đóng trước khi chờ máy chấm); không có bài → 404 | `lookup_judge` | backend/app/main.py:114-116, backend/app/content_api.py:155-166 |
-| Ghép payload `{code, function, cases}` | `run()` | backend/app/main.py:118-121 |
+| Tra bài trong Postgres bằng session ngắn (đóng trước khi chờ máy chấm); không có bài → 404 | `lookup_judge` | backend/app/main.py:114-116, backend/app/content_api.py:156-182 |
+| Ghép payload `{code, function, class_name, cases}` | `run()` | backend/app/main.py:118-125 |
 | Gửi `HARNESS_SOURCE` làm source, payload làm stdin cho máy chấm (tối đa 4 đồng thời) | `runner.run` | backend/app/main.py:124-125 |
 | Máy chấm hỏng/429/5xx/không hiểu → `503 runner_unavailable` | `RunnerUnavailable` | backend/app/main.py:126-128 |
 | DB không kết nối được → `503 database_unavailable`; chưa nạp nội dung → `503 content_not_loaded` | exception handler | backend/app/main.py:69-78 |
@@ -76,10 +76,10 @@ App không còn chứa nội dung học nào (chỉ còn tiến độ demo).
 
 | Chặng | Làm gì | file:dòng |
 | --- | --- | --- |
-| Soạn | `content.json` = cây nội dung + `judge: {solution, cases}` mỗi bài | backend/content/content.json:112,197 |
-| Nạp | kiểm hình dạng (pydantic strict) + id/quan hệ, xoá hết rồi ghi lại trong một transaction, `version` = sha256 phần công khai | backend/app/load_content.py:46-95,98-156 |
+| Soạn | `content.json` = cây nội dung + `judge: {solution, cases}` mỗi bài; bài method có `class_name` | backend/content/content.json:195,266 |
+| Nạp | kiểm hình dạng (pydantic strict) + id/quan hệ + case kịch bản, xoá hết rồi ghi lại trong một transaction, `version` = sha256 phần công khai | backend/app/load_content.py:49-132,135-205 |
 | Lưu | bảng `themes/topics/code_files/exercises/file_exercises/blocks/content_meta` | backend/app/tables.py:18-108 |
-| Phát | `GET /content`: 6 SELECT kẹp giữa hai lần đọc `version`, đọc lại (tối đa 3) nếu version đổi giữa chừng; `response_model` không có `judge` | backend/app/content_api.py:42-59,169-171 |
+| Phát | `GET /content`: 6 SELECT kẹp giữa hai lần đọc `version`, đọc lại (tối đa 3) nếu version đổi giữa chừng; `response_model` không có `judge` | backend/app/content_api.py:44-61,184-186 |
 | Tải + cache | `GET /content` timeout 5s; thành công thì ghi cache; lỗi gì cũng rơi về cache; không có cache thì `ContentUnavailable` (mobile/lib/data/content_repository.dart:58-98) | docs/ARCHITECTURE.md:1 |
 | Cổng | `ContentGate` chờ/lỗi/dữ liệu + banner khi dùng cache; `main()` override `contentIndexProvider` (mobile/lib/app/content_gate.dart:17-71, mobile/lib/main.dart:10-21) | docs/ARCHITECTURE.md:1 |
 
@@ -97,11 +97,94 @@ bài hoặc `label` ô làm tiến độ cũ mồ côi vì tiến độ khoá th
 xác thực và không phân trang (trả cả cây một lần). Mọi lỗi `/content` đều hiện cùng một banner
 "dùng nội dung đã lưu" — app không phân biệt mạng hỏng với server trả dữ liệu sai.
 
+## Cây nội dung — module lồng nhau + bài method
+
+### Là gì
+
+Nội dung học là một cây: theme chứa module, module chứa file và có thể chứa module con (không giới hạn
+độ sâu), file chứa bài. Ví dụ seed "Airline Reservation System" có module cấp 1 và module con
+"Schedule — lịch bay" bên trong (backend/content/content.json:36-51). Một bài có thể là hàm rời hoặc là
+method của một class (`FlightService.add_flight`); bài method chỉ chấm được bằng case kịch bản. Hai thứ
+này (module con, tên class) cùng đi từ file soạn tới DB, tới `/content`, tới app, và tới máy chấm.
+
+### Cách hoạt động
+
+| Khái niệm | Soạn / DB | Phát qua `/content` | Trong app |
+| --- | --- | --- | --- |
+| Module con | key `modules` (đệ quy) trong `content.json`; DB lưu `topics.parent_id` (FK về chính nó, CASCADE) + `topics.position` là thứ tự preorder trong theme — backend/app/tables.py:31-41, backend/migrations/versions/0002_module_tree_class.py:22-27 | `topics` cấp 1 theo theme, `modules` lồng theo `parent_id` — backend/app/content_api.py:72-80,95-107 | `Topic.modules`, `allFiles`/`allModules` duyệt preorder (file của module trước, rồi module con) — mobile/lib/domain/models.dart:116-135 |
+| Tên class | `Exercise.class_name` là cột nullable, không phải bảng riêng — backend/app/tables.py:67 | `class_name` trong payload bài; cũng nằm trong `Judge` để `/run` dùng — backend/app/content_api.py:29,133,164 | `Exercise.className`, `qualifiedName` — mobile/lib/domain/models.dart:316-320 |
+
+Nạp cây bằng duyệt trước (cha trước con) nên `position` tăng đúng thứ tự và FK `parent_id` luôn trỏ vào
+hàng đã flush:
+
+```python
+def _walk_topics(topics: list[dict], parent_id: str | None = None):
+    for tp in topics:
+        yield tp, parent_id
+        yield from _walk_topics(tp.get("modules", []), tp.get("id"))
+```
+(backend/app/load_content.py:42-46; ghi DB: backend/app/load_content.py:184-191)
+
+Vị trí ô (nhãn "trong hàm / trong method / trong class" ở tiêu đề ô) không được lưu ở đâu cả mà suy ra từ
+template: tìm dòng marker `# TODO <nhãn>`, lấy dòng cha gần nhất có thụt lề nhỏ hơn, phân loại
+`def`/`class`, và nếu `def` đó nằm dưới một dòng `class` thì là method (mobile/lib/domain/merge.dart:135-175).
+Cha là marker ô khác thì dùng dòng đầu đáp án mẫu của ô đó.
+
+### Ranh giới
+
+Tên class chỉ là thuộc tính của bài: không có bảng `classes`, và cùng một class (`FlightService`) có nhiều
+bài chỉ lặp chuỗi tên (backend/app/tables.py:67). Nhóm bài theo class ở màn Topic dựa vào
+`className` liền kề khác nhau trong cùng file (mobile/lib/features/browse/topic_detail_screen.dart:55-64).
+Hạ cấp migration 0002 làm mất quan hệ cha–con và `class_name`; chấp nhận được vì bảng nội dung chỉ là bản
+dẫn xuất của `content.json`, nạp lại là có đủ (backend/migrations/versions/0002_module_tree_class.py:33-35).
+`/content` không kiểm module con có cùng theme với cha hay không (chỉ đúng nếu DB do loader ghi); sửa DB tay
+có thể làm sai (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog T-07).
+
+## Chấm bài method — case kịch bản
+
+### Là gì
+
+Hàm rời gọi được bằng `func(*args)`. Method thì cần một đối tượng đã dựng: phải tạo `FlightService`, thêm vài
+chuyến bay, rồi mới gọi `search`. Vì vậy case chấm có thêm dạng "kịch bản": một danh sách câu lệnh chuẩn bị
+(`steps`), một biểu thức gọi (`call`), và kỳ vọng là giá trị trả về hoặc loại exception ném ra.
+Hai dạng case cùng nằm trong `judge.cases`; harness phân biệt bằng việc case có key `call` hay không.
+
+### Cách hoạt động
+
+| | Case cũ (hàm rời) | Case kịch bản (method) |
+| --- | --- | --- |
+| Hình dạng | `{args, expect: {return}}` hoặc `{args, expect: {arg, value}}` (backend/app/harness.py:150-156) | `{steps?: [..], call: "..", expect: {return}}` hoặc `expect: {raises: "TênLỗi"}` (backend/app/harness.py:48-53) |
+| Cách chạy | `func(*deepcopy(args))` trên namespace sau khi `exec` code học viên (backend/app/harness.py:157-161) | `exec` từng `step` rồi `eval` `call` trong bản sao nông của namespace, mỗi case một bản mới (backend/app/harness.py:58-66) |
+| Dừng khi nào | exception → dừng, các case sau không chạy (backend/app/harness.py:161-167) | exception khi `expect.return` → dừng; khi `expect.raises` → là kết quả case, chạy tiếp (backend/app/harness.py:68-86) |
+| Nơi | backend/app/harness.py:150-172 | backend/app/harness.py:48-87,142-148 |
+
+```python
+if class_name:
+    cls = namespace.get(class_name)
+    if not isinstance(cls, type):
+        error = {"kind": "runtime", "line": None,
+                 "message": "Không tìm thấy class %s trong code" % class_name}
+```
+(backend/app/harness.py:123-131) — `raises` so theo tên trong MRO của exception nên bắt cả lớp con (backend/app/harness.py:75-78).
+Đổi tên class hay method thì báo "Không tìm thấy class/method ..." thay vì lỗi lạ (backend/app/harness.py:132-139).
+
+Lỗi soạn bài bị chặn lúc nạp, không để tới harness (nếu không học viên thấy lỗi như do code mình sai):
+`steps`/`call` phải `compile` được, `expect` phải có `return` hoặc `raises` (backend/app/load_content.py:49-67),
+và bài có `class_name` bắt buộc mọi case là dạng `call` vì harness không gọi method theo `args`
+(backend/app/load_content.py:111-117).
+
+### Ranh giới
+
+`steps`/`call` do tác giả viết trong content DB, không bao giờ từ client (backend/app/harness.py:145). Bản sao
+nông của namespace nghĩa là thuộc tính gán thẳng lên class ở một case vẫn rò sang case sau; test cho việc này
+chưa có (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog harness). Backlog thêm: `SystemExit`
+trong `steps`, và `project.output` của bài `raises` chỉ ghi loại lỗi chứ không kèm message.
+
 ## Domain + Data
 
 ### Là gì
 
-Tầng dữ liệu thuần Dart, không phụ thuộc Flutter UI: cấu trúc nội dung học (theme → topic → file →
+Tầng dữ liệu thuần Dart, không phụ thuộc Flutter UI: cấu trúc nội dung học (theme → topic/module lồng nhau → file →
 exercise → block, một block = một ô TODO) và các hàm thuần (ghép ô, khoá bài). Nội dung hiển thị
 (đề, ví dụ, template, gợi ý, lời giải từng ô) không nằm trong app: app tải từ `GET /content` và
 giữ thành một đối tượng `Content` (cây + hàm tra cứu) mà mọi màn đọc qua `contentIndexProvider`.
@@ -131,7 +214,7 @@ block mà là `ExerciseProgress.passed` (mobile/lib/features/exercise/session_co
 Hợp đồng `/run` được giữ khớp bằng hai bên tự viết (Python `RunResponse` và Dart `JudgeClient._parse`)
 cộng test fixture tay — không sinh code từ một schema chung (mobile/lib/data/judge_client.dart:109-146,
 backend/app/main.py:64-82). Hình dạng `/content` cũng giữ khớp bằng hai bên tự viết: model pydantic
-(backend/app/content_schema.py:80-102) và `Content.fromJson` (mobile/lib/domain/content.dart:14), có test fixture
+(backend/app/content_schema.py:66-102) và `Content.fromJson` (mobile/lib/domain/content.dart:14), có test fixture
 đọc thẳng `backend/content/content.json` (mobile/test/support/content_fixture.dart:12). `contentIndexProvider`
 không có mặc định — quên override thì ném `UnimplementedError` (mobile/lib/data/content_providers.dart:11-13).
 
@@ -177,7 +260,7 @@ mobile/lib/features/exercise/code_tab.dart:126), nên tiến độ không đư�
 ### Là gì
 
 Các màn đưa người học từ danh sách chủ đề tới đúng bài tập: Home liệt kê theme, Theme detail liệt kê
-topic, Topic detail liệt kê file/exercise. Mỗi dòng bài (`ExerciseRow`) hiện trạng thái Mới / Đang
+topic, Topic detail liệt kê thẻ module con (nếu có) rồi file/exercise. Mỗi dòng bài (`ExerciseRow`) hiện trạng thái Mới / Đang
 dở / Đã xong / Khoá, và Home có thẻ "Tiếp tục" cho bài đang dở.
 
 ### Cách hoạt động
@@ -191,6 +274,8 @@ ExerciseScreen 3 tab (dòng 85) — thay cho BlockListScreen + CellScreen và ro
 (mobile/lib/features/exercise/session_providers.dart:30-42).
 
 ### Ranh giới
+
+Module lồng nhiều tầng đi qua cùng route `/topic/:topicId`: module con là thẻ trên Topic detail bấm vào mở chính màn đó với id con (mobile/lib/features/browse/topic_detail_screen.dart:49-50,146-147); trong file, bài của cùng một class được nhóm dưới tiêu đề `class <Tên>` (mobile/lib/features/browse/topic_detail_screen.dart:55-64,173-183).
 
 Hai thứ tên gần giống nhau: `completedBlocks` nay chỉ là getter suy ra từ `passed` (xong thì bằng
 tổng số ô, chưa xong thì 0), không còn nói "đã gõ đúng bao nhiêu block". Dựng tay

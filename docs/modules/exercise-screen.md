@@ -5,7 +5,7 @@
 
 ## Là gì
 
-Mỗi bài là một hàm Python ngắn, chia thành vài ô nhỏ (A, B, C) vì gõ nhiều dòng trên điện thoại rất
+Mỗi bài là một hàm Python ngắn (hoặc một method của class, vd `FlightService.add_flight`), chia thành vài ô nhỏ (A, B, C) vì gõ nhiều dòng trên điện thoại rất
 mệt. Phần code còn lại của hàm đã có sẵn và bị khoá, người học chỉ gõ các ô TODO, không cần lo thụt
 lề. Bấm Run thì app tự ghép các ô vào code khoá, gửi lên backend chấm bằng Python thật, rồi hiện
 bảng test (input / mong đợi / nhận được) và tô đỏ đúng ô gây lỗi. Pass hết test thì bài được tính là
@@ -40,6 +40,13 @@ Template khoá + marker, ví dụ bài `split-chunks` (marker B thụt sâu hơn
 `ref.read(contentIndexProvider).exerciseById`, mobile/lib/features/exercise/exercise_screen.dart:115). `mergeCells` thụt nội dung ô theo thụt lề của dòng marker
 (mobile/lib/domain/merge.dart:80-102), nên người học gõ ô B không cần gõ 8 dấu cách.
 
+Tiêu đề mỗi ô có nhãn vị trí ("trong hàm", "trong method", "trong class") suy từ template, không lưu trong DB:
+`cellLocation` tìm dòng marker của ô, lấy dòng cha gần nhất thụt lề nhỏ hơn rồi phân loại `def`/`class`
+(mobile/lib/domain/merge.dart:135-175; dùng ở mobile/lib/features/exercise/code_tab.dart:444 và
+mobile/lib/features/exercise/cell_editor_page.dart:18,113). Cha là marker ô khác thì xét dòng đầu đáp án mẫu của ô
+đó; `def` lấy từ đáp án mẫu coi là hàm vì không biết có nằm trong class (mobile/lib/domain/merge.dart:158-168).
+Nhãn không kèm tên method (ngắn, vừa tiêu đề ô ở 375px; planning/crew/2026-10-11-project-tree-airline/DEVIATIONS.md).
+
 Quy tắc khoá một nơi: bài k trong `CodeFile` mở khi k = 0 hoặc bài k-1 đã passed; bài đã passed luôn mở;
 bài nằm ở nhiều file mở nếu mở ở bất kỳ file nào (mobile/lib/domain/progression.dart:22-33). `ExerciseRow`,
 `ExerciseScreen` đều qua `exerciseUnlockedProvider` (mobile/lib/features/exercise/session_providers.dart:45-52).
@@ -61,11 +68,11 @@ Ghép ô làm ở client (Dart) một chỗ duy nhất thay vì ở backend, đ�
 nên UI phải chặn Run khi có ô rỗng (đã chặn ở code_tab.dart:100-111). `knownIdentifiersFor` cho autocomplete
 nay quét cả phần khoá của template (mobile/lib/features/exercise/session_controller.dart:286-300).
 
-Không làm: tải nội dung bài qua mạng (seed vẫn tĩnh), nút "chép lời giải vào ô", khoá bài xuyên
-file/topic.
+Không làm: nút "chép lời giải vào ô", khoá bài xuyên file/topic.
 
 ## Giới hạn đã biết
 
+- `cellLocation` đoán vị trí ô bằng thụt lề nên sai ở vài ca lạ: comment `#` thụt ít hơn bị coi là cha, `async for/with`, header nhiều dòng, `self.x` gán ở ô trước (mobile/lib/domain/merge.dart:135-175; planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog cellLocation).
 - Rời màn khi đang Run thì kết quả `passed` về sau bị bỏ (`if (!mounted) return`,
   mobile/lib/features/exercise/code_tab.dart:126) → mất tiến độ (SEAM M-3 trong STATUS.md:47).
 - `nextExerciseAfter` chỉ xét file đầu tiên chứa bài, còn `isExerciseUnlocked` xét mọi file — bài dùng
