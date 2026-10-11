@@ -42,7 +42,7 @@ def _version(session: Session) -> str | None:
 def read_content(session: Session) -> dict:
     """Toàn bộ cây nội dung đúng shape hợp đồng `/content`.
 
-    Bảy SELECT chạy ở READ COMMITTED nên một lần nạp lại có thể commit xen giữa. Nạp lại ghi
+    Các SELECT (6 bảng) chạy ở READ COMMITTED nên một lần nạp lại có thể commit xen giữa. Nạp lại ghi
     `version` cùng transaction với dữ liệu, nên version đầu == version cuối ⇒ mọi câu giữa thấy
     cùng một bản. Khác nhau (hoặc cây lệch gây KeyError) thì đọc lại.
     """
