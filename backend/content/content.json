@@ -2368,7 +2368,8 @@
             "steps": [
               "from datetime import datetime",
               "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
-              "rid = svc.book('VN1', 2)"
+              "rid = svc.book('VN1', 2)",
+              "svc.flights['VN1']['price'] = 2000000"
             ],
             "call": "svc.cancel(rid, datetime(2026, 10, 30, 8, 0))",
             "expect": {
@@ -2470,7 +2471,7 @@
         },
         "project": {
           "caption": "Giảm ghế khi chỉ còn 23 tiếng 59 phút",
-          "input": "rid = svc.book('VN1', 3)\nsvc.change_seats(rid, 1, datetime(2026, 10, 31, 8, 1))",
+          "input": "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 10, 'price': 1500000}})\nrid = svc.book('VN1', 3)\nsvc.change_seats(rid, 1, datetime(2026, 10, 31, 8, 1))",
           "output": "ValueError",
           "note": "Tăng ghế sát giờ vẫn được nếu còn ghế trống; chỉ giảm ghế mới bị chặn."
         }
@@ -2550,7 +2551,8 @@
             "steps": [
               "from datetime import datetime",
               "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
-              "rid = svc.book('VN1', 2)"
+              "rid = svc.book('VN1', 2)",
+              "svc.flights['VN1']['price'] = 2000000"
             ],
             "call": "svc.change_seats(rid, 4, datetime(2026, 10, 30, 8, 0))",
             "expect": {
@@ -2561,11 +2563,11 @@
             "steps": [
               "from datetime import datetime",
               "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
-              "rid = svc.book('VN1', 3)"
+              "rid = svc.book('VN1', 2)"
             ],
-            "call": "svc.change_seats(rid, 1, datetime(2026, 10, 30, 8, 0))",
+            "call": "svc.change_seats(rid, 4, datetime(2026, 10, 31, 22, 0))",
             "expect": {
-              "return": -3000000
+              "return": 3000000
             }
           },
           {
@@ -2746,11 +2748,11 @@
             "steps": [
               "from datetime import datetime",
               "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
-              "rid = svc.book('VN3', 2)"
+              "rid = svc.book('VN1', 1)"
             ],
-            "call": "svc.change_flight(rid, 'VN1', datetime(2026, 11, 3, 8, 0))",
+            "call": "svc.change_flight(rid, 'VN2', datetime(2026, 10, 31, 8, 0))",
             "expect": {
-              "return": -1000000
+              "return": -500000
             }
           },
           {
