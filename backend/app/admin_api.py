@@ -3,6 +3,7 @@
 - GET  /api/admin/content   → {version, content}: nội dung đầy đủ (CÓ judge), `version` = admin_version.
 - POST /api/admin/validate  {content} → {ok, errors}: chạy đủ luật, không ghi.
 - PUT  /api/admin/content   {base_version, content} → {version} | 409 version_conflict | 422 {errors}.
+- GET/POST/DELETE /api/admin/mcp-access[/{sub}]: cấp/thu hồi quyền sửa nội dung qua `/mcp` (app.mcp_access).
 
 Ghi đi đúng một đường với CLI: `load_content` (validate + thay toàn bộ, một transaction, khoá
 `CONTENT_WRITE_LOCK`). Kiểm version và ghi nằm trong cùng khoá, nên hai admin không ghi đè nhau.
@@ -17,15 +18,16 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy.exc import DataError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, require_admin
 from app.db import get_session
 from app.export_content import admin_version, export_content
 from app.load_content import load_content, lock_content, validation_errors
+from app.mcp_access import allow, list_access, revoke
 
 logger = logging.getLogger("admin")
 
@@ -44,6 +46,13 @@ class SaveIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     base_version: str = Field(min_length=1, max_length=100)
     content: dict[str, Any]
+
+
+class McpAccessIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sub: str
+    email: str
+    label: str = ""
 
 
 class _BadBody(Exception):
@@ -122,3 +131,48 @@ async def save_content(
     except _BadBody as exc:
         return _invalid(exc.errors)
     return await run_in_threadpool(_save, body, user, session)
+
+
+@router.get("/mcp-access")
+def get_mcp_access(session: Session = Depends(get_session)) -> dict:
+    return {"items": list_access(session)}
+
+
+def _grant(body: McpAccessIn, user: CurrentUser, session: Session):
+    try:
+        item = allow(session, body.sub, body.email, body.label)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        return _invalid([str(exc)])
+    except IntegrityError:  # hai admin cấp cùng một sub mới đúng lúc
+        session.rollback()
+        return _invalid(["sub vừa được cấp ở nơi khác — tải lại danh sách rồi thử lại"])
+    logger.info("admin %s granted mcp access sub=%s as %s", user.email, item["sub"], item["email"])
+    return {"item": item}
+
+
+@router.post("/mcp-access")
+async def post_mcp_access(
+    request: Request,
+    user: CurrentUser = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    try:
+        body = await _parse(request, McpAccessIn)
+    except _BadBody as exc:
+        return _invalid(exc.errors)
+    return await run_in_threadpool(_grant, body, user, session)
+
+
+@router.delete("/mcp-access/{sub}")
+def delete_mcp_access(
+    sub: str,
+    user: CurrentUser = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    if not revoke(session, sub):
+        raise HTTPException(status_code=404, detail="not_found")
+    session.commit()
+    logger.info("admin %s revoked mcp access sub=%s", user.email, sub.strip())
+    return Response(status_code=204)
