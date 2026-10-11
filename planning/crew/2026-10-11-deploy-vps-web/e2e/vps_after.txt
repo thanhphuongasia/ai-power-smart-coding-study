@@ -1,0 +1,12 @@
+port:5080 302
+port:8088 404
+port:8787 404
+port:9999 200
+port:3005 200
+port:4000 404
+port:4210 404
+8090 (trước deploy) 200
+studybuddy.jacons-corp.com 200
+identity.jacons-corp.com 200
+github-mcp.jacons-corp.com 401
+huikiemcom.jacons-corp.com 200
