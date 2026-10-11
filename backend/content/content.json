@@ -20,6 +20,7 @@
               "id": "airline-flight-py",
               "name": "models/flight.py",
               "exercise_ids": [
+                "flight-init",
                 "flight-seats-left",
                 "flight-is-full"
               ]
@@ -44,6 +45,22 @@
                   "name": "services/schedule.py",
                   "exercise_ids": [
                     "schedule-flights-on"
+                  ]
+                }
+              ],
+              "modules": []
+            },
+            {
+              "id": "airline-flight-controller",
+              "name": "Controller — API chuyến bay",
+              "description": "Nhận request thêm/xoá chuyến bay, gọi FlightService và trả mã HTTP.",
+              "files": [
+                {
+                  "id": "airline-flight-controller-py",
+                  "name": "controllers/flight_controller.py",
+                  "exercise_ids": [
+                    "flight-controller-add",
+                    "flight-controller-delete"
                   ]
                 }
               ],
@@ -189,13 +206,186 @@
     }
   ],
   "exercises": {
+    "flight-init": {
+      "id": "flight-init",
+      "title": "Khai báo thuộc tính chuyến bay",
+      "class_name": "Flight",
+      "function_name": "__init__",
+      "params": [
+        "code",
+        "origin",
+        "dest",
+        "capacity"
+      ],
+      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        # Core: định danh chuyến bay, truyền vào lúc tạo và không đổi\n        self.code = code\n        # TODO A\n        # TODO B\n        # Support: trạng thái vận hành, có giá trị mặc định và đổi dần\n        # TODO C",
+      "challenge": {
+        "statement": "Hoàn thiện __init__ của class Flight. Nhóm core lưu tham số truyền vào (code đã có sẵn làm mẫu; còn origin, dest, capacity). Nhóm support có giá trị mặc định: booked = 0 (số ghế đã bán) và status = \"scheduled\" (trạng thái chuyến).",
+        "motivation": "Mọi method khác của Flight (seats_left, is_full, đặt chỗ, huỷ chỗ) đều đọc các thuộc tính này. Tách rõ hai nhóm giúp biết cái gì là danh tính chuyến bay (core: đổi là thành chuyến khác) và cái gì là trạng thái vận hành (support: đổi liên tục khi bán vé, khi chuyến cất cánh).",
+        "small": {
+          "caption": "Tạo một chuyến bay mới",
+          "input": "f = Flight('VN123', 'HAN', 'SGN', 180)\nprint(f.code, f.capacity, f.booked, f.status)",
+          "output": "VN123 180 0 scheduled",
+          "note": null
+        },
+        "project": {
+          "caption": "Màn quản trị tạo chuyến HAN → DAD rồi bán 3 vé",
+          "input": "f = Flight('VN155', 'HAN', 'DAD', 120)\nf.booked += 3\nprint(f.origin, '->', f.dest, f.booked, f.status)",
+          "output": "HAN -> DAD 3 scheduled",
+          "note": "booked và status không có trong tham số: chuyến mới tạo luôn bắt đầu từ 0 vé, trạng thái scheduled."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-init-a",
+          "label": "A",
+          "title": "Core: tuyến bay",
+          "prompt": "Giống dòng self.code = code ở trên: lưu origin và dest vào self.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.origin = origin\nself.dest = dest",
+            "self.origin, self.dest = origin, dest"
+          ],
+          "expected_output": "Đã lưu tuyến bay.",
+          "explanation": "Điểm đi và điểm đến là danh tính của chuyến: đổi tuyến là thành chuyến khác.",
+          "hints": [
+            "Làm giống dòng self.code = code.",
+            "Hai dòng: self.origin = ... và self.dest = ...",
+            "self.origin = origin\nself.dest = dest"
+          ],
+          "vocab": [
+            "self",
+            "origin",
+            "dest"
+          ]
+        },
+        {
+          "id": "flight-init-b",
+          "label": "B",
+          "title": "Core: sức chứa",
+          "prompt": "Lưu capacity (tổng số ghế) vào self.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.capacity = capacity"
+          ],
+          "expected_output": "Đã lưu sức chứa.",
+          "explanation": "capacity cố định theo loại máy bay; seats_left và is_full đọc nó qua self.capacity.",
+          "hints": [
+            "Tham số còn lại chưa lưu là capacity.",
+            "Dạng self.<tên> = <tên>.",
+            "self.capacity = capacity"
+          ],
+          "vocab": [
+            "self",
+            "capacity"
+          ]
+        },
+        {
+          "id": "flight-init-c",
+          "label": "C",
+          "title": "Support: trạng thái",
+          "prompt": "Thêm booked = 0 và status = \"scheduled\" — không lấy từ tham số.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.booked = 0\nself.status = \"scheduled\"",
+            "self.booked = 0\nself.status = 'scheduled'",
+            "self.booked, self.status = 0, \"scheduled\""
+          ],
+          "expected_output": "Đã có booked và status.",
+          "explanation": "Thuộc tính support có giá trị khởi đầu cố định và thay đổi trong lúc vận hành (bán vé, đổi trạng thái).",
+          "hints": [
+            "Chuyến mới chưa bán vé nào, trạng thái là \"scheduled\".",
+            "Hai dòng: self.booked = ... và self.status = ...",
+            "self.booked = 0\nself.status = \"scheduled\""
+          ],
+          "vocab": [
+            "self",
+            "booked",
+            "status"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        # Core: định danh chuyến bay, truyền vào lúc tạo và không đổi\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        # Support: trạng thái vận hành, có giá trị mặc định và đổi dần\n        self.booked = 0\n        self.status = \"scheduled\"",
+        "cases": [
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 180)"
+            ],
+            "call": "[f.code, f.origin, f.dest, f.capacity]",
+            "expect": {
+              "return": [
+                "VN123",
+                "HAN",
+                "SGN",
+                180
+              ]
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 180)"
+            ],
+            "call": "[f.booked, f.status]",
+            "expect": {
+              "return": [
+                0,
+                "scheduled"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "a = Flight('VN1', 'HAN', 'SGN', 2)",
+              "b = Flight('VN2', 'HAN', 'DAD', 3)",
+              "a.booked = 2"
+            ],
+            "call": "[a.booked, b.booked, b.capacity]",
+            "expect": {
+              "return": [
+                2,
+                0,
+                3
+              ]
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN9', 'DAD', 'HAN', 0)"
+            ],
+            "call": "[f.capacity, f.status]",
+            "expect": {
+              "return": [
+                0,
+                "scheduled"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 180)"
+            ],
+            "call": "sorted(vars(f))",
+            "expect": {
+              "return": [
+                "booked",
+                "capacity",
+                "code",
+                "dest",
+                "origin",
+                "status"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "flight-seats-left": {
       "id": "flight-seats-left",
       "title": "Còn bao nhiêu ghế trống",
       "class_name": "Flight",
       "function_name": "seats_left",
       "params": [],
-      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        # TODO A\n        # TODO B",
+      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n        self.status = \"scheduled\"\n\n    def seats_left(self):\n        # TODO A\n        # TODO B",
       "challenge": {
         "statement": "Viết method seats_left(self) của class Flight, trả về số ghế còn trống = capacity - booked. Không bao giờ trả số âm (nếu booked vượt capacity thì trả 0).",
         "motivation": "Màn hình tìm chuyến bay cần hiển thị \"Còn N ghế\". Số này tính một chỗ duy nhất trong Flight để mọi màn hình (tìm kiếm, đặt chỗ, check-in) hiển thị giống nhau.",
@@ -260,7 +450,7 @@
         }
       ],
       "judge": {
-        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        left = self.capacity - self.booked\n        return max(left, 0)",
+        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n        self.status = \"scheduled\"\n\n    def seats_left(self):\n        left = self.capacity - self.booked\n        return max(left, 0)",
         "cases": [
           {
             "steps": [
@@ -319,7 +509,7 @@
       "class_name": "Flight",
       "function_name": "is_full",
       "params": [],
-      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        # TODO A\n        # TODO B",
+      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n        self.status = \"scheduled\"\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        # TODO A\n        # TODO B",
       "challenge": {
         "statement": "Viết method is_full(self) của class Flight: trả True nếu chuyến bay không còn ghế trống, ngược lại trả False. Dùng lại method seats_left() có sẵn.",
         "motivation": "Nút \"Đặt vé\" phải bị khoá khi chuyến bay hết chỗ. Gọi lại seats_left() thay vì tự trừ lần nữa để quy tắc \"còn bao nhiêu ghế\" chỉ nằm ở một nơi.",
@@ -384,7 +574,7 @@
         }
       ],
       "judge": {
-        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        left = self.seats_left()\n        return left == 0",
+        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n        self.status = \"scheduled\"\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        left = self.seats_left()\n        return left == 0",
         "cases": [
           {
             "steps": [
@@ -915,6 +1105,332 @@
             "expect": {
               "return": [
                 "VN1",
+                "VN2"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "flight-controller-add": {
+      "id": "flight-controller-add",
+      "title": "API thêm chuyến bay",
+      "class_name": "FlightController",
+      "function_name": "add",
+      "params": [
+        "payload"
+      ],
+      "template": "from types import SimpleNamespace\n\n\nclass FlightService:\n    \"\"\"Bản rút gọn của services/flight_service.py để file chạy độc lập.\"\"\"\n\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def remove_flight(self, code):\n        del self.flights[code]\n\n\nclass FlightController:\n    \"\"\"Tầng controller: nhận dữ liệu request (dict), gọi service, trả {status, ...} theo mã HTTP.\"\"\"\n\n    REQUIRED = (\"code\", \"origin\", \"dest\", \"capacity\")\n\n    def __init__(self, service):\n        self.service = service\n\n    def add(self, payload):\n        missing = [k for k in self.REQUIRED if k not in payload]\n        if missing:\n            return {\"status\": 400, \"error\": \"Thiếu trường: \" + \", \".join(missing)}\n        flight = SimpleNamespace(**payload)\n        try:\n            # TODO A\n        except ValueError as e:\n            # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết method add(self, payload) của FlightController: gọi self.service.add_flight(flight). Thành công trả {\"status\": 201, \"code\": <mã>}. Nếu service raise ValueError (mã trùng) thì trả {\"status\": 409, \"error\": <thông báo>}. Phần kiểm thiếu trường (400) đã có sẵn.",
+        "motivation": "Controller là cửa vào của API (POST /flights). Nó không tự lưu dữ liệu mà giao cho service, rồi đổi kết quả thành mã HTTP mà màn quản trị hiểu được: 201 tạo xong, 409 trùng mã, 400 thiếu dữ liệu. Nhờ vậy lỗi nghiệp vụ không làm sập request.",
+        "small": {
+          "caption": "Thêm một chuyến hợp lệ",
+          "input": "api = FlightController(FlightService())\nprint(api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2}))",
+          "output": "{'status': 201, 'code': 'VN1'}",
+          "note": null
+        },
+        "project": {
+          "caption": "Màn quản trị gửi trùng mã VN1 hai lần",
+          "input": "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})\nprint(api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'DAD', 'capacity': 3}))",
+          "output": "{'status': 409, 'error': 'Mã chuyến bay đã tồn tại'}",
+          "note": "Chuyến VN1 cũ (HAN-SGN) vẫn giữ nguyên, không bị ghi đè."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-controller-add-a",
+          "label": "A",
+          "title": "Giao việc cho service",
+          "prompt": "Trong try, gọi add_flight của service với flight.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "self.service.add_flight(flight)"
+          ],
+          "expected_output": "Đã gọi service.",
+          "explanation": "Controller không tự ghi vào dict; service mới là nơi giữ luật nghiệp vụ (không cho trùng mã).",
+          "hints": [
+            "Service nằm ở self.service.",
+            "Method của service là add_flight, truyền flight vào.",
+            "self.service.add_flight(flight)"
+          ],
+          "vocab": [
+            "self",
+            "service",
+            "add_flight"
+          ]
+        },
+        {
+          "id": "flight-controller-add-b",
+          "label": "B",
+          "title": "Trùng mã → 409",
+          "prompt": "Khi bắt được ValueError, trả dict status 409 kèm thông báo lỗi.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "return {\"status\": 409, \"error\": str(e)}",
+            "return {'status': 409, 'error': str(e)}"
+          ],
+          "expected_output": "Đã trả 409.",
+          "explanation": "409 Conflict nghĩa là dữ liệu gửi lên xung đột với dữ liệu đang có. str(e) lấy thông báo service đã raise.",
+          "hints": [
+            "Mã HTTP cho trùng dữ liệu là 409.",
+            "Trả dict có \"status\" và \"error\"; thông báo lấy bằng str(e).",
+            "return {\"status\": 409, \"error\": str(e)}"
+          ],
+          "vocab": [
+            "return",
+            "str"
+          ]
+        },
+        {
+          "id": "flight-controller-add-c",
+          "label": "C",
+          "title": "Thành công → 201",
+          "prompt": "Sau try/except, trả dict status 201 kèm mã chuyến vừa tạo.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return {\"status\": 201, \"code\": flight.code}",
+            "return {'status': 201, 'code': flight.code}"
+          ],
+          "expected_output": "{'status': 201, 'code': 'VN1'}",
+          "explanation": "201 Created báo tạo mới thành công; trả kèm mã để màn quản trị mở chi tiết chuyến vừa tạo.",
+          "hints": [
+            "Mã HTTP cho \"tạo mới thành công\" là 201.",
+            "Trả dict có \"status\" và \"code\" = flight.code.",
+            "return {\"status\": 201, \"code\": flight.code}"
+          ],
+          "vocab": [
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "from types import SimpleNamespace\n\n\nclass FlightService:\n    \"\"\"Bản rút gọn của services/flight_service.py để file chạy độc lập.\"\"\"\n\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def remove_flight(self, code):\n        del self.flights[code]\n\n\nclass FlightController:\n    \"\"\"Tầng controller: nhận dữ liệu request (dict), gọi service, trả {status, ...} theo mã HTTP.\"\"\"\n\n    REQUIRED = (\"code\", \"origin\", \"dest\", \"capacity\")\n\n    def __init__(self, service):\n        self.service = service\n\n    def add(self, payload):\n        missing = [k for k in self.REQUIRED if k not in payload]\n        if missing:\n            return {\"status\": 400, \"error\": \"Thiếu trường: \" + \", \".join(missing)}\n        flight = SimpleNamespace(**payload)\n        try:\n            self.service.add_flight(flight)\n        except ValueError as e:\n            return {\"status\": 409, \"error\": str(e)}\n        return {\"status\": 201, \"code\": flight.code}",
+        "cases": [
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)"
+            ],
+            "call": "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})",
+            "expect": {
+              "return": {
+                "status": 201,
+                "code": "VN1"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)"
+            ],
+            "call": "(api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2}), list(svc.flights))[1]",
+            "expect": {
+              "return": [
+                "VN1"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})"
+            ],
+            "call": "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'DAD', 'capacity': 3})",
+            "expect": {
+              "return": {
+                "status": 409,
+                "error": "Mã chuyến bay đã tồn tại"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})"
+            ],
+            "call": "(api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'DAD', 'capacity': 3}), svc.flights['VN1'].dest)[1]",
+            "expect": {
+              "return": "SGN"
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)"
+            ],
+            "call": "api.add({'code': 'VN2'})",
+            "expect": {
+              "return": {
+                "status": 400,
+                "error": "Thiếu trường: origin, dest, capacity"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "flight-controller-delete": {
+      "id": "flight-controller-delete",
+      "title": "API xoá chuyến bay",
+      "class_name": "FlightController",
+      "function_name": "delete",
+      "params": [
+        "code"
+      ],
+      "template": "from types import SimpleNamespace\n\n\nclass FlightService:\n    \"\"\"Bản rút gọn của services/flight_service.py để file chạy độc lập.\"\"\"\n\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def remove_flight(self, code):\n        del self.flights[code]\n\n\nclass FlightController:\n    \"\"\"Tầng controller: nhận dữ liệu request (dict), gọi service, trả {status, ...} theo mã HTTP.\"\"\"\n\n    REQUIRED = (\"code\", \"origin\", \"dest\", \"capacity\")\n\n    def __init__(self, service):\n        self.service = service\n\n    def add(self, payload):\n        missing = [k for k in self.REQUIRED if k not in payload]\n        if missing:\n            return {\"status\": 400, \"error\": \"Thiếu trường: \" + \", \".join(missing)}\n        flight = SimpleNamespace(**payload)\n        try:\n            self.service.add_flight(flight)\n        except ValueError as e:\n            return {\"status\": 409, \"error\": str(e)}\n        return {\"status\": 201, \"code\": flight.code}\n\n    def delete(self, code):\n        # TODO A\n            # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết method delete(self, code) của FlightController: nếu mã chuyến không có trong self.service.flights thì trả {\"status\": 404, \"error\": \"Không tìm thấy chuyến bay\"}. Ngược lại gọi self.service.remove_flight(code) rồi trả {\"status\": 204}.",
+        "motivation": "DELETE /flights/<mã> dùng khi huỷ khai thác một chuyến. Kiểm tồn tại trước để trả 404 rõ ràng thay vì để service ném KeyError thành lỗi 500; xoá xong trả 204 (thành công, không có nội dung trả về).",
+        "small": {
+          "caption": "Xoá chuyến vừa thêm",
+          "input": "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})\nprint(api.delete('VN1'))",
+          "output": "{'status': 204}",
+          "note": null
+        },
+        "project": {
+          "caption": "Bấm xoá hai lần liên tiếp (mạng chậm, người dùng bấm lại)",
+          "input": "print(api.delete('VN1'))\nprint(api.delete('VN1'))",
+          "output": "{'status': 204}\n{'status': 404, 'error': 'Không tìm thấy chuyến bay'}",
+          "note": "Lần hai trả 404 thay vì làm sập request."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-controller-delete-a",
+          "label": "A",
+          "title": "Kiểm mã có tồn tại",
+          "prompt": "Nếu code không nằm trong self.service.flights...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if code not in self.service.flights:"
+          ],
+          "expected_output": "Đã kiểm tồn tại.",
+          "explanation": "Dict flights dùng mã chuyến làm key, nên toán tử not in kiểm được ngay.",
+          "hints": [
+            "Danh sách chuyến nằm ở self.service.flights.",
+            "Dùng not in để kiểm mã không tồn tại.",
+            "if code not in self.service.flights:"
+          ],
+          "vocab": [
+            "if",
+            "not",
+            "in"
+          ]
+        },
+        {
+          "id": "flight-controller-delete-b",
+          "label": "B",
+          "title": "Không có → 404",
+          "prompt": "Trả dict status 404 với thông báo \"Không tìm thấy chuyến bay\".",
+          "indent_level": 3,
+          "accepted_answers": [
+            "return {\"status\": 404, \"error\": \"Không tìm thấy chuyến bay\"}",
+            "return {'status': 404, 'error': 'Không tìm thấy chuyến bay'}"
+          ],
+          "expected_output": "Đã trả 404.",
+          "explanation": "404 Not Found: tài nguyên được yêu cầu không tồn tại.",
+          "hints": [
+            "Mã HTTP cho \"không tìm thấy\" là 404.",
+            "Trả dict có \"status\" và \"error\".",
+            "return {\"status\": 404, \"error\": \"Không tìm thấy chuyến bay\"}"
+          ],
+          "vocab": [
+            "return"
+          ]
+        },
+        {
+          "id": "flight-controller-delete-c",
+          "label": "C",
+          "title": "Xoá rồi trả 204",
+          "prompt": "Gọi remove_flight của service, rồi trả {\"status\": 204}.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.service.remove_flight(code)\nreturn {\"status\": 204}",
+            "self.service.remove_flight(code)\nreturn {'status': 204}"
+          ],
+          "expected_output": "{'status': 204}",
+          "explanation": "204 No Content: xoá thành công, không cần trả dữ liệu gì thêm.",
+          "hints": [
+            "Việc xoá giao cho service: self.service.remove_flight(code).",
+            "Sau đó trả dict chỉ có \"status\": 204.",
+            "self.service.remove_flight(code)\nreturn {\"status\": 204}"
+          ],
+          "vocab": [
+            "service",
+            "remove_flight",
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "from types import SimpleNamespace\n\n\nclass FlightService:\n    \"\"\"Bản rút gọn của services/flight_service.py để file chạy độc lập.\"\"\"\n\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def remove_flight(self, code):\n        del self.flights[code]\n\n\nclass FlightController:\n    \"\"\"Tầng controller: nhận dữ liệu request (dict), gọi service, trả {status, ...} theo mã HTTP.\"\"\"\n\n    REQUIRED = (\"code\", \"origin\", \"dest\", \"capacity\")\n\n    def __init__(self, service):\n        self.service = service\n\n    def add(self, payload):\n        missing = [k for k in self.REQUIRED if k not in payload]\n        if missing:\n            return {\"status\": 400, \"error\": \"Thiếu trường: \" + \", \".join(missing)}\n        flight = SimpleNamespace(**payload)\n        try:\n            self.service.add_flight(flight)\n        except ValueError as e:\n            return {\"status\": 409, \"error\": str(e)}\n        return {\"status\": 201, \"code\": flight.code}\n\n    def delete(self, code):\n        if code not in self.service.flights:\n            return {\"status\": 404, \"error\": \"Không tìm thấy chuyến bay\"}\n        self.service.remove_flight(code)\n        return {\"status\": 204}",
+        "cases": [
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})"
+            ],
+            "call": "api.delete('VN1')",
+            "expect": {
+              "return": {
+                "status": 204
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})"
+            ],
+            "call": "(api.delete('VN1'), list(svc.flights))[1]",
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)"
+            ],
+            "call": "api.delete('VN9')",
+            "expect": {
+              "return": {
+                "status": 404,
+                "error": "Không tìm thấy chuyến bay"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})",
+              "api.delete('VN1')"
+            ],
+            "call": "api.delete('VN1')",
+            "expect": {
+              "return": {
+                "status": 404,
+                "error": "Không tìm thấy chuyến bay"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FlightService()",
+              "api = FlightController(svc)",
+              "api.add({'code': 'VN1', 'origin': 'HAN', 'dest': 'SGN', 'capacity': 2})",
+              "api.add({'code': 'VN2', 'origin': 'HAN', 'dest': 'DAD', 'capacity': 3})"
+            ],
+            "call": "(api.delete('VN1'), list(svc.flights))[1]",
+            "expect": {
+              "return": [
                 "VN2"
               ]
             }

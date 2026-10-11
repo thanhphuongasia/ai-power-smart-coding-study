@@ -63,11 +63,14 @@ void main() {
         'clean-text',
         'save-document',
         'like-post',
+        'flight-init',
         'flight-seats-left',
         'flight-is-full',
         'flight-service-add',
         'flight-service-search',
         'schedule-flights-on',
+        'flight-controller-add',
+        'flight-controller-delete',
         'booking-book',
         'booking-cancel',
         'seat-map-assign',
@@ -78,13 +81,13 @@ void main() {
       expect(testContent.locateFilesNamed('chunker.py').length, 2);
     });
 
-    test('theme airline đứng đầu, cây ≥ 2 cấp module, 8 bài method', () {
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 11 bài method', () {
       final airline = testContent.themes.first;
       expect(airline.id, 'airline');
       expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
       expect(airline.allTopics.length, greaterThanOrEqualTo(4));
       final methods = allExercises.where((e) => e.className != null).toList();
-      expect(methods.length, 8);
+      expect(methods.length, 11);
       for (final e in methods) {
         final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
         expect(
@@ -244,11 +247,15 @@ void main() {
     test('challenge đủ nội dung cho mọi bài', () {
       for (final e in allExercises) {
         final c = e.challenge;
+        // Constructor được gọi qua tên class (`Flight(...)`), không ai gõ `__init__`.
+        final called = e.functionName == '__init__'
+            ? e.className!
+            : e.functionName;
         expect(c.statement, isNotEmpty, reason: e.id);
         expect(c.motivation, isNotEmpty, reason: e.id);
         for (final ex in [c.small, c.project]) {
           expect(ex.caption, isNotEmpty, reason: e.id);
-          expect(ex.input, contains(e.functionName), reason: e.id);
+          expect(ex.input, contains(called), reason: e.id);
           expect(ex.output, isNotEmpty, reason: e.id);
         }
       }
@@ -272,22 +279,38 @@ void main() {
       },
     );
 
-    test('block sau một block bắt đầu bằng return phải thụt sâu hơn', () {
+    test('không có ô nào nằm sau return trong cùng nhánh (code chết)', () {
+      // Ô kế tiếp chỉ chạy tới được nếu nhánh chứa `return` đã đóng: giữa hai
+      // marker phải có dòng thụt ÍT hơn ô return (vd `except`, hết `if`), hoặc
+      // ô kế thụt ít hơn hẳn (guard clause `if …: return` rồi code tiếp).
+      final marker = RegExp(r'^(\s*)# TODO ([A-Z])\s*$');
       for (final exercise in allExercises) {
-        for (var i = 0; i < exercise.blocks.length; i++) {
-          final block = exercise.blocks[i];
-          if (!block.acceptedAnswers.first.trim().startsWith('return')) {
+        final lines = exercise.template.split('\n');
+        int lineOf(String label) => lines.indexWhere((l) {
+          final m = marker.firstMatch(l);
+          return m != null && m.group(2) == label;
+        });
+        int indentOf(String l) => l.length - l.trimLeft().length;
+        final blocks = exercise.blocks;
+        for (var i = 0; i + 1 < blocks.length; i++) {
+          if (!blocks[i].acceptedAnswers.first.trim().startsWith('return')) {
             continue;
           }
-          for (var j = i + 1; j < exercise.blocks.length; j++) {
-            expect(
-              exercise.blocks[j].indentLevel > block.indentLevel,
-              isTrue,
-              reason:
-                  '${exercise.id}: ${exercise.blocks[j].id} sau return '
-                  '${block.id}',
-            );
-          }
+          final from = lineOf(blocks[i].label);
+          final to = lineOf(blocks[i + 1].label);
+          final retIndent = indentOf(lines[from]);
+          final closed =
+              indentOf(lines[to]) < retIndent ||
+              lines
+                  .sublist(from + 1, to)
+                  .any((l) => l.trim().isNotEmpty && indentOf(l) < retIndent);
+          expect(
+            closed,
+            isTrue,
+            reason:
+                '${exercise.id}: ${blocks[i + 1].id} nằm sau return '
+                '${blocks[i].id} trong cùng nhánh',
+          );
         }
       }
     });
