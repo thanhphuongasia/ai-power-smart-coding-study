@@ -77,7 +77,7 @@ def test_content_uses_fixed_number_of_queries(loaded_session, client_for):
     finally:
         event.remove(engine, "before_cursor_execute", listener)
     selects = [s for s in statements if s.lstrip().upper().startswith("SELECT")]
-    assert len(selects) <= 7, selects  # meta + 6 bảng, không phụ thuộc số bài
+    assert len(selects) <= 8, selects  # version (đầu + cuối) + 6 bảng, không phụ thuộc số bài
 
 
 def test_new_exercise_in_source_is_served_and_runnable(db_session, content_data, client_for):
@@ -160,3 +160,63 @@ def test_run_releases_db_session_before_judging(loaded_session, monkeypatch):
         app.dependency_overrides.clear()
     assert response.status_code == 200
     assert events == ["open", "close", "judge"]
+
+
+def test_read_retries_when_reload_commits_in_between(loaded_session, monkeypatch):
+    """Version đổi giữa lúc đọc (nạp lại xen vào) → đọc lại, không trả cây trộn hai bản."""
+    from app import content_api
+
+    versions = iter(["sha256:old", "sha256:new", "sha256:new", "sha256:new"])
+    monkeypatch.setattr(content_api, "_version", lambda session: next(versions))
+    reads = []
+    real = content_api._read_tree
+    monkeypatch.setattr(content_api, "_read_tree", lambda s: reads.append(1) or real(s))
+
+    payload = content_api.read_content(loaded_session)
+    assert payload["version"] == "sha256:new"
+    assert len(reads) == 2
+
+
+def test_read_retries_on_inconsistent_tree(loaded_session, monkeypatch):
+    from app import content_api
+
+    calls = {"n": 0}
+    real = content_api._read_tree
+
+    def flaky(session):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise KeyError("removed")  # file trỏ bài vừa bị xoá bởi lần nạp xen giữa
+        return real(session)
+
+    monkeypatch.setattr(content_api, "_read_tree", flaky)
+    assert content_api.read_content(loaded_session)["exercises"]
+    assert calls["n"] == 2
+
+
+def test_run_is_503_when_content_not_loaded(db_session, client_for):
+    """DB đã migrate nhưng chưa nạp: /run và /content cùng 503, /run không báo nhầm 404."""
+    client = client_for(db_session)
+    run = client.post("/run", json={"exercise_id": "clean-text", "code": "x = 1"})
+    assert run.status_code == 503
+    assert run.json() == {"detail": "content_not_loaded"}
+    assert client.get("/content").json() == {"detail": "content_not_loaded"}
+
+
+def test_orphan_exercise_is_listed_once_at_end_and_runnable(db_session, content_data, client_for):
+    """Bài không thuộc file nào vẫn có trên /content (cuối, theo id) và /run chấm được."""
+    data = copy.deepcopy(content_data)
+    orphan = copy.deepcopy(data["exercises"]["like-post"])
+    orphan["id"] = "zz-orphan"
+    for block in orphan["blocks"]:
+        block["id"] = block["id"].replace("like-post", "zz-orphan")
+    data["exercises"]["zz-orphan"] = orphan
+    load_content(db_session, data)
+    db_session.flush()
+
+    client = client_for(db_session)
+    ids = list(client.get("/content").json()["exercises"])
+    assert ids.count("zz-orphan") == 1
+    assert ids[-1] == "zz-orphan"
+    run = client.post("/run", json={"exercise_id": "zz-orphan", "code": orphan["judge"]["solution"]})
+    assert run.json()["status"] == "passed"

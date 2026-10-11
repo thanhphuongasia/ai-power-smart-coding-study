@@ -59,7 +59,7 @@ JUDGE0_LIVE=1 .venv/bin/python -m pytest -q    # thêm 1 test gọi Judge0 thậ
 | Phần | File | Việc |
 |---|---|---|
 | API | `app/main.py` | `POST /run`, nối router `/content` |
-| Nội dung | `app/content_api.py` | dựng payload `/content` từ DB (7 query cố định); tra phần chấm cho `/run` |
+| Nội dung | `app/content_api.py` | dựng payload `/content` từ DB (8 query cố định, đọc lại nếu đang nạp xen giữa); tra phần chấm cho `/run` |
 | Nạp | `app/load_content.py` | validate + thay toàn bộ nội dung, tính `version` (sha256 phần công khai) |
 | Bảng | `app/tables.py`, `migrations/` | SQLAlchemy + Alembic |
 | Harness | `app/harness.py` | chạy TRÊN máy chấm: đọc stdin, chạy code + test case, in 1 dòng `__JUDGE_RESULT__{json}` |

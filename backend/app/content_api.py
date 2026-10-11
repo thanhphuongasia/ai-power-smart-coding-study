@@ -1,6 +1,6 @@
 """Đọc nội dung học từ Postgres: payload `GET /content` (công khai) và phần chấm của một bài.
 
-Payload dựng từ đúng 7 query cố định (một query mỗi bảng), không N+1. Thứ tự theo `position`.
+Payload dựng từ 8 query cố định (version đầu + cuối, một query mỗi bảng), không N+1. Thứ tự theo `position`.
 `judge_solution`/`judge_cases` không bao giờ vào payload `/content`.
 """
 
@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,12 +26,39 @@ class Judge:
     cases: list
 
 
-def read_content(session: Session) -> dict | None:
-    """Toàn bộ cây nội dung đúng shape hợp đồng `/content`, hoặc None nếu chưa nạp lần nào."""
-    version = session.get(ContentMeta, "version")
-    if version is None:
-        return None
+class ContentNotLoaded(Exception):
+    """DB đã có bảng nhưng chưa nạp nội dung lần nào (chưa chạy load_content)."""
 
+
+_READ_ATTEMPTS = 3
+
+
+def _version(session: Session) -> str | None:
+    # select cột (không session.get) để luôn hỏi DB, không lấy từ identity map.
+    return session.scalar(select(ContentMeta.value).where(ContentMeta.key == "version"))
+
+
+def read_content(session: Session) -> dict:
+    """Toàn bộ cây nội dung đúng shape hợp đồng `/content`.
+
+    Bảy SELECT chạy ở READ COMMITTED nên một lần nạp lại có thể commit xen giữa. Nạp lại ghi
+    `version` cùng transaction với dữ liệu, nên version đầu == version cuối ⇒ mọi câu giữa thấy
+    cùng một bản. Khác nhau (hoặc cây lệch gây KeyError) thì đọc lại.
+    """
+    for _ in range(_READ_ATTEMPTS):
+        before = _version(session)
+        if before is None:
+            raise ContentNotLoaded()
+        try:
+            payload = _read_tree(session)
+        except KeyError:
+            continue
+        if _version(session) == before:
+            return {"version": before, **payload}
+    raise RuntimeError("Nội dung đang được nạp lại liên tục, đọc không ổn định")
+
+
+def _read_tree(session: Session) -> dict:
     themes = session.scalars(select(Theme).order_by(Theme.position)).all()
     topics = session.scalars(select(Topic).order_by(Topic.position)).all()
     files = session.scalars(select(CodeFile).order_by(CodeFile.position)).all()
@@ -79,7 +106,6 @@ def read_content(session: Session) -> dict | None:
     ordered_ids.extend(sorted(i for i in exercises if i not in ordered_ids))
 
     return {
-        "version": version.value,
         "themes": payload_themes,
         "exercises": {i: _exercise_payload(exercises[i], blocks_by_exercise[i]) for i in ordered_ids},
     }
@@ -112,9 +138,12 @@ def _exercise_payload(exercise: Exercise, blocks: list[Block]) -> dict:
 
 
 def read_judge(session: Session, exercise_id: str) -> Judge | None:
-    """Phần chấm của một bài cho `/run`; None nếu không có bài."""
+    """Phần chấm của một bài cho `/run`; None nếu không có bài. Chưa nạp nội dung → ContentNotLoaded
+    (để `/run` và `/content` cùng báo 503, không để `/run` báo nhầm "không có bài")."""
     exercise = session.get(Exercise, exercise_id)
     if exercise is None:
+        if _version(session) is None:
+            raise ContentNotLoaded()
         return None
     return Judge(function=exercise.function_name, cases=exercise.judge_cases)
 
@@ -138,7 +167,4 @@ def get_judge_lookup() -> JudgeLookup:
 
 @router.get("/content")
 def get_content(session: Session = Depends(get_session)) -> dict:
-    payload = read_content(session)
-    if payload is None:
-        raise HTTPException(status_code=503, detail="content_not_loaded")
-    return payload
+    return read_content(session)

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.exc import OperationalError
 
 from app import harness
-from app.content_api import JudgeLookup, get_judge_lookup
+from app.content_api import ContentNotLoaded, JudgeLookup, get_judge_lookup
 from app.content_api import router as content_router
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
 
@@ -71,6 +71,11 @@ async def _database_unavailable(request: Request, exc: OperationalError) -> JSON
     # DB chết / không kết nối được: 503 có nghĩa thay vì 500, không lộ chi tiết kết nối.
     logger.warning("database unavailable on %s: %s", request.url.path, type(exc.orig).__name__)
     return JSONResponse(status_code=503, content={"detail": "database_unavailable"})
+
+
+@app.exception_handler(ContentNotLoaded)
+async def _content_not_loaded(request: Request, exc: ContentNotLoaded) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "content_not_loaded"})
 
 
 class RunError(BaseModel):
