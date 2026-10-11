@@ -51,10 +51,10 @@ ssh vps sudo cat /etc/smart-coding-study/initial-passwords
 
 Nhiều dòng cùng một email (lần seed trước lỗi giữa chừng) thì dòng **cuối** là đúng. Đăng nhập rồi đổi mật khẩu (nút tài khoản → Đổi mật khẩu), sau đó nên xoá file:
 `ssh vps sudo rm /etc/smart-coding-study/initial-passwords`. User đã có thì seed không đổi mật khẩu.
-Đặt lại mật khẩu (gõ ở prompt ẩn, không nằm trong lịch sử shell; thu hồi mọi phiên cũ):
+Đặt lại mật khẩu (thu hồi mọi phiên cũ của user đó; thay `MAT_KHAU`):
 
 ```bash
-ssh -t vps 'sudo bash -c "cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.set_password test@gmail.com"'
+printf '%s' 'MAT_KHAU' | ssh vps 'cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.set_password test@gmail.com'
 ```
 
 Chưa có trang quản lý user: thêm user = thêm vào `SEED_USERS` trong `backend/app/seed_users.py` rồi deploy.
