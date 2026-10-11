@@ -17,4 +17,8 @@ cd "$CI_PRIMARY_REPOSITORY_PATH/mobile"
 flutter config --no-analytics
 flutter precache --ios
 flutter pub get
-flutter build ios --config-only --release --no-codesign
+flutter build ios \
+  --config-only \
+  --release \
+  --no-codesign \
+  --dart-define=API_URL=https://codewithphuong.jacons-corp.com
