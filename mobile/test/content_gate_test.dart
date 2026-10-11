@@ -12,6 +12,7 @@ import 'package:smart_coding_study/data/content_repository.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/domain/models.dart';
 import 'package:smart_coding_study/main.dart';
+import 'support/auth_fixture.dart';
 import 'support/content_fixture.dart';
 
 const fakeThemeName = 'Chủ đề giả từ máy chủ';
@@ -44,6 +45,7 @@ class FakeRepo implements ContentRepository {
 /// Giống main.dart: override ở gốc + ContentGate bọc app.
 Widget app(FakeRepo repo) => ProviderScope(
   overrides: [
+    ...authOverrides(),
     contentRepositoryProvider.overrideWithValue(repo),
     contentIndexProvider.overrideWith(
       (ref) => ref.watch(contentProvider).requireValue.content,
@@ -201,6 +203,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              ...authOverrides(),
               contentRepositoryProvider.overrideWithValue(repo),
               contentIndexProvider.overrideWith(
                 (ref) => ref.watch(contentProvider).requireValue.content,

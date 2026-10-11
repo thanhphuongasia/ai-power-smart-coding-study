@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/auth_gate.dart';
 import 'app/content_gate.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
@@ -15,7 +16,7 @@ void main() {
           (ref) => ref.watch(contentProvider).requireValue.content,
         ),
       ],
-      child: const ContentGate(child: SmartCodingStudyApp()),
+      child: const ContentGate(child: AuthGate(child: SmartCodingStudyApp())),
     ),
   );
 }

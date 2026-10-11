@@ -8,7 +8,9 @@ nên con luôn đứng sau cha và thứ tự anh em giữ đúng như `content.
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -116,3 +118,66 @@ class ContentMeta(Base):
 
     key: Mapped[str] = mapped_column(String(50), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+# --- Người dùng và tiến độ -------------------------------------------------------------------
+# Không nằm trong vòng thay toàn bộ của load_content: nạp lại nội dung KHÔNG được đụng các bảng này.
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(254))
+    # argon2id; mật khẩu thô không bao giờ được lưu.
+    password_hash: Mapped[str] = mapped_column(Text)
+    # Tập con của {"learner", "admin"}.
+    roles: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserSession(Base):
+    """Phiên đăng nhập. Chỉ lưu sha256 của token: lộ bảng này không dùng được token."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class UserProgress(Base):
+    """Tiến độ một bài của một user.
+
+    `exercise_id` là chuỗi, KHÔNG FK tới exercises: load_content xoá-rồi-ghi toàn bộ nội dung, FK
+    cascade sẽ xoá sạch tiến độ mỗi lần nạp lại / admin lưu.
+    """
+
+    __tablename__ = "user_progress"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    exercise_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    # Chỉ server ghi (khi /run trả passed cho user đã đăng nhập).
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    drafts: Mapped[dict] = mapped_column(JSONB, default=dict)
+    hints_used: Mapped[dict] = mapped_column(JSONB, default=dict)
+    solution_viewed: Mapped[list] = mapped_column(JSONB, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserState(Base):
+    """Trạng thái học không gắn với một bài: lịch ôn (review) và số hoạt động theo ngày (activity)."""
+
+    __tablename__ = "user_state"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    review: Mapped[dict] = mapped_column(JSONB, default=dict)
+    activity: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
+import 'support/auth_fixture.dart';
 import 'support/content_fixture.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
@@ -19,6 +20,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         ...contentOverrides,
+        ...authOverrides(),
         clockProvider.overrideWithValue(() => DateTime(2026, 3, 10, 9)),
       ],
       child: const SmartCodingStudyApp(),

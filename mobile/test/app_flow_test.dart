@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/data/judge_client.dart';
+import 'support/auth_fixture.dart';
 import 'support/content_fixture.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
@@ -58,6 +59,7 @@ void main() {
       ProviderScope(
         overrides: [
           ...contentOverrides,
+          ...authOverrides(),
           clockProvider.overrideWithValue(() => clock),
           judgeClientProvider.overrideWithValue(judge),
         ],

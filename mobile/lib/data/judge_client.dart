@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import 'api_client.dart';
 import 'content_repository.dart' show apiBaseUrl;
 
 enum JudgeStatus { passed, failed, error, timeout, unavailable }
@@ -141,4 +142,6 @@ class JudgeClient {
   }
 }
 
-final judgeClientProvider = Provider<JudgeClient>((ref) => JudgeClient());
+final judgeClientProvider = Provider<JudgeClient>(
+  (ref) => JudgeClient(httpClient: ref.watch(apiClientProvider)),
+);

@@ -1,5 +1,6 @@
-"""API: `GET /content` (nội dung học từ Postgres, xem content_api.py) và `POST /run` (ghép
-harness + test case của bài trong DB rồi gửi cho máy chấm).
+"""API: `GET /content` (nội dung học từ Postgres, xem content_api.py), `POST /run` (ghép
+harness + test case của bài trong DB rồi gửi cho máy chấm; có Bearer hợp lệ thì ghi `passed` cho
+user), và `/api/*` (đăng nhập — auth.py, tiến độ — progress.py, quản trị nội dung — admin_api.py).
 
 Chạy: `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000` (xem README.md).
 """
@@ -21,8 +22,13 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.exc import OperationalError
 
 from app import harness
+from app.admin_api import router as admin_router
+from app.auth import UserLookup, get_user_lookup, optional_bearer
+from app.auth import router as auth_router
 from app.content_api import ContentNotLoaded, JudgeLookup, get_judge_lookup
 from app.content_api import router as content_router
+from app.progress import PassRecorder, get_pass_recorder
+from app.progress import router as progress_router
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
 
 logger = logging.getLogger("judge")
@@ -32,6 +38,8 @@ HARNESS_SOURCE = (APP_DIR / "harness.py").read_text(encoding="utf-8")
 MAX_CODE_CHARS = 8000
 # 8000 ký tự UTF-8 tối đa ~32KB, cộng JSON escape: 64KB là đủ rộng cho request hợp lệ.
 MAX_BODY_BYTES = 64 * 1024
+# Admin gửi cả bộ nội dung (content.json ~vài trăm KB) khi kiểm tra/lưu.
+MAX_ADMIN_BODY_BYTES = 4 * 1024 * 1024
 # Máy chấm công khai giới hạn theo IP: không bắn quá 4 bài cùng lúc từ một backend.
 _RUN_SLOTS = asyncio.Semaphore(4)
 # Tạo lúc import: CODE_RUNNER sai thì server không khởi động được, thay vì 500 ở request đầu.
@@ -39,16 +47,23 @@ _RUNNER = runner_from_env()
 
 app = FastAPI(title="Smart Coding Study")
 app.include_router(content_router)
+app.include_router(auth_router)
+app.include_router(progress_router)
+app.include_router(admin_router)
+
+
+def _body_limit(path: str) -> int:
+    return MAX_ADMIN_BODY_BYTES if path.startswith("/api/admin/") else MAX_BODY_BYTES
 
 
 @app.middleware("http")
 async def _limit_body(request: Request, call_next):
     # Field(max_length) chỉ kiểm SAU khi đọc hết body; chặn body lớn trước khi đọc.
-    if request.method == "POST":
+    if request.method in ("POST", "PUT"):
         length = request.headers.get("content-length")
         if length is None or not length.isdigit():
             return JSONResponse(status_code=411, content={"detail": "length_required"})
-        if int(length) > MAX_BODY_BYTES:
+        if int(length) > _body_limit(request.url.path):
             return JSONResponse(status_code=413, content={"detail": "body_too_large"})
     return await call_next(request)
 
@@ -108,12 +123,17 @@ async def run(
     request: RunRequest,
     runner: CodeRunner = Depends(get_runner),
     lookup_judge: JudgeLookup = Depends(get_judge_lookup),
+    token: str | None = Depends(optional_bearer),
+    lookup_user: UserLookup = Depends(get_user_lookup),
+    record_pass: PassRecorder = Depends(get_pass_recorder),
 ) -> RunResponse:
     # Tra DB (sync) trong threadpool để không chặn event loop; kết nối trả lại pool trước khi
     # chờ máy chấm.
     judge = await run_in_threadpool(lookup_judge, request.exercise_id)
     if judge is None:
         raise HTTPException(status_code=404, detail="exercise_not_found")
+    # Token sai/hết hạn: vẫn chấm như khách (không ghi tiến độ), không chặn việc Run.
+    user = await run_in_threadpool(lookup_user, token) if token else None
 
     payload = json.dumps(
         {
@@ -141,9 +161,14 @@ async def run(
         # Code học viên chạy cùng tiến trình với harness nên có thể in một dòng kết quả
         # sai dạng; dòng đó coi như không đọc được, không để thành 500.
         try:
-            return RunResponse.model_validate({**result, "duration_ms": duration_ms})
+            response = RunResponse.model_validate({**result, "duration_ms": duration_ms})
         except ValidationError:
             logger.warning("harness result has wrong shape for %s", request.exercise_id)
+        else:
+            # Chỉ server ghi passed, và chỉ khi máy chấm xác nhận (client không tự khai được).
+            if user is not None and response.status == "passed":
+                await run_in_threadpool(record_pass, user.id, request.exercise_id)
+            return response
     if execution.status == "error":
         # Harness bị dừng trước khi in kết quả (vd hết bộ nhớ): lỗi do code học viên.
         message = execution.message or (execution.stderr.strip().splitlines() or ["Chương trình bị dừng"])[-1]
