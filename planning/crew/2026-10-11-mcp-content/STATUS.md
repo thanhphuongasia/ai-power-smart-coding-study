@@ -12,11 +12,11 @@ identity-service: PR #5 — https://github.com/thanhphuongasia/identity-service/
 | T-03 mcp_access API + CLI | T2 | đóng — PASS với Minor (Backlog) |
 | T-04 /mcp server + tool | L4 orchestrator | đóng — r2 PASS với Minor; external Major (thiếu test) đã thêm test + mutation |
 | T-05 deploy + README | T1 | đóng — PASS với Minor (1, 2 đã sửa) |
-| T-06 identity-service AllowedResources | L1 orchestrator | PR #5 mở, dotnet test 99/99 — chờ user merge + deploy |
+| T-06 identity-service AllowedResources | L1 orchestrator | đóng — PR #5 merge 85625e2 (user cho phép), deploy VPS exit 0, metadata/JWKS 200 |
 
 Trạng thái: app đã lên main bbf751d + deploy production (smoke MCP qua nginx OK). SEAM 7/7 CÒN ĐÚNG, verify-seam exit 0.
 
-Next action: user merge identity-service PR #5 → deploy identity-service → user thêm connector https://codewithphuong.jacons-corp.com/mcp trên claude.ai → lấy sub từ thông báo tool → `python -m app.mcp_access allow <sub> --as <email admin>` trên VPS → thử list_projects.
+Next action: user thêm connector https://codewithphuong.jacons-corp.com/mcp trên claude.ai → lấy sub từ thông báo tool → `python -m app.mcp_access allow <sub> --as <email admin>` trên VPS → thử list_projects.
 
 ## Bằng chứng
 
