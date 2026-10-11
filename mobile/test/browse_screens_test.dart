@@ -181,6 +181,19 @@ void main() {
       findsOneWidget,
     );
     expect(controller.hitTestable(), findsNothing);
+    // START ở bài kế tiếp; bài đầu file sau đã mở nhưng chưa tới lượt → JUMP.
+    expect(find.byKey(const Key('start-flight-init')), findsOneWidget);
+    expect(find.byKey(const Key('jump-flight-init')), findsNothing);
+    expect(
+      find.byKey(const Key('jump-flight-seats-left')),
+      findsNothing,
+    ); // khoá
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('jump-flight-service-add')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('JUMP HERE?'), findsWidgets);
     await tester.scrollUntilVisible(
       controller,
       400,

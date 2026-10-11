@@ -264,9 +264,9 @@ class _LessonPathState extends State<_LessonPath> {
               ),
               for (var i = 0; i < ex.length; i++)
                 Positioned(
-                  left: center(i).dx - _LessonPath.hexW / 2 - 30,
+                  left: center(i).dx - _LessonPath.hexW / 2 - 50,
                   top: i * _LessonPath.rowHeight,
-                  width: _LessonPath.hexW + 60,
+                  width: _LessonPath.hexW + 100,
                   child: _PathNode(
                     exercise: ex[i],
                     state: _stateOf(ex[i]),
@@ -409,6 +409,13 @@ class _PathNode extends StatelessWidget {
               height: _LessonPath.nodeTop,
               child: isNext
                   ? _StartBubble(key: Key('start-${exercise.id}'))
+                  // Đã mở nhưng chưa tới lượt: mời nhảy cóc, chữ nhạt.
+                  : state == _NodeState.fresh || state == _NodeState.started
+                  ? _StartBubble(
+                      key: Key('jump-${exercise.id}'),
+                      text: 'JUMP HERE?',
+                      faded: true,
+                    )
                   : null,
             ),
             SizedBox(
@@ -516,14 +523,18 @@ class _LessonPopover extends StatelessWidget {
   }
 }
 
-/// Bong bóng START có đuôi nhọn chỉ xuống nút.
+/// Bong bóng có đuôi nhọn chỉ xuống nút: START (bài kế tiếp) hoặc, chữ nhạt,
+/// JUMP HERE? (bài đã mở nhưng chưa tới lượt).
 class _StartBubble extends StatelessWidget {
-  const _StartBubble({super.key});
+  const _StartBubble({super.key, this.text = 'START', this.faded = false});
+
+  final String text;
+  final bool faded;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final border = p.outline.withValues(alpha: 0.4);
+    final border = p.outline.withValues(alpha: faded ? 0.25 : 0.4);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -535,9 +546,11 @@ class _StartBubble extends StatelessWidget {
             border: Border.all(color: border, width: 2),
           ),
           child: Text(
-            'START',
+            text,
+            maxLines: 1,
+            softWrap: false,
             style: AppText.label.copyWith(
-              color: p.primary,
+              color: p.primary.withValues(alpha: faded ? 0.45 : 1),
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
             ),
