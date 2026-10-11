@@ -181,6 +181,16 @@ def diagram() -> dict:
     }
 
 
+def test_version_changes_when_diagram_changes():
+    """Sơ đồ là nội dung công khai: đổi sơ đồ phải đổi version để app bỏ cache cũ."""
+    from app.load_content import compute_version
+
+    a = small()
+    b = small()
+    b["themes"][0]["diagram"] = diagram()
+    assert compute_version(a) != compute_version(b)
+
+
 def test_diagram_stored_on_theme(db_session):
     d = small()
     d["themes"][0]["diagram"] = diagram()
@@ -375,4 +385,4 @@ def test_public_payload_validates_against_shared_model(real_data):
     from app.content_schema import ContentPayload
 
     payload = {"version": "sha256:x", **public_payload(real_data)}
-    assert ContentPayload.model_validate(payload).model_dump() == payload
+    assert ContentPayload.model_validate(payload).model_dump(by_alias=True) == payload

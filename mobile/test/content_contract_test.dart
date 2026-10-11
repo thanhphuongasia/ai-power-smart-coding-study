@@ -1,11 +1,13 @@
 // Hợp đồng nội dung trên backend/content/content.json (nguồn thật):
 //  - INV-05: marker `# TODO <label>` đúng một lần mỗi ô, thụt = 4 × indent_level.
 //  - INV-04: ghép lời giải các ô vào template = judge.solution từng ký tự.
+//  - INV-02/03 + quan hệ: sơ đồ lớp (theme.diagram) khớp code các bài.
 // Thay cho seed_test.dart (luật nội dung) + judge_contract_test.dart.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/domain/answer_checker.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/domain/merge.dart';
+import 'package:smart_coding_study/domain/models.dart';
 
 import 'support/content_fixture.dart';
 
@@ -344,6 +346,93 @@ void main() {
         contains('Nhân viên được nghỉ phép 12 ngày/năm.'),
       );
       expect(c.project.input, contains(', 30)'));
+    });
+  });
+
+  group('sơ đồ lớp (theme.diagram) khớp bài tập', () {
+    final rawThemes = {
+      for (final t in contentJson['themes'] as List)
+        (t as Map<String, dynamic>)['id'] as String: t,
+    };
+    Map<String, dynamic> diagramOf(String themeId) =>
+        rawThemes[themeId]!['diagram'] as Map<String, dynamic>;
+    List<Map<String, dynamic>> classesOf(String themeId) => [
+      for (final c in diagramOf(themeId)['classes'] as List)
+        c as Map<String, dynamic>,
+    ];
+    String mergedCode(Exercise e) => mergeCells(e, {
+      for (final b in e.blocks) b.label: b.acceptedAnswers.first,
+    }).code;
+
+    test(
+      'INV-02: thuộc tính/phương thức trong sơ đồ có trong code bài của lớp',
+      () {
+        for (final theme in testContent.themes) {
+          for (final cls in classesOf(theme.id)) {
+            final name = cls['name'] as String;
+            // Bài của lớp đó; thêm bản rút gọn `class Name` nằm trong file bài
+            // khác (vd FlightService.remove_flight chỉ có trong bài controller).
+            final themeCodes = [
+              for (final e in allExercises)
+                if (testContent.locateExercise(e.id).theme.id == theme.id)
+                  (e: e, code: mergedCode(e)),
+            ];
+            if (!themeCodes.any((x) => x.e.className == name)) continue;
+            final codes = [
+              for (final x in themeCodes)
+                if (x.e.className == name || x.code.contains('class $name'))
+                  x.code,
+            ];
+            for (final a in cls['attributes'] as List) {
+              final attr = (a as Map<String, dynamic>)['name'] as String;
+              expect(
+                codes.any((c) => c.contains('self.$attr =')),
+                isTrue,
+                reason: '$name.$attr: không bài nào có "self.$attr ="',
+              );
+            }
+            for (final m in cls['methods'] as List) {
+              expect(
+                codes.any((c) => c.contains('def $m(')),
+                isTrue,
+                reason: '$name.$m(): không bài nào có "def $m("',
+              );
+            }
+          }
+        }
+      },
+    );
+
+    test('INV-03: mọi bài có class_name đều có lớp đó trong sơ đồ theme', () {
+      for (final e in allExercises) {
+        final cn = e.className;
+        if (cn == null) continue;
+        final themeId = testContent.locateExercise(e.id).theme.id;
+        expect(
+          classesOf(themeId).any((c) => c['name'] == cn),
+          isTrue,
+          reason: '${e.id}: lớp $cn thiếu trong diagram của theme $themeId',
+        );
+      }
+    });
+
+    test('quan hệ trỏ tới lớp có thật và via ⊆ methods của from', () {
+      for (final theme in testContent.themes) {
+        final classes = {
+          for (final c in classesOf(theme.id)) c['name'] as String: c,
+        };
+        for (final r in diagramOf(theme.id)['relations'] as List) {
+          final rel = r as Map<String, dynamic>;
+          final from = rel['from'] as String;
+          final to = rel['to'] as String;
+          expect(classes.containsKey(from), isTrue, reason: 'from $from');
+          expect(classes.containsKey(to), isTrue, reason: 'to $to');
+          final methods = (classes[from]!['methods'] as List).cast<String>();
+          for (final v in rel['via'] as List) {
+            expect(methods, contains(v), reason: '$from→$to via $v');
+          }
+        }
+      }
     });
   });
 }

@@ -11,8 +11,205 @@
         "booking"
       ],
       "diagram": {
-        "classes": [],
-        "relations": []
+        "classes": [
+          {
+            "name": "Flight",
+            "file": "models/flight.py",
+            "attributes": [
+              {
+                "name": "code",
+                "type": "str",
+                "group": "core"
+              },
+              {
+                "name": "origin",
+                "type": "str",
+                "group": "core"
+              },
+              {
+                "name": "dest",
+                "type": "str",
+                "group": "core"
+              },
+              {
+                "name": "capacity",
+                "type": "int",
+                "group": "core"
+              },
+              {
+                "name": "booked",
+                "type": "int",
+                "group": "support"
+              },
+              {
+                "name": "status",
+                "type": "str",
+                "group": "support"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "seats_left",
+              "is_full"
+            ]
+          },
+          {
+            "name": "FlightService",
+            "file": "services/flight_service.py",
+            "attributes": [
+              {
+                "name": "flights",
+                "type": "dict[str, Flight]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "add_flight",
+              "remove_flight",
+              "search"
+            ]
+          },
+          {
+            "name": "Schedule",
+            "file": "services/schedule.py",
+            "attributes": [
+              {
+                "name": "by_date",
+                "type": "dict[str, list[str]]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "add",
+              "flights_on"
+            ]
+          },
+          {
+            "name": "FlightController",
+            "file": "controllers/flight_controller.py",
+            "attributes": [
+              {
+                "name": "service",
+                "type": "FlightService",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "add",
+              "delete"
+            ]
+          },
+          {
+            "name": "BookingService",
+            "file": "services/booking_service.py",
+            "attributes": [
+              {
+                "name": "free",
+                "type": "dict[str, int]",
+                "group": "core"
+              },
+              {
+                "name": "reservations",
+                "type": "dict[str, tuple[str, str, int]]",
+                "group": "core"
+              },
+              {
+                "name": "counter",
+                "type": "int",
+                "group": "support"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "book",
+              "cancel"
+            ]
+          },
+          {
+            "name": "SeatMap",
+            "file": "seating/seat_map.py",
+            "attributes": [
+              {
+                "name": "valid",
+                "type": "set[str]",
+                "group": "core"
+              },
+              {
+                "name": "taken",
+                "type": "dict[str, str]",
+                "group": "support"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "assign_seat"
+            ]
+          }
+        ],
+        "relations": [
+          {
+            "from": "FlightService",
+            "to": "Flight",
+            "kind": "aggregation",
+            "label": "flights: mã → Flight",
+            "via": [
+              "add_flight",
+              "remove_flight",
+              "search"
+            ]
+          },
+          {
+            "from": "Schedule",
+            "to": "Flight",
+            "kind": "association",
+            "label": "lịch theo ngày: ngày → mã chuyến",
+            "via": [
+              "add",
+              "flights_on"
+            ]
+          },
+          {
+            "from": "FlightController",
+            "to": "FlightService",
+            "kind": "dependency",
+            "label": "gọi service thêm/xoá chuyến",
+            "via": [
+              "add",
+              "delete"
+            ]
+          },
+          {
+            "from": "FlightController",
+            "to": "Flight",
+            "kind": "dependency",
+            "label": "tạo Flight từ payload",
+            "via": [
+              "add"
+            ]
+          },
+          {
+            "from": "BookingService",
+            "to": "Flight",
+            "kind": "association",
+            "label": "trừ/hoàn ghế của chuyến (booked)",
+            "via": [
+              "book",
+              "cancel"
+            ]
+          },
+          {
+            "from": "SeatMap",
+            "to": "Flight",
+            "kind": "association",
+            "label": "sơ đồ ghế của một chuyến",
+            "via": [
+              "assign_seat"
+            ]
+          }
+        ]
       },
       "topics": [
         {
