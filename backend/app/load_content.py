@@ -13,9 +13,11 @@ import sys
 from collections import Counter
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.content_schema import SourceContent
 from app.tables import Block, CodeFile, ContentMeta, Exercise, FileExercise, Theme, Topic
 
 DEFAULT_PATH = "content/content.json"
@@ -43,6 +45,14 @@ def _duplicates(ids: list[str]) -> list[str]:
 
 def validate(data: dict) -> None:
     """Ném ValueError nêu rõ chỗ sai. Không đụng DB."""
+    try:
+        SourceContent.model_validate(data)
+    except ValidationError as exc:
+        details = "; ".join(
+            f'{".".join(str(p) for p in err["loc"])}: {err["msg"]}' for err in exc.errors()
+        )
+        raise ValueError("content sai hình dạng: " + details) from None
+
     errors: list[str] = []
     themes = data.get("themes")
     exercises = data.get("exercises")

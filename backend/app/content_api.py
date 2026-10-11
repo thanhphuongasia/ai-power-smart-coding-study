@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.content_schema import ContentPayload
 from app.db import SessionLocal, get_session
 from app.tables import Block, CodeFile, ContentMeta, Exercise, FileExercise, Theme, Topic
 
@@ -165,6 +166,6 @@ def get_judge_lookup() -> JudgeLookup:
     return lookup
 
 
-@router.get("/content")
+@router.get("/content", response_model=ContentPayload)
 def get_content(session: Session = Depends(get_session)) -> dict:
     return read_content(session)

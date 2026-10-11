@@ -37,7 +37,12 @@ def small() -> dict:
     def ex(i: str) -> dict:
         return {
             "id": i, "title": i, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
-            "challenge": {"statement": "s"}, "blocks": [block(i + "-a", "A"), block(i + "-b", "B")],
+            "challenge": {
+                "statement": "s", "motivation": "m",
+                "small": {"caption": "c", "input": "f(1)", "output": "1", "note": None},
+                "project": {"caption": "c", "input": "f(2)", "output": "2", "note": "n"},
+            },
+            "blocks": [block(i + "-a", "A"), block(i + "-b", "B")],
             "judge": {"solution": "def f(a):\n    return a", "cases": [{"args": [1], "expect": {"return": 1}}]},
         }
 
@@ -141,7 +146,7 @@ def _bad_dup_label():
     [
         (_bad_duplicate_id, "trùng"),
         (_bad_unknown_exercise, "nope"),
-        (_bad_no_judge, "judge.solution"),
+        (_bad_no_judge, "exercises.e1.judge"),
         (_bad_no_cases, "judge.cases"),
         (_bad_dup_label, "label"),
     ],
@@ -172,3 +177,66 @@ def test_every_exercise_has_judge(real_data):
     for key, ex in real_data["exercises"].items():
         assert ex["judge"]["solution"], key
         assert ex["judge"]["cases"], key
+
+
+# ---- Hình dạng (M1): sai shape bị chặn lúc nạp, DB giữ bản cũ ----
+
+def _del_caption(d):
+    del d["exercises"]["split-chunks"]["challenge"]["small"]["caption"]
+
+
+def _indent_str(d):
+    d["exercises"]["split-chunks"]["blocks"][0]["indent_level"] = "1"
+
+
+def _indent_float(d):
+    d["exercises"]["split-chunks"]["blocks"][0]["indent_level"] = 1.0
+
+
+def _extra_block_key(d):
+    d["exercises"]["split-chunks"]["blocks"][0]["extra_key"] = "x"
+
+
+def _hints_not_str(d):
+    d["exercises"]["split-chunks"]["blocks"][0]["hints"] = ["a", 2, "c"]
+
+
+def _no_note_key(d):
+    del d["exercises"]["split-chunks"]["challenge"]["project"]["note"]
+
+
+@pytest.mark.parametrize(
+    "mutate,path",
+    [
+        (_del_caption, "exercises.split-chunks.challenge.small.caption"),
+        (_indent_str, "exercises.split-chunks.blocks.0.indent_level"),
+        (_indent_float, "exercises.split-chunks.blocks.0.indent_level"),
+        (_extra_block_key, "exercises.split-chunks.blocks.0.extra_key"),
+        (_hints_not_str, "exercises.split-chunks.blocks.0.hints.1"),
+        (_no_note_key, "exercises.split-chunks.challenge.project.note"),
+    ],
+)
+def test_wrong_shape_raises_with_path_and_keeps_db(db_session, real_data, mutate, path):
+    old = load_content(db_session, real_data)
+    bad = copy.deepcopy(real_data)
+    mutate(bad)
+    with pytest.raises(ValueError) as err:
+        load_content(db_session, bad)
+    assert path in str(err.value)
+    assert db_session.get(ContentMeta, "version").value == old
+    assert count(db_session, Exercise) == 5
+    assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
+
+
+def test_note_null_is_valid(db_session):
+    d = small()
+    assert d["exercises"]["e1"]["challenge"]["small"]["note"] is None
+    load_content(db_session, d)
+    assert count(db_session, Exercise) == 2
+
+
+def test_public_payload_validates_against_shared_model(real_data):
+    from app.content_schema import ContentPayload
+
+    payload = {"version": "sha256:x", **public_payload(real_data)}
+    assert ContentPayload.model_validate(payload).model_dump() == payload
