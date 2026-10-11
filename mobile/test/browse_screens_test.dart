@@ -12,6 +12,8 @@ import 'package:smart_coding_study/features/browse/theme_detail_screen.dart';
 import 'package:smart_coding_study/features/browse/topic_detail_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/practice/practice_screen.dart';
+import 'package:smart_coding_study/data/content_providers.dart';
+import 'package:smart_coding_study/domain/content.dart';
 import 'support/content_fixture.dart';
 
 GoRouter _buildTestRouter([String initialLocation = '/']) {
@@ -225,5 +227,110 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('module lồng nhau', () {
+    Map<String, dynamic> ex(String id, String? cls) => {
+      'id': id,
+      'title': id,
+      'function_name': 'search',
+      'class_name': cls,
+      'params': <String>[],
+      'template': '',
+      'challenge': {
+        'statement': '',
+        'motivation': '',
+        'small': {'caption': '', 'input': '', 'output': '', 'note': null},
+        'project': {'caption': '', 'input': '', 'output': '', 'note': null},
+      },
+      'blocks': <Map<String, dynamic>>[],
+    };
+
+    final nested = Content.fromJson({
+      'version': 'n1',
+      'themes': [
+        {
+          'id': 'th',
+          'name': 'Airline',
+          'description': '',
+          'tags': <String>[],
+          'topics': [
+            {
+              'id': 'booking',
+              'name': 'Booking',
+              'description': '',
+              'files': <Map<String, dynamic>>[],
+              'modules': [
+                {
+                  'id': 'search-mod',
+                  'name': 'Search',
+                  'description': 'Tìm chuyến bay',
+                  'files': [
+                    {
+                      'id': 'f-svc',
+                      'name': 'service.py',
+                      'exercise_ids': ['e1', 'e2'],
+                    },
+                  ],
+                  'modules': <Map<String, dynamic>>[],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      'exercises': {
+        'e1': ex('e1', 'FlightService'),
+        'e2': ex('e2', 'FlightService'),
+      },
+    });
+
+    Future<void> pumpNested(WidgetTester tester, String location) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [contentIndexProvider.overrideWithValue(nested)],
+          child: MaterialApp.router(
+            theme: buildAppTheme(),
+            routerConfig: _buildTestRouter(location),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Theme card đếm cả bài trong module con', (tester) async {
+      await pumpNested(tester, '/theme/th');
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('topic-booking')),
+          matching: find.text('2 bài tập'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Topic -> module con: breadcrumb, header class, tên đầy đủ', (
+      tester,
+    ) async {
+      await pumpNested(tester, '/topic/booking');
+      final card = find.byKey(const Key('module-search-mod'));
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('2 bài tập')),
+        findsOneWidget,
+      );
+
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Airline › Booking › Search'), findsOneWidget);
+      // Hai bài liên tiếp cùng class -> một header duy nhất.
+      expect(
+        find.byKey(const Key('class-f-svc-FlightService')),
+        findsOneWidget,
+      );
+      expect(find.text('class FlightService'), findsOneWidget);
+      expect(find.text('FlightService.search()'), findsNWidgets(2));
+    });
   });
 }

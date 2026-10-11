@@ -73,7 +73,7 @@ class ExerciseRow extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${exercise.functionName}()',
+                    '${exercise.qualifiedName}()',
                     style: AppText.code.copyWith(color: context.palette.ink),
                   ),
                   const SizedBox(height: AppSpace.s1),

@@ -69,7 +69,7 @@ class _TopicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final exercises = [for (final file in topic.files) ...file.exercises];
+    final exercises = [for (final file in topic.allFiles) ...file.exercises];
     final totalBlocks = totalBlocksIn(exercises);
     final doneBlocks = completedBlocksIn(exercises, progress);
 
