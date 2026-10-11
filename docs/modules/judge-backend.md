@@ -60,8 +60,8 @@ của namespace nên state không rò giữa các case:
 scope = dict(namespace)  # mỗi case một bản sao mới: state không rò giữa các case
 ```
 (backend/app/harness.py:58; `raises` so tên trong MRO của exception, backend/app/harness.py:75-78). Harness kiểm
-`class_name` là class và có method trước khi chạy, thiếu thì báo "Không tìm thấy class/method ..."
-(backend/app/harness.py:123-139). Lỗi soạn case (không compile được, `expect` thiếu `return`/`raises`, bài
+`class_name` là class và class có thành viên tên `function` trước khi chạy, thiếu thì báo "Không tìm thấy class/method ..."
+(backend/app/harness.py:123-139). Phép kiểm thành viên là `hasattr`, không phải `callable`: bài về `property` (như `owner_name`, `balance` của `BankAccount`) có `function` là property, không gọi được trực tiếp trên class, nhưng vẫn là thành viên hợp lệ (backend/app/harness.py:131-132, test backend/tests/test_harness.py:262). Lỗi soạn case (không compile được, `expect` thiếu `return`/`raises`, bài
 method mà có case không phải dạng `call`) bị chặn lúc nạp nội dung, không tới được harness
 (backend/app/load_content.py:49-67,111-117). Tổng quan xem docs/ARCHITECTURE.md mục "Chấm bài method".
 
@@ -89,6 +89,14 @@ Giới hạn tài nguyên mỗi lần chạy gửi kèm: `cpu_time_limit=2`, `wa
 backend/app/runner.py:69-77); tối đa 4 request đồng thời tới máy chấm
 (backend/app/main.py:36); body tối đa 64KB (backend/app/main.py:34,44-53).
 
+Bài chấm output in ra: bài như `display_info` kiểm chuỗi in ra, nên case phải bắt stdout bằng `redirect_stdout` rồi lấy một dòng làm `call`. Nếu chỉ có case dùng giá trị mặc định, học viên gõ cứng chuỗi (`print("Interest Rate: 2.0%")`) vẫn qua. Bài loại này bắt buộc có thêm một case đổi class variable (`BankAccount.interest_rate = 0.05`) trong `try/finally` trả lại giá trị cũ, rồi mong đợi chuỗi theo giá trị mới:
+
+```json
+"BankAccount.interest_rate = 0.05",
+"try:\n    with contextlib.redirect_stdout(buf):\n        acc.display_info()\nfinally:\n    BankAccount.interest_rate = 0.02"
+```
+(backend/content/content.json:5496-5497; bài `bank-display-info`, case `expect` "Interest Rate: 5.0%")
+
 ## Giới hạn đã biết
 
 - Code học viên đi qua `https://ce.judge0.com` (bên thứ ba, giới hạn theo IP) — chỉ hợp dev local.
@@ -104,6 +112,7 @@ backend/app/runner.py:69-77); tối đa 4 request đồng thời tới máy ch�
 - `load_content.validate` chưa chặn `indent_level` âm; DB sửa tay sai hình dạng chưa có test (STATUS.md, Backlog T-10).
 - Bản sao nông của namespace: gán thuộc tính thẳng lên class ở một case có thể rò sang case sau; `SystemExit` trong `steps` chưa có test (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog harness).
 - Test thật gọi Judge0 là test `live`, mặc định skip (backend/tests/test_api.py).
+- Vì dùng `hasattr`, học viên viết `deposit = None` hoặc `deposit = 5` thì qua cửa kiểm thành viên và vỡ muộn bằng `TypeError` ở case thay vì thông báo "Không tìm thấy method"; bài class dùng case dạng `args` (không dùng `call`) sẽ nổ `func(*run_args)` khi `func` là None. Hiện không bài nào dùng dạng đó (planning/crew/2026-10-11-python-oop-bank/reviews/T-01.md, Minor 3).
 
 ## Nguồn
 

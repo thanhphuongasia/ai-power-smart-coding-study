@@ -62,7 +62,9 @@ CLI (backend/app/load_content.py:390-416):
 | `python -m app.load_content --force [path]` | validate rồi thay toàn bộ có chủ ý |
 | `python -m app.export_content [path]` | xuất DB ra đúng shape `content.json` (kèm `judge`), mặc định ra stdout |
 
-Quy trình sửa nội dung bằng file: `export_content` → sửa file → `load_content --force`. Không có `--if-empty` hay `--force` thì lệnh từ chối chạy (exit 2), nên không còn cách "vô tình ghi đè" (backend/app/load_content.py:398-400).
+Quy trình sửa nội dung bằng file: `export_content` → sửa file → `load_content --force`.
+
+Đưa nội dung mới từ repo lên VPS (vì deploy chỉ nạp `--if-empty` nên không tự cập nhật nội dung): (1) export DB của VPS ra file và so với `backend/content/content.json` cũ trong repo, để biết admin đã sửa gì trên VPS mà bản repo chưa có; (2) `deploy.sh` đưa code mới (gồm harness) lên; (3) chạy `load_content --force` trên VPS với `content.json` mới; (4) kiểm `/content` trả đúng số theme/bài. Bỏ bước 1 thì `--force` ghi đè mất chỉnh sửa của admin (run planning/crew/2026-10-11-python-oop-bank/, STATUS.md; chưa có script cho chuỗi này, làm tay). Không có `--if-empty` hay `--force` thì lệnh từ chối chạy (exit 2), nên không còn cách "vô tình ghi đè" (backend/app/load_content.py:398-400).
 
 Màn Admin trong app đi từng tầng (drill-down: chạm một thẻ để xuống tầng sâu hơn, mỗi tầng một màn riêng), thay cho cây phẳng nhiều icon trước đây. Bốn route go_router đều đăng ký ở `mobile/lib/app/router.dart:88-110`, và mỗi tầng được `push` từ tầng trên nên nút back lùi đúng một tầng:
 
