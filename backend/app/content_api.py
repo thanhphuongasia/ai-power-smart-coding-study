@@ -115,6 +115,7 @@ def _read_tree(session: Session) -> dict:
                 "name": theme.name,
                 "description": theme.description,
                 "tags": theme.tags,
+                "diagram": theme.diagram,
                 "topics": payload_topics,
             }
         )

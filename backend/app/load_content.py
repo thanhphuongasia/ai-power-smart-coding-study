@@ -67,6 +67,26 @@ def _scenario_errors(cases: list) -> list[tuple[int, str]]:
     return out
 
 
+def _diagram_errors(diagram: dict) -> list[str]:
+    """Sơ đồ class: tên class duy nhất; quan hệ trỏ tới class có thật; `via` là method của `from`."""
+    out: list[str] = []
+    classes = diagram.get("classes", [])
+    dup = _duplicates([c.get("name") for c in classes])
+    if dup:
+        out.append(f"sơ đồ: class trùng {dup}")
+    methods = {c.get("name"): set(c.get("methods", [])) for c in classes}
+    for r in diagram.get("relations", []):
+        src, dst = r.get("from"), r.get("to")
+        for end in (src, dst):
+            if end not in methods:
+                out.append(f'sơ đồ: quan hệ {src} → {dst} trỏ tới class không có: "{end}"')
+        if src in methods:
+            extra = [m for m in r.get("via", []) if m not in methods[src]]
+            if extra:
+                out.append(f"sơ đồ: via {extra} không phải method của {src}")
+    return out
+
+
 def _duplicates(ids: list[str]) -> list[str]:
     return sorted(i for i, n in Counter(ids).items() if n > 1)
 
@@ -93,6 +113,9 @@ def validate(data: dict) -> None:
         dup = _duplicates([i.get("id") for i in items])
         if dup:
             errors.append(f"id {kind} trùng: {dup}")
+
+    for th in themes:
+        errors.extend(f'theme {th.get("id")}: {msg}' for msg in _diagram_errors(th.get("diagram") or {}))
 
     for key, ex in exercises.items():
         if ex.get("id") != key:
@@ -179,7 +202,16 @@ def load_content(session: Session, data: dict[str, Any]) -> str:
                 )
             )
     for ti, th in enumerate(data["themes"]):
-        session.add(Theme(id=th["id"], position=ti, name=th["name"], description=th["description"], tags=th["tags"]))
+        session.add(
+            Theme(
+                id=th["id"],
+                position=ti,
+                name=th["name"],
+                description=th["description"],
+                tags=th["tags"],
+                diagram=th["diagram"],
+            )
+        )
         session.flush()
         # position = thứ tự preorder trong theme → cha flush trước con (FK parent_id).
         for pi, (tp, parent_id) in enumerate(_walk_topics(th["topics"])):

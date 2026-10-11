@@ -10,9 +10,9 @@ nghiêm (`v is String`, `v is int`), nên model dùng `strict=True`: `"1"` khôn
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 
 class _Strict(BaseModel):
@@ -73,11 +73,42 @@ class Topic(_Strict):
     modules: list[Topic]
 
 
+class DiagramAttribute(_Strict):
+    name: StrictStr
+    type: StrictStr
+    group: Literal["core", "support"]
+
+
+class DiagramClass(_Strict):
+    name: StrictStr
+    file: StrictStr
+    attributes: list[DiagramAttribute]
+    methods: list[StrictStr]
+
+
+class DiagramRelation(_Strict):
+    """`via`: method của `from` tác động lên `to`."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+
+    from_: StrictStr = Field(alias="from")
+    to: StrictStr
+    kind: Literal["association", "aggregation", "composition", "dependency"]
+    label: StrictStr
+    via: list[StrictStr]
+
+
+class ClassDiagram(_Strict):
+    classes: list[DiagramClass]
+    relations: list[DiagramRelation]
+
+
 class Theme(_Strict):
     id: StrictStr
     name: StrictStr
     description: StrictStr
     tags: list[StrictStr]
+    diagram: ClassDiagram
     topics: list[Topic]
 
 

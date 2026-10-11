@@ -26,6 +26,8 @@ class Theme(Base):
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    # Sơ đồ class của project (soạn tay trong content.json): {classes, relations}.
+    diagram: Mapped[dict] = mapped_column(JSONB)
 
 
 class Topic(Base):

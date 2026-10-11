@@ -48,7 +48,8 @@ def small() -> dict:
 
     return {
         "version": "source",
-        "themes": [{"id": "th", "name": "T", "description": "d", "tags": ["x"], "topics": [
+        "themes": [{"id": "th", "name": "T", "description": "d", "tags": ["x"],
+                    "diagram": {"classes": [], "relations": []}, "topics": [
             {"id": "tp", "name": "N", "description": "d", "modules": [], "files": [
                 {"id": "f1", "name": "a.py", "exercise_ids": ["e1", "e2"]},
                 {"id": "f2", "name": "b.py", "exercise_ids": ["e2"]},
@@ -159,6 +160,58 @@ def test_method_exercise_requires_scenario_cases(db_session):
     d = small()
     d["exercises"]["e1"]["class_name"] = "Svc"  # case `args` cũ → harness không chấm được
     with pytest.raises(ValueError, match="bài method cần case dạng `call`"):
+        load_content(db_session, d)
+
+
+def diagram() -> dict:
+    return {
+        "classes": [
+            {"name": "Flight", "file": "models/flight.py",
+             "attributes": [{"name": "code", "type": "str", "group": "core"},
+                            {"name": "booked", "type": "int", "group": "support"}],
+             "methods": ["__init__", "seats_left"]},
+            {"name": "FlightService", "file": "services/flight_service.py",
+             "attributes": [{"name": "flights", "type": "dict[str, Flight]", "group": "core"}],
+             "methods": ["add_flight", "search"]},
+        ],
+        "relations": [
+            {"from": "FlightService", "to": "Flight", "kind": "aggregation",
+             "label": "flights: mã → Flight", "via": ["add_flight", "search"]},
+        ],
+    }
+
+
+def test_diagram_stored_on_theme(db_session):
+    d = small()
+    d["themes"][0]["diagram"] = diagram()
+    load_content(db_session, d)
+    assert db_session.get(Theme, "th").diagram == diagram()
+
+
+@pytest.mark.parametrize(
+    "mutate, msg",
+    [
+        (lambda g: g["relations"][0].update({"to": "Ghost"}), "class không có"),
+        (lambda g: g["relations"][0].update({"via": ["delete_all"]}), "không phải method của FlightService"),
+        (lambda g: g["classes"].append(dict(g["classes"][0])), "class trùng"),
+        (lambda g: g["relations"][0].update({"kind": "inherits"}), "kind"),
+        (lambda g: g["classes"][0]["attributes"][0].update({"group": "misc"}), "group"),
+        (lambda g: g.pop("relations"), "relations"),
+    ],
+)
+def test_bad_diagram_rejected(db_session, mutate, msg):
+    d = small()
+    g = diagram()
+    mutate(g)
+    d["themes"][0]["diagram"] = g
+    with pytest.raises(ValueError, match=msg):
+        load_content(db_session, d)
+
+
+def test_diagram_key_required(db_session):
+    d = small()
+    del d["themes"][0]["diagram"]
+    with pytest.raises(ValueError, match="diagram"):
         load_content(db_session, d)
 
 

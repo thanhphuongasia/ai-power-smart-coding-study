@@ -259,3 +259,21 @@ def test_nested_modules_and_class_name_round_trip(db_session, content_data, clie
     assert expected.index(ex_id) > expected.index(first["files"][0]["exercise_ids"][0])
     assert read_judge(db_session, ex_id).class_name == "Svc"
     assert read_judge(db_session, "split-chunks").class_name is None
+
+
+def test_theme_diagram_served_with_from_key(db_session, content_data, client_for):
+    """Sơ đồ class đi nguyên vẹn ra /content; quan hệ giữ key `from` (không phải `from_`)."""
+    data = copy.deepcopy(content_data)
+    data["themes"][0]["diagram"] = {
+        "classes": [
+            {"name": "A", "file": "a.py", "attributes": [{"name": "x", "type": "int", "group": "core"}],
+             "methods": ["run"]},
+            {"name": "B", "file": "b.py", "attributes": [], "methods": []},
+        ],
+        "relations": [{"from": "A", "to": "B", "kind": "dependency", "label": "dùng B", "via": ["run"]}],
+    }
+    load_content(db_session, data)
+    body = client_for(db_session).get("/content").json()
+    assert body["themes"][0]["diagram"] == data["themes"][0]["diagram"]
+    assert '"from_"' not in json.dumps(body)
+    assert all("diagram" in t for t in body["themes"])

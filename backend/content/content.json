@@ -10,6 +10,10 @@
         "oop",
         "booking"
       ],
+      "diagram": {
+        "classes": [],
+        "relations": []
+      },
       "topics": [
         {
           "id": "airline-flight",
@@ -111,6 +115,10 @@
         "rag",
         "nlp"
       ],
+      "diagram": {
+        "classes": [],
+        "relations": []
+      },
       "topics": [
         {
           "id": "rag-chunking",
@@ -145,6 +153,10 @@
         "python",
         "file-system"
       ],
+      "diagram": {
+        "classes": [],
+        "relations": []
+      },
       "topics": [
         {
           "id": "doc-text-processing",
@@ -186,6 +198,10 @@
         "python",
         "social"
       ],
+      "diagram": {
+        "classes": [],
+        "relations": []
+      },
       "topics": [
         {
           "id": "feed-basics",
