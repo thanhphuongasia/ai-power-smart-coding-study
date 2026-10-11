@@ -117,7 +117,7 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
   void initState() {
     super.initState();
     // start() sau frame đầu, và build() phải watch sessionProvider suốt vòng
-    // đời màn — nếu không autoDispose huỷ Timer (xem CellScreen cũ).
+    // đời màn — nếu không autoDispose huỷ Timer.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(sessionProvider(widget.exerciseId).notifier).start();

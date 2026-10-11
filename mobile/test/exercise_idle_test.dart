@@ -13,20 +13,19 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_coding_study/features/exercise/cell_screen.dart';
+import 'package:smart_coding_study/features/exercise/exercise_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
-import 'package:smart_coding_study/shared/widgets.dart';
 
 class _FakeClock {
   DateTime now = DateTime(2024, 1, 1, 9);
 }
 
-/// Dựng CellScreen ở block 'split-chunks' index 2 (đúng bối cảnh đã dùng ở
-/// cell_layout_test.dart/app_flow_test.dart), trả về [ProviderContainer]
+/// Dựng ExerciseScreen của 'split-chunks' (seed có draft ô A nên mở thẳng tab
+/// Code, nơi có nút Run và Gợi ý), trả về [ProviderContainer]
 /// thật để đọc trực tiếp `sessionProvider` mà không phụ thuộc UI phụ (label
 /// TimerPill, ...).
-Future<ProviderContainer> _pumpCell(
+Future<ProviderContainer> _pumpScreen(
   WidgetTester tester,
   _FakeClock fakeClock,
 ) async {
@@ -38,7 +37,7 @@ Future<ProviderContainer> _pumpCell(
         builder: (context) {
           container = ProviderScope.containerOf(context);
           return const MaterialApp(
-            home: CellScreen(exerciseId: 'split-chunks', blockIndex: 2),
+            home: ExerciseScreen(exerciseId: 'split-chunks'),
           );
         },
       ),
@@ -75,7 +74,7 @@ void main() {
     'Bấm Run lúc 100s → tới 170s phase vẫn active, không hiện idle dialog',
     (tester) async {
       final fakeClock = _FakeClock();
-      final container = await _pumpCell(tester, fakeClock);
+      final container = await _pumpScreen(tester, fakeClock);
 
       await _advance(tester, fakeClock, const Duration(seconds: 100));
 
@@ -99,16 +98,11 @@ void main() {
     'Mở gợi ý lúc 100s → tới 170s phase vẫn active, không hiện idle dialog',
     (tester) async {
       final fakeClock = _FakeClock();
-      final container = await _pumpCell(tester, fakeClock);
+      final container = await _pumpScreen(tester, fakeClock);
 
       await _advance(tester, fakeClock, const Duration(seconds: 100));
 
-      await tester.tap(find.byType(HintButton));
-      await tester.pumpAndSettle();
-
-      // Đóng bottom sheet: chạm ra ngoài vùng sheet (barrier mặc định
-      // barrierDismissible=true của showModalBottomSheet).
-      await tester.tapAt(const Offset(20, 20));
+      await tester.tap(find.byKey(const Key('hint-button')));
       await tester.pumpAndSettle();
 
       await _advance(tester, fakeClock, const Duration(seconds: 70));
@@ -128,12 +122,37 @@ void main() {
     'Không chạm gì 121s → idle dialog hiện (giữ hành vi cũ)',
     (tester) async {
       final fakeClock = _FakeClock();
-      await _pumpCell(tester, fakeClock);
+      await _pumpScreen(tester, fakeClock);
 
       await _advance(tester, fakeClock, const Duration(seconds: 121));
       await tester.pump();
 
       expect(find.text(_idleDialogTitle), findsOneWidget);
+
+      await _drainEditorTimer(tester);
+    },
+  );
+
+  testWidgets(
+    'Idle dialog: đếm ngược 60s, "Tiếp tục" đóng dialog và về active',
+    (tester) async {
+      final fakeClock = _FakeClock();
+      final container = await _pumpScreen(tester, fakeClock);
+
+      await _advance(tester, fakeClock, const Duration(seconds: 121));
+      await tester.pump();
+      expect(find.text(_idleDialogTitle), findsOneWidget);
+      expect(find.byKey(const Key('idle-countdown')), findsOneWidget);
+      expect(find.byKey(const Key('idle-rest-button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('idle-resume-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_idleDialogTitle), findsNothing);
+      expect(
+        container.read(sessionProvider('split-chunks')).phase,
+        SessionPhase.active,
+      );
 
       await _drainEditorTimer(tester);
     },

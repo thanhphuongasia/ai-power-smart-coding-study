@@ -25,6 +25,16 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Đánh dấu bài [id] đã passed ngay trong app đang chạy (bài passed sinh thẻ
+/// ôn cho từng ô; seed chỉ có clean-text passed, thẻ của nó đến hạn ngày mai).
+Future<void> _pass(WidgetTester tester, String id) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byKey(const Key('bottom-nav'))),
+  );
+  container.read(progressProvider.notifier).markPassed(id);
+  await tester.pumpAndSettle();
+}
+
 Brightness _brightness(WidgetTester tester) =>
     Theme.of(tester.element(find.byKey(const Key('bottom-nav')))).brightness;
 
@@ -64,35 +74,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('stats-heatmap')), findsOneWidget);
 
-    // 2 thẻ split-chunks đến hạn trong seed.
+    // Seed chưa có thẻ nào đến hạn → badge ẩn. Pass split-chunks (3 ô) → 3
+    // thẻ đến hạn hôm nay.
     expect(
       find.descendant(
         of: find.byKey(const Key('bottom-nav')),
-        matching: find.text('2'),
+        matching: find.text('3'),
+      ),
+      findsNothing,
+    );
+    await _pass(tester, 'split-chunks');
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('bottom-nav')),
+        matching: find.text('3'),
       ),
       findsWidgets,
     );
   });
 
-  testWidgets('Ôn tập: lật thẻ, chấm Dễ → sang thẻ kế, hết thẻ → trống', (
+  testWidgets('Ôn tập: seed chưa có thẻ đến hạn; lật thẻ, chấm → hết thẻ', (
     tester,
   ) async {
     await _pumpApp(tester);
     await tester.tap(find.text('Ôn tập'));
     await tester.pumpAndSettle();
 
+    // Seed: chỉ clean-text passed, thẻ của nó đến hạn ngày mai.
+    expect(find.byKey(const Key('review-empty')), findsOneWidget);
+    expect(find.text('Sắp đến hạn'), findsOneWidget);
+
+    // Pass split-chunks → thẻ A, B, C đến hạn hôm nay.
+    await _pass(tester, 'split-chunks');
     expect(
-      find.byKey(const Key('review-card-split-chunks-b0')),
+      find.byKey(const Key('review-card-split-chunks-a')),
       findsOneWidget,
     );
     await tester.tap(find.byKey(const Key('review-reveal')));
     await tester.pumpAndSettle();
-    expect(find.text('def split_chunks(text, size):'), findsOneWidget);
+    expect(find.text('for i in range(0, len(text), size):'), findsOneWidget);
     await tester.tap(find.byKey(const Key('rate-easy')));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('review-card-split-chunks-b1')),
+      find.byKey(const Key('review-card-split-chunks-b')),
       findsOneWidget,
     );
 
@@ -101,11 +126,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('review-input')),
-      'chunks = []',
+      'chunks.append(text[i:i + size])',
     );
     await tester.tap(find.byKey(const Key('review-check')));
     await tester.pumpAndSettle();
     expect(find.text('Đúng'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('rate-ok')));
+    await tester.pumpAndSettle();
+
+    // Thẻ C cuối cùng.
+    expect(
+      find.byKey(const Key('review-card-split-chunks-c')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Thẻ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('review-reveal')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('rate-ok')));
     await tester.pumpAndSettle();
 
@@ -123,10 +160,11 @@ void main() {
           .descendant(of: find.byKey(Key(key)), matching: find.byType(Text))
           .first,
     )).data!;
-    expect(tile('stat-blocks'), '4');
+    // Seed: chỉ clean-text passed (1 ô), thẻ của nó đến hạn ngày mai.
+    expect(tile('stat-blocks'), '1');
     expect(tile('stat-streak'), '6');
     expect(tile('stat-no-hint'), '100%');
-    expect(tile('stat-due'), '2');
+    expect(tile('stat-due'), '0');
   });
 
   testWidgets('Topic → chunker.py → File cross-cut liệt kê 2 theme', (

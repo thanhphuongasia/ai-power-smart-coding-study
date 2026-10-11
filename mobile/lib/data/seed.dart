@@ -366,17 +366,6 @@ final Exercise splitChunksExercise = Exercise(
   ],
 );
 
-/// Số block đã hoàn thành sẵn khi mở app, theo exerciseId.
-/// (Sẽ bị xoá khi T-06 chuyển tiến độ sang `seedPassedExercises`/`seedDrafts`.)
-/// split-chunks: 0; clean-text đã xong hẳn (1 ô); còn lại 0.
-final Map<String, int> seedCompletedBlocks = {
-  'split-chunks': 0,
-  'overlap-chunks': 0,
-  'clean-text': 1,
-  'save-document': 0,
-  'like-post': 0,
-};
-
 /// Bài đã chạy đúng toàn bộ unit test khi mở app.
 final Set<String> seedPassedExercises = {'clean-text'};
 

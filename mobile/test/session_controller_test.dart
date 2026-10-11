@@ -100,20 +100,6 @@ void main() {
       expect(afterSecond, equals(afterFirst));
     });
 
-    test('markBlockPassed (deprecated): chỉ block cuối mới pass cả bài', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final notifier = container.read(progressProvider.notifier);
-
-      // ignore: deprecated_member_use_from_same_package
-      notifier.markBlockPassed('split-chunks', 0);
-      expect(container.read(progressProvider)['split-chunks']!.passed, isFalse);
-
-      // ignore: deprecated_member_use_from_same_package
-      notifier.markBlockPassed('split-chunks', 2);
-      expect(container.read(progressProvider)['split-chunks']!.passed, isTrue);
-    });
-
     test('useHint tối đa 3 mỗi ô (key = nhãn)', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -424,49 +410,6 @@ void main() {
         expect(state.phase, SessionPhase.active);
         // Có timer chạy lại.
         expect(async.pendingTimers.length, 1);
-      });
-    });
-  });
-
-  group('SessionController.run (deprecated)', () {
-    test('block cuối đúng → pass cả bài; block giữa đúng → chưa', () {
-      _withFakeSession((async, container, listen) {
-        final controller = container.read(
-          sessionProvider('split-chunks').notifier,
-        );
-
-        // ignore: deprecated_member_use_from_same_package
-        final mid = controller.run(0, 'for i in range(0, len(text), size):');
-        expect(mid.passed, isTrue);
-        expect(
-          container.read(progressProvider)['split-chunks']!.passed,
-          isFalse,
-        );
-
-        // ignore: deprecated_member_use_from_same_package
-        final last = controller.run(2, 'return chunks');
-        expect(last.passed, isTrue);
-        expect(
-          container.read(progressProvider)['split-chunks']!.passed,
-          isTrue,
-        );
-      });
-    });
-
-    test('sai → không đánh dấu passed', () {
-      _withFakeSession((async, container, listen) {
-        final controller = container.read(
-          sessionProvider('split-chunks').notifier,
-        );
-
-        // ignore: deprecated_member_use_from_same_package
-        final result = controller.run(2, 'code sai hoàn toàn');
-
-        expect(result.passed, isFalse);
-        expect(
-          container.read(progressProvider)['split-chunks']!.passed,
-          isFalse,
-        );
       });
     });
   });

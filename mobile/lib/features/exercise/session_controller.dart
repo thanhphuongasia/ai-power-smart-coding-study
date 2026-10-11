@@ -7,13 +7,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/seed.dart';
-import '../../domain/answer_checker.dart';
 import '../../domain/models.dart';
 import '../stats/activity.dart';
 import 'session_providers.dart';
-
-/// Trạng thái một block so với tiến trình hiện tại của người học.
-enum BlockStatus { done, active, locked }
 
 /// Trạng thái đồng hồ của phiên làm bài.
 enum SessionPhase { active, idle, timedOut }
@@ -37,8 +33,6 @@ class ExerciseProgress {
     this.drafts = const {},
     this.hintsUsed = const {},
     this.solutionViewed = const {},
-    @Deprecated('Xoá ở T-10: bị bỏ qua, dùng passed + totalBlocks')
-    int completedBlocks = 0,
   });
 
   final bool passed;
@@ -101,14 +95,6 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
     if (current.passed) return;
     ref.read(activityProvider.notifier).record();
     state = {...state, exerciseId: current.copyWith(passed: true)};
-  }
-
-  /// API cũ theo block: chỉ block CUỐI mới coi là pass cả bài.
-  @Deprecated('Xoá ở T-10: dùng markPassed')
-  void markBlockPassed(String exerciseId, int blockIndex) {
-    final total = exerciseById(exerciseId).blocks.length;
-    if (blockIndex != total - 1) return;
-    markPassed(exerciseId);
   }
 
   /// Lưu draft code đang gõ dở cho ô [label] của [exerciseId].
@@ -289,29 +275,6 @@ class SessionController extends Notifier<SessionState> {
     _timer?.cancel();
     _timer = null;
   }
-
-  /// Chấm code cho block [blockIndex] (luồng cũ, xoá ở T-10).
-  @Deprecated('Xoá ở T-10: chấm cả bài qua judge')
-  RunResult run(int blockIndex, String code) {
-    final exercise = exerciseById(exerciseId);
-    final block = exercise.blocks[blockIndex];
-    final result = runBlock(code, block);
-    if (result.passed) {
-      // ignore: deprecated_member_use_from_same_package
-      ref
-          .read(progressProvider.notifier)
-          .markBlockPassed(exerciseId, blockIndex);
-    }
-    return result;
-  }
-}
-
-/// Trạng thái block [index] so với tiến trình [p]: done / active / locked.
-/// Luồng cũ tuần tự: passed → mọi block done; chưa → chỉ block 0 active.
-@Deprecated('Xoá ở T-10: ô không còn khoá tuần tự')
-BlockStatus blockStatusOf(ExerciseProgress p, int index) {
-  if (p.passed) return BlockStatus.done;
-  return index == 0 ? BlockStatus.active : BlockStatus.locked;
 }
 
 final RegExp _assignmentPattern = RegExp(r'^([A-Za-z_]\w*)\s*=(?!=)');

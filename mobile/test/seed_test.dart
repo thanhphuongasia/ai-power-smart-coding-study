@@ -56,15 +56,6 @@ void main() {
   });
 
   group('seed tiến độ ban đầu', () {
-    test('seedCompletedBlocks: split-chunks 0, clean-text = số block', () {
-      expect(seedCompletedBlocks['split-chunks'], 0);
-      final clean = exerciseById('clean-text');
-      expect(seedCompletedBlocks['clean-text'], clean.blocks.length);
-      expect(seedCompletedBlocks['overlap-chunks'], 0);
-      expect(seedCompletedBlocks['save-document'], 0);
-      expect(seedCompletedBlocks['like-post'], 0);
-    });
-
     test('seedPassedExercises và seedDrafts', () {
       expect(seedPassedExercises, {'clean-text'});
       expect(seedDrafts, {
