@@ -1,0 +1,2 @@
+ M mobile/ios/Runner.xcodeproj/project.pbxproj
+?? planning/crew/2026-10-11-oop-bank-progressive/

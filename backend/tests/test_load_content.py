@@ -64,7 +64,7 @@ def test_load_real_file(db_session, real_data):
     version = load_content(db_session, real_data)
     assert version.startswith("sha256:")
     assert count(db_session, Theme) == 5
-    assert count(db_session, Exercise) == 29
+    assert count(db_session, Exercise) == 31
     assert db_session.scalar(select(func.count()).select_from(FileExercise).where(FileExercise.exercise_id == "split-chunks")) == 2
     assert db_session.get(ContentMeta, "version").value == version
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
@@ -277,7 +277,7 @@ def test_removed_exercise_disappears(db_session, real_data):
                 f["exercise_ids"] = [i for i in f["exercise_ids"] if i != "like-post"]
     load_content(db_session, data)
     assert db_session.get(Exercise, "like-post") is None
-    assert count(db_session, Exercise) == 28
+    assert count(db_session, Exercise) == 30
     assert db_session.scalar(select(func.count()).select_from(Block).where(Block.exercise_id == "like-post")) == 0
 
 
@@ -326,7 +326,7 @@ def test_invalid_data_raises_and_keeps_db(db_session, real_data, make, msg):
     with pytest.raises(ValueError, match=msg):
         load_content(db_session, make())
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 29
+    assert count(db_session, Exercise) == 31
     assert count(db_session, Theme) == 5
 
 
@@ -394,7 +394,7 @@ def test_wrong_shape_raises_with_path_and_keeps_db(db_session, real_data, mutate
         load_content(db_session, bad)
     assert path in str(err.value)
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 29
+    assert count(db_session, Exercise) == 31
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
 
 
@@ -410,3 +410,21 @@ def test_public_payload_validates_against_shared_model(real_data):
 
     payload = {"version": "sha256:x", **public_payload(real_data)}
     assert ContentPayload.model_validate(payload).model_dump(by_alias=True) == payload
+
+
+def test_progressive_template_does_not_leak_later_answers(real_data):
+    """Notebook tiến dần: template bài i không được chứa sẵn lời giải của bài j đứng SAU nó."""
+    trivial = {"return", "return False", "return True", "pass"}
+    theme = next(t for t in real_data["themes"] if t["id"] == "python-fundamentals")
+    ids = [i for tp in theme["topics"] for f in tp["files"] for i in f["exercise_ids"]]
+    assert len(ids) == 9
+    exercises = real_data["exercises"]
+    for pos, ex_id in enumerate(ids):
+        template_lines = {ln.strip() for ln in exercises[ex_id]["template"].split("\n")}
+        for later_id in ids[pos + 1 :]:
+            for block in exercises[later_id]["blocks"]:
+                for line in "\n".join(block["accepted_answers"]).split("\n"):
+                    line = line.strip()
+                    if line in trivial or len(line) < 12:
+                        continue
+                    assert line not in template_lines, f"{ex_id}: template đã lộ đáp án của {later_id}: {line!r}"
