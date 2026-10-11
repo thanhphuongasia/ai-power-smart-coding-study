@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/data/seed.dart';
-import 'package:smart_coding_study/domain/models.dart';
 import 'package:smart_coding_study/domain/answer_checker.dart';
+import 'package:smart_coding_study/domain/merge.dart';
+import 'package:smart_coding_study/domain/models.dart';
 
 void main() {
   group('seedThemes cấu trúc chung', () {
@@ -44,7 +45,7 @@ void main() {
       final splitChunks = chunkerPy.exercises.firstWhere(
         (e) => e.id == 'split-chunks',
       );
-      expect(splitChunks.blocks.length, 5);
+      expect(splitChunks.blocks.length, 3);
 
       final preprocessorPy = chunking.files.firstWhere(
         (f) => f.id == 'rag-preprocessor-py',
@@ -54,20 +55,21 @@ void main() {
     });
   });
 
-  group('seedCompletedBlocks', () {
-    test('split-chunks đang dở với 2 block đã xong', () {
-      expect(seedCompletedBlocks['split-chunks'], 2);
-    });
-
-    test('exercise preprocessor (clean-text) đã xong hẳn', () {
+  group('seed tiến độ ban đầu', () {
+    test('seedCompletedBlocks: split-chunks 0, clean-text = số block', () {
+      expect(seedCompletedBlocks['split-chunks'], 0);
       final clean = exerciseById('clean-text');
       expect(seedCompletedBlocks['clean-text'], clean.blocks.length);
-    });
-
-    test('exercise còn lại là 0', () {
       expect(seedCompletedBlocks['overlap-chunks'], 0);
       expect(seedCompletedBlocks['save-document'], 0);
       expect(seedCompletedBlocks['like-post'], 0);
+    });
+
+    test('seedPassedExercises và seedDrafts', () {
+      expect(seedPassedExercises, {'clean-text'});
+      expect(seedDrafts, {
+        'split-chunks': {'A': 'for i in range(0, len(text), size):'},
+      });
     });
   });
 
@@ -169,15 +171,81 @@ void main() {
       }
     });
 
-    test('block index 0 của mỗi exercise là dòng def', () {
+    test('INV-01: mỗi block có đúng một marker # TODO <label> đúng thụt lề', () {
+      final marker = RegExp(r'^(\s*)# TODO ([A-Z])\s*$');
       for (final exercise in allExercises) {
-        final firstBlock = exercise.blocks.first;
-        final firstAnswer = firstBlock.acceptedAnswers.first;
+        final found = <String, List<int>>{};
+        for (final line in exercise.template.split('\n')) {
+          final m = marker.firstMatch(line);
+          if (m != null) {
+            found.putIfAbsent(m.group(2)!, () => []).add(m.group(1)!.length);
+          }
+        }
         expect(
-          firstAnswer.trimLeft().startsWith('def '),
-          isTrue,
-          reason: 'exercise ${exercise.id} block 0: $firstAnswer',
+          found.keys.toSet(),
+          exercise.blocks.map((b) => b.label).toSet(),
+          reason: 'exercise ${exercise.id}: marker thừa/thiếu',
         );
+        for (final block in exercise.blocks) {
+          expect(found[block.label], hasLength(1),
+              reason: '${exercise.id} ô ${block.label}');
+          expect(found[block.label]!.single, 4 * block.indentLevel,
+              reason: '${exercise.id} ô ${block.label}: thụt lề marker');
+        }
+        expect(exercise.blocks.length, lessThanOrEqualTo(3),
+            reason: 'exercise ${exercise.id}');
+      }
+    });
+
+    test('block có label, explanation, id <exercise>-<label thường>', () {
+      for (final exercise in allExercises) {
+        for (final block in exercise.blocks) {
+          expect(block.label, matches(RegExp(r'^[A-Z]$')));
+          expect(block.id, '${exercise.id}-${block.label.toLowerCase()}');
+          expect(block.explanation, isNotEmpty, reason: block.id);
+        }
+      }
+    });
+
+    test('challenge đủ nội dung cho mọi bài', () {
+      for (final e in allExercises) {
+        final c = e.challenge;
+        expect(c.statement, isNotEmpty, reason: e.id);
+        expect(c.motivation, isNotEmpty, reason: e.id);
+        for (final ex in [c.small, c.project]) {
+          expect(ex.caption, isNotEmpty, reason: e.id);
+          expect(ex.input, contains(e.functionName), reason: e.id);
+          expect(ex.output, isNotEmpty, reason: e.id);
+        }
+      }
+    });
+
+    test('ghép lời giải mọi ô ra đúng code tham chiếu (INV-02 phía mobile)', () {
+      const expected = {
+        'split-chunks': 'def split_chunks(text, size):\n'
+            '    chunks = []\n'
+            '    for i in range(0, len(text), size):\n'
+            '        chunks.append(text[i:i + size])\n'
+            '    return chunks',
+        'overlap-chunks': 'def overlap_chunks(text, size, overlap):\n'
+            '    chunks = []\n'
+            '    for i in range(0, len(text), size - overlap):\n'
+            '        chunks.append(text[i:i + size])\n'
+            '    return chunks',
+        'clean-text': 'def clean_text(text):\n'
+            '    return text.strip()',
+        'save-document': 'def save_document(store, document):\n'
+            '    store.append(document)',
+        'like-post': 'def like_post(post):\n'
+            '    post["likes"] += 1',
+      };
+      expect(allExercises.map((e) => e.id).toSet(), expected.keys.toSet());
+      for (final e in allExercises) {
+        final merged = mergeCells(e, {
+          for (final b in e.blocks) b.label: b.acceptedAnswers.first,
+        });
+        expect(merged.code, expected[e.id], reason: e.id);
+        expect(merged.lineOrigin.length, merged.code.split('\n').length);
       }
     });
 
@@ -221,47 +289,27 @@ void main() {
   });
 
   group('split-chunks exercise validation', () {
-    test('split-chunks b2 chấp nhận: for i in range(0, len(text), size):', () {
-      final exercise = exerciseById('split-chunks');
-      final b2 = exercise.blocks.firstWhere((b) => b.id == 'split-chunks-b2');
-
-      final testCode = 'for i in range(0, len(text), size):';
-      final normalizedTest = normalizeCode(testCode);
-      final normalizedAccepted = normalizeCode(b2.acceptedAnswers.first);
-
+    test('split-chunks b0 chấp nhận: for i in range(0, len(text), size):', () {
+      final a = exerciseById('split-chunks').blocks.first;
       expect(
-        normalizedTest,
-        normalizedAccepted,
-        reason: 'split-chunks-b2 phải chấp nhận: $testCode',
+        normalizeCode('for i in range(0, len(text), size):'),
+        normalizeCode(a.acceptedAnswers.first),
       );
     });
 
-    test('split-chunks có đúng 5 block (b0..b4)', () {
+    test('split-chunks có 3 ô A, B, C với indentLevel 1, 2, 1', () {
       final exercise = exerciseById('split-chunks');
-      expect(exercise.blocks.length, 5);
-      final ids = exercise.blocks.map((b) => b.id).toList();
-      expect(
-        ids,
-        [
-          'split-chunks-b0',
-          'split-chunks-b1',
-          'split-chunks-b2',
-          'split-chunks-b3',
-          'split-chunks-b4',
-        ],
-      );
+      expect(exercise.blocks.map((b) => b.id).toList(),
+          ['split-chunks-a', 'split-chunks-b', 'split-chunks-c']);
+      expect(exercise.blocks.map((b) => b.indentLevel).toList(), [1, 2, 1]);
     });
 
-    test('split-chunks b3 (append) có indentLevel 2', () {
-      final exercise = exerciseById('split-chunks');
-      final b3 = exercise.blocks.firstWhere((b) => b.id == 'split-chunks-b3');
-      expect(b3.indentLevel, 2);
-    });
-
-    test('split-chunks b2 (loop) có indentLevel 1', () {
-      final exercise = exerciseById('split-chunks');
-      final b2 = exercise.blocks.firstWhere((b) => b.id == 'split-chunks-b2');
-      expect(b2.indentLevel, 1);
+    test('ví dụ nhỏ và ví dụ dự án của split-chunks', () {
+      final c = exerciseById('split-chunks').challenge;
+      expect(c.small.input, contains('split_chunks("hello world", 4)'));
+      expect(c.small.output, "['hell', 'o wo', 'rld']");
+      expect(c.project.input, contains('Nhân viên được nghỉ phép 12 ngày/năm.'));
+      expect(c.project.input, contains(', 30)'));
     });
   });
 }

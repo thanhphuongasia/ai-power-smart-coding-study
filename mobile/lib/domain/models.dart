@@ -48,6 +48,54 @@ class CodeFile {
   final List<Exercise> exercises;
 }
 
+/// Một ví dụ minh hoạ trong tab Challenge: code gọi hàm + kết quả thật.
+class Example {
+  const Example({
+    required this.caption,
+    required this.input,
+    required this.output,
+    this.note,
+  });
+
+  final String caption;
+
+  /// Code Python gọi hàm, vd `split_chunks("hello world", 4)`.
+  final String input;
+
+  /// Kết quả in ra khi chạy `input` (lấy bằng cách chạy python3 thật).
+  final String output;
+  final String? note;
+}
+
+/// Nội dung tab Challenge của một bài.
+class Challenge {
+  const Challenge({
+    required this.statement,
+    required this.motivation,
+    required this.small,
+    required this.project,
+  });
+
+  /// Đề bài, 1–2 câu.
+  final String statement;
+
+  /// Vì sao cần hàm này ngoài đời thật.
+  final String motivation;
+
+  /// Ví dụ nhỏ, dễ nhẩm.
+  final Example small;
+
+  /// Ví dụ trong bối cảnh dự án thật.
+  final Example project;
+}
+
+const Challenge emptyChallenge = Challenge(
+  statement: '',
+  motivation: '',
+  small: Example(caption: '', input: '', output: ''),
+  project: Example(caption: '', input: '', output: ''),
+);
+
 class Exercise {
   const Exercise({
     required this.id,
@@ -55,6 +103,8 @@ class Exercise {
     required this.functionName,
     required this.params,
     required this.blocks,
+    this.template = '',
+    this.challenge = emptyChallenge,
   });
 
   final String id;
@@ -68,6 +118,10 @@ class Exercise {
   /// Vd: ['text', 'size'].
   final List<String> params;
   final List<Block> blocks;
+
+  /// Code khoá của hàm; mỗi ô TODO là một dòng `# TODO A` (thụt lề đúng chỗ).
+  final String template;
+  final Challenge challenge;
 }
 
 class Block {
@@ -80,11 +134,19 @@ class Block {
     required this.expectedOutput,
     required this.hints,
     required this.vocab,
+    this.label = '',
+    this.explanation = '',
   });
 
   final String id;
   final String title;
   final String prompt;
+
+  /// Nhãn ô trong template: 'A', 'B', 'C'.
+  final String label;
+
+  /// 1–2 câu giải thích lời giải (tab Solution).
+  final String explanation;
 
   /// Số lần thụt 4 space của block trong hàm: def=0, thân hàm=1, thân for=2.
   final int indentLevel;

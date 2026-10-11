@@ -162,7 +162,7 @@ void main() {
     await tester.pump();
     await _type(tester, '), size):');
     expect(_ctrl(tester).text, 'for i in range(0, len(text), size):');
-    expect(runBlock(_ctrl(tester).text, _splitChunks[2]).passed, isTrue);
+    expect(runBlock(_ctrl(tester).text, _splitChunks[0]).passed, isTrue);
     await _teardown(tester, h);
   });
 
@@ -315,7 +315,7 @@ void main() {
       expect(_ctrl(tester).text, 'for i in range(0, len(text), size)');
       expect(_ctrl(tester).selection.baseOffset, 34);
       await _type(tester, ':');
-      expect(runBlock(_ctrl(tester).text, _splitChunks[2]).passed, isTrue);
+      expect(runBlock(_ctrl(tester).text, _splitChunks[0]).passed, isTrue);
       await _teardown(tester, h);
     });
 
@@ -396,7 +396,7 @@ void main() {
       final code = _ctrl(tester).text;
       expect(code, 'chunks.append(text[i:i + size])');
       expect(_ctrl(tester).selection.baseOffset, code.length);
-      expect(runBlock(code, _splitChunks[3]).passed, isTrue);
+      expect(runBlock(code, _splitChunks[1]).passed, isTrue);
       await _teardown(tester, h);
     });
 
@@ -444,7 +444,7 @@ void main() {
   testWidgets(
       'end-to-end line 2: chunks.append(text[i:i + size]) via '
       'suggestions + symbol keys + typing passes runBlock', (tester) async {
-    final block = _splitChunks[3];
+    final block = _splitChunks[1];
     final h = await _pump(tester,
         known: const ['text', 'size', 'chunks', 'i'], vocab: block.vocab);
     await _type(tester, 'chu');
@@ -557,5 +557,127 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(_field), findsOneWidget);
     await _teardown(tester);
+  });
+
+  group('multi-cell + shared CodeToolbar', () {
+    testWidgets('symbol/suggestion go to the focused cell only', (
+      tester,
+    ) async {
+      final tb = CodeToolbarController();
+      const a = Key('cell-A-field');
+      const b = Key('cell-B-field');
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: Column(
+              children: [
+                for (final id in ['A', 'B'])
+                  SizedBox(
+                    height: 120,
+                    child: CodeInput(
+                      initialCode: '',
+                      knownIdentifiers: const ['chunks'],
+                      vocab: const [],
+                      onChanged: (_) {},
+                      showBars: false,
+                      keyPrefix: 'cell-$id',
+                      toolbar: tb,
+                    ),
+                  ),
+                CodeToolbar(
+                  controller: tb,
+                  knownIdentifiers: const ['chunks'],
+                  vocab: const [],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      String text(Key k) => tester
+          .widget<EditableText>(
+            find.descendant(
+              of: find.byKey(k),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text;
+
+      expect(find.byKey(const Key('code-input-field')), findsNothing);
+      expect(find.byKey(const Key('cell-A-border')), findsOneWidget);
+      expect(find.byKey(const Key('cell-B-border')), findsOneWidget);
+      expect(tb.hasActive, isFalse);
+
+      await tester.showKeyboard(find.byKey(b));
+      await tester.pump();
+      expect(tb.hasActive, isTrue);
+      await tester.tap(find.byKey(const Key('symbol-(')));
+      await tester.pump();
+      expect(text(b), '()');
+      expect(text(a), '');
+
+      await tester.showKeyboard(find.byKey(a));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'chu',
+          selection: TextSelection.collapsed(offset: 3),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('suggestion-chunks')));
+      await tester.pump();
+      expect(text(a), 'chunks');
+      expect(text(b), '()');
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 6));
+      tb.dispose();
+    });
+
+    testWidgets('toolbar has no target when no cell is focused', (
+      tester,
+    ) async {
+      final tb = CodeToolbarController();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: Column(
+              children: [
+                SizedBox(
+                  height: 120,
+                  child: CodeInput(
+                    initialCode: '',
+                    knownIdentifiers: const [],
+                    vocab: const [],
+                    onChanged: (_) {},
+                    showBars: false,
+                    keyPrefix: 'cell-A',
+                    toolbar: tb,
+                  ),
+                ),
+                CodeToolbar(
+                  controller: tb,
+                  knownIdentifiers: const [],
+                  vocab: const [],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(tb.hasActive, isFalse);
+      // Phím bị vô hiệu: bấm không ném lỗi, không đổi gì.
+      await tester.tap(find.byKey(const Key('symbol-(')), warnIfMissed: false);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 6));
+      tb.dispose();
+    });
   });
 }
