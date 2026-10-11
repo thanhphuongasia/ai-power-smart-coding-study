@@ -33,10 +33,11 @@ Luồng một lần Run (mobile/lib/features/exercise/code_tab.dart:97-137):
 
 Template khoá + marker, ví dụ bài `split-chunks` (marker B thụt sâu hơn vì nằm trong vòng `for`):
 
-```dart
-template: 'def split_chunks(text, size):\n    chunks = []\n    # TODO A\n        # TODO B\n    # TODO C',
+```json
+"template": "def split_chunks(text, size):\n    chunks = []\n    # TODO A\n        # TODO B\n    # TODO C",
 ```
-(mobile/lib/data/seed.dart:300). `mergeCells` thụt nội dung ô theo thụt lề của dòng marker
+(backend/content/content.json:112, tải về app qua `GET /content`; màn bài đọc bài bằng
+`ref.read(contentIndexProvider).exerciseById`, mobile/lib/features/exercise/exercise_screen.dart:115). `mergeCells` thụt nội dung ô theo thụt lề của dòng marker
 (mobile/lib/domain/merge.dart:80-102), nên người học gõ ô B không cần gõ 8 dấu cách.
 
 Quy tắc khoá một nơi: bài k trong `CodeFile` mở khi k = 0 hoặc bài k-1 đã passed; bài đã passed luôn mở;
@@ -81,6 +82,7 @@ file/topic.
 - Màn + 3 tab + idle/timeout: mobile/lib/features/exercise/exercise_screen.dart:31-304
 - Tab Code: mobile/lib/features/exercise/code_tab.dart:23-300; kết quả: mobile/lib/features/exercise/run_result_view.dart:13-290
 - Tab Challenge / Solution: mobile/lib/features/exercise/challenge_tab.dart:14, mobile/lib/features/exercise/solution_tab.dart:15-65
+- Nội dung bài: backend/content/content.json → GET /content (xem docs/ARCHITECTURE.md, mục "Luồng nội dung"); đọc qua mobile/lib/data/content_providers.dart:11
 - Ghép ô: mobile/lib/domain/merge.dart; khoá bài: mobile/lib/domain/progression.dart
 - Client chấm: mobile/lib/data/judge_client.dart:57-149
 - Quyết định: docs/DECISIONS.md (các mục của run 2026-10-11-exercise-tabs-judge)

@@ -44,6 +44,11 @@ lúc đó phải quyết định lại có đưa Dio/Retrofit trở lại hay d�
 (mobile/lib/data/judge_client.dart:149, mobile/pubspec.yaml: dependency `http`). Xem mục
 "Chấm bài bằng Python thật qua backend" bên dưới.
 
+**Cập nhật (run 2026-10-11-content-api-postgres, commit 11b3837)**: câu "toàn bộ nội dung bài học là
+seed tĩnh trong `mobile/lib/data/seed.dart`" không còn đúng — `seed.dart` đã bị xoá, nội dung đến
+từ `GET /content` (mobile/lib/data/content_repository.dart:72-88); xem mục "Nội dung học ở
+Postgres" bên dưới. `http` vẫn là HTTP client duy nhất.
+
 ### Bỏ Hive (lưu tiến độ qua restart) ở phase 1
 
 **Quyết định**: tiến độ làm bài (block đã xong, draft code, hint đã dùng) chỉ sống trong bộ nhớ
@@ -133,6 +138,13 @@ test nào hỏng. Backend riêng cũng để về sau tự host được; client
 `--dart-define=JUDGE_URL`); chỉ chạy local trên simulator iOS (`NSAllowsLocalNetworking`);
 backend chưa chạy thì Run báo "không kết nối được máy chấm", không chấm được.
 
+**Cập nhật (run 2026-10-11-content-api-postgres, commit 11b3837)**: hai chi tiết trong mục này đã
+đổi. (1) Test case + lời giải không còn ở `backend/app/exercises.json` (đã xoá) mà ở Postgres, nạp từ
+`backend/content/content.json` (backend/app/load_content.py:98-123, backend/app/content_api.py:141-149).
+(2) `--dart-define=JUDGE_URL` đã được thay bằng `--dart-define=API_URL` dùng chung cho `/content` và
+`/run` (mobile/lib/data/content_repository.dart:9-17, mobile/lib/data/judge_client.dart:7,65).
+Phần còn lại của quyết định (chấm bằng Python thật, app không giữ test) vẫn đúng.
+
 **Nguồn**: planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md, "Quyết định thiết kế" 1, 10;
 backend/app/main.py:89-130; mobile/lib/data/judge_client.dart:57-107; mobile/ios/Runner/Info.plist:28-31.
 
@@ -170,6 +182,10 @@ bằng nhau. Case ném exception thì dừng, các case sau không chạy.
 
 **Nguồn**: backend/app/harness.py:1-16,48-109; backend/app/exercises.json:1-5;
 planning/crew/2026-10-11-exercise-tabs-judge/DEVIATIONS.md (dòng "T-02 review external").
+
+**Cập nhật (commit 11b3837)**: dạng JSON của test case vẫn đúng; chỉ nơi lưu đổi — `exercises.json`
+đã xoá, case nằm ở trường `judge.cases` trong `backend/content/content.json:197` (ví dụ split-chunks)
+và cột `judge_cases` của bảng `exercises` (backend/app/tables.py:50-66).
 
 ### Ghép ô TODO ở client (Dart), không ở backend
 
@@ -221,3 +237,114 @@ ngày mãi; reviewer đề nghị hỏi user có muốn vậy không — chưa c
 
 **Nguồn**: mobile/lib/features/exercise/solution_tab.dart:59-65; mobile/lib/features/stats/stats_screen.dart:28-41;
 mobile/lib/features/review/review_controller.dart:122-148.
+
+### Nội dung học ở Postgres; `content.json` là nguồn soạn, app không còn chứa nội dung
+
+**Quyết định**: toàn bộ nội dung học (theme → topic → file → exercise → ô TODO, challenge, template,
+gợi ý, lời giải từng ô) cùng phần chấm (`judge.solution`, `judge.cases`) nằm trong Postgres, quản lý
+schema bằng Alembic và truy cập bằng SQLAlchemy **sync** (psycopg 3). File soạn duy nhất là
+`backend/content/content.json`; `seed.dart` (nội dung viết cứng trong Dart) và `exercises.json` bị xoá.
+Phần còn lại của `mobile/lib/data/` là `demo_seed.dart`, chỉ giữ tiến độ demo (bài đã pass, nháp,
+hoạt động, lịch ôn, Admin PendingContent), không có nội dung học.
+
+**Vì sao**: thêm/sửa bài không còn phải sửa Dart và build lại app; test case và nội dung ở cùng một
+nơi nên id bài ở `/content` và `/run` luôn khớp. SQLAlchemy sync vì chỉ ~5 bài, không cần async DB;
+`/run` bọc lệnh tra DB bằng `run_in_threadpool` để không chặn event loop.
+
+**Đánh đổi đã chấp nhận**: backend giờ cần Postgres chạy (mặc định
+`postgresql+psycopg://localhost:5432/smart_coding_study`, đổi bằng `DATABASE_URL`). Sửa thẳng trong DB sẽ
+bị lần nạp sau ghi đè — nguồn soạn là `content.json`. Chưa có màn soạn nội dung. Tiến độ khoá theo
+`exercise.id` + `block.label` nên đổi id trên server làm tiến độ cũ mồ côi.
+
+**Nguồn**: backend/app/db.py:11-26; backend/app/tables.py:18-108; backend/migrations/versions/0001_content_tables.py;
+backend/app/main.py:106-114; backend/README.md:1-60; mobile/lib/data/demo_seed.dart:1-8;
+planning/crew/2026-10-11-content-api-postgres/PLAN.md, "Quyết định thiết kế" 1, 2, 6, 7.
+
+### Nạp nội dung: thay toàn bộ trong một transaction, kiểm hình dạng bằng pydantic
+
+**Quyết định**: `python -m app.load_content [path]` đọc `content.json`, kiểm, xoá hết bảng nội dung rồi
+ghi lại **trong một transaction**; lỗi giữa chừng thì rollback, DB giữ bản cũ. `version` =
+sha256 của phần công khai (bỏ `judge`), nên cùng nội dung thì cùng version (idempotent) và `version`
+được ghi cùng transaction với dữ liệu. Việc kiểm hình dạng dùng đúng bộ model pydantic (strict,
+`extra="forbid"`) mà `GET /content` dùng làm `response_model`.
+
+**Vì sao**: nạp từng phần dễ để lại bài trùng hoặc bài đã xoá khỏi file mà vẫn còn trên `/content`.
+Dùng chung một bộ model cho "nạp" và "trả ra" vì run đã bị sót một lỗ: ban đầu `load_content` chỉ
+kiểm id/quan hệ, nên `content.json` sai kiểu vẫn nạp được, `/content` trả 200 nhưng app parse lỗi và
+âm thầm dùng cache (correction T-10). Model `strict` vì Dart kiểm kiểu nghiêm (`"1"` không thành `1`).
+
+**Đánh đổi đã chấp nhận**: xoá-rồi-ghi lại khoá bảng trong lúc nạp; với 5 bài thì chấp nhận được.
+`validate` chưa kiểm vài trường (ví dụ `indent_level` âm vẫn qua).
+
+**Nguồn**: backend/app/load_content.py:1-5,37-39,46-95,98-156,159-173; backend/app/content_schema.py:1-102;
+planning/crew/2026-10-11-content-api-postgres/DEVIATIONS.md (dòng "Plan không có T-10").
+
+### `GET /content` công khai, không trả `judge`; đọc lại khi version đổi giữa chừng
+
+**Quyết định**: `GET /content` trả cả cây trong một lần (`{version, themes, exercises}`), không bao giờ
+chứa `judge_solution`/`judge_cases`. Việc dựng payload là 6 SELECT cố định (một query mỗi bảng) kẹp giữa hai
+lần đọc `version`; nếu `version` đầu ≠ cuối (một lần nạp lại commit xen giữa) hoặc cây lệch
+(`KeyError`) thì đọc lại, tối đa 3 lần. Chưa nạp nội dung lần nào → `503 content_not_loaded`;
+DB không kết nối được → `503 database_unavailable`.
+
+**Vì sao**: ở READ COMMITTED, 6 câu SELECT riêng lẻ có thể thấy hai bản khác nhau nếu nạp lại xen
+vào. Vì `version` được ghi cùng transaction với dữ liệu, so version đầu/cuối là cách rẻ hơn mở
+transaction REPEATABLE READ.
+
+**Đánh đổi đã chấp nhận**: cửa sổ hẹp ABA (A→B→A đúng lúc đọc) không bị bắt; đọc không ổn định 3 lần
+liên tiếp thì `RuntimeError` → 500; lỗi cạn pool (`TimeoutError`) chưa thành 503. REPEATABLE READ
+sẽ đóng triệt để (backlog T-06).
+
+**Nguồn**: backend/app/content_api.py:34-59,141-171; backend/app/main.py:69-78; backend/app/content_schema.py:80-85;
+planning/crew/2026-10-11-content-api-postgres/STATUS.md (Backlog T-06 r2).
+
+### `/run` đọc test case từ DB bằng session ngắn, trả kết nối trước khi chờ máy chấm
+
+**Quyết định**: `/run` tra `function` + `cases` của bài qua `get_judge_lookup`: mở một `SessionLocal`
+riêng, đọc rồi đóng ngay, rồi mới gửi cho máy chấm. Không dùng session per-request giữ suốt request.
+
+**Vì sao**: máy chấm mất vài giây; giữ session suốt request thì mỗi `/run` chiếm một kết nối pool trong
+lúc chờ, nhiều request đồng thời làm cạn pool và `/content` chết theo.
+
+**Đánh đổi đã chấp nhận**: bài không có → 404 `exercise_not_found`, nhưng nếu DB chưa nạp gì thì
+`/run` báo 503 `content_not_loaded` (không báo nhầm "không có bài"). Timeout kết nối DB 5s trùng với
+timeout client 5s của app.
+
+**Nguồn**: backend/app/content_api.py:141-166; backend/app/main.py:106-120; backend/app/db.py:19.
+
+### App tải nội dung qua API, cache `shared_preferences`, `ContentGate` đứng ngoài app widget
+
+**Quyết định**: `ContentRepository.load()` thử `GET /content` (timeout 5s) trước; thành công thì ghi
+cache (body + version); mọi lỗi (mạng, timeout, HTTP ≠ 200, JSON/schema hỏng) rơi về cache; không có cache
+dùng được thì ném `ContentUnavailable`. Cache chỉ được ghi khi bản tải về parse được. `ContentGate`
+bọc `SmartCodingStudyApp` ở `main()`: chờ → màn tải, lỗi → màn lỗi + "Thử lại", có nội dung → dựng app, kèm
+banner "Đang dùng nội dung đã lưu" nếu nguồn là cache. `contentIndexProvider` không có giá trị mặc
+định; `ProviderScope` ở gốc override nó bằng `contentProvider.requireValue.content`, nên mọi nơi trong app
+đọc nội dung qua một provider đồng bộ.
+
+**Vì sao**: 11 file `lib` đọc nội dung đồng bộ; bọc cả app bằng một cổng thay vì đổi mọi chỗ đọc sang
+`AsyncValue`. Cổng nằm ngoài app widget và có cấu trúc cây cố định (child luôn là phần tử thứ 2 của
+`Column`, chỉ ô banner đổi) để "Thử lại" từ cache sang mạng không unmount app — người học không mất
+chữ đang gõ (review T-08 F1, correction T-08b).
+
+**Đánh đổi đã chấp nhận**: mọi lỗi `/content` đều thành cùng một banner "dùng cache"; nội dung đổi
+khi đang mở bài thì ô code đã dựng giữ bản cũ (CodeTab dựng ô ở `initState`); mở bài đã bị xoá sau
+"Thử lại" → `StateError`. Cache ghi body rồi version nên kill giữa chừng có thể lệch (version chưa ai đọc).
+
+**Nguồn**: mobile/lib/data/content_repository.dart:40-115; mobile/lib/data/content_providers.dart:9-35;
+mobile/lib/app/content_gate.dart:12-73; mobile/lib/main.dart:10-21;
+planning/crew/2026-10-11-content-api-postgres/DEVIATIONS.md (dòng "Plan không có T-08b"), reviews/SEAM.md.
+
+### Một biến `API_URL` thay `JUDGE_URL`
+
+**Quyết định**: app có một địa chỉ backend `API_URL` (mặc định `http://127.0.0.1:8000`) dùng chung cho
+`/content` và `/run`; `JudgeClient` lấy địa chỉ từ cùng hàm `apiBaseUrl()` với `ContentRepository`.
+`JUDGE_URL` bị bỏ.
+
+**Vì sao**: `/content` và `/run` giờ là cùng một server; hai biến dễ trỏ lệch nhau.
+
+**Đánh đổi đã chấp nhận**: chỉ chạy local trên iOS simulator — macOS thiếu `network.client` entitlement,
+Android release thiếu `INTERNET` và `10.0.2.2` (ngoài phạm vi run).
+
+**Nguồn**: mobile/lib/data/content_repository.dart:9-17; mobile/lib/data/judge_client.dart:7,65;
+backend/README.md:22-23; planning/crew/2026-10-11-content-api-postgres/STATUS.md (Backlog SEAM).
