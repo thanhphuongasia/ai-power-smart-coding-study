@@ -10,17 +10,21 @@ identity-service: PR #5 — https://github.com/thanhphuongasia/identity-service/
 | T-01 mcp_auth (PRM + JWT + mcp_access) | L4 orchestrator | đóng — r2 PASS với Minor (đã sửa), external 2 Major đã xử lý |
 | T-02 content_ops | T2 | đóng — PASS với Minor (Backlog) |
 | T-03 mcp_access API + CLI | T2 | đóng — PASS với Minor (Backlog) |
-| T-04 /mcp server + tool | L4 orchestrator | chờ re-review r2 (external Major = thiếu test, đã thêm test + mutation) |
+| T-04 /mcp server + tool | L4 orchestrator | đóng — r2 PASS với Minor; external Major (thiếu test) đã thêm test + mutation |
 | T-05 deploy + README | T1 | đóng — PASS với Minor (1, 2 đã sửa) |
 | T-06 identity-service AllowedResources | L1 orchestrator | PR #5 mở, dotnet test 99/99 — chờ user merge + deploy |
 
-Next action: chờ re-review T-04 r2 + reviewer mối nối (SEAM.md) → verify-seam.sh → merge main + deploy app; identity-service cần merge PR #5 + deploy.
+Trạng thái: app đã lên main bbf751d + deploy production (smoke MCP qua nginx OK). SEAM 7/7 CÒN ĐÚNG, verify-seam exit 0.
+
+Next action: user merge identity-service PR #5 → deploy identity-service → user thêm connector https://codewithphuong.jacons-corp.com/mcp trên claude.ai → lấy sub từ thông báo tool → `python -m app.mcp_access allow <sub> --as <email admin>` trên VPS → thử list_projects.
 
 ## Bằng chứng
 
 - Full suite (commit 12f9085 + 78f0785): `453 passed, 2 skipped`.
 - Mutation đã bắt: bỏ validate, open-mode fallback, bỏ verify token, bỏ lock_content, bỏ so version dưới khoá, ContextVar → global.
 - E2E uvicorn thật + JWKS giả, DB `smart_coding_study_e2e`: 12/12 PASS (INV-01, 02, 03, 04, 06, 07).
+
+Audit model (subagent .jsonl): T2 (impl-standard, review, seam) = claude-sonnet-5-5; 3 lượt T1 (2 external wrapper, impl-light T-05) = claude-haiku-5-5. Khớp bảng tier.
 
 ## Backlog
 
