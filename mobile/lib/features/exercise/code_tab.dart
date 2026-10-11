@@ -3,6 +3,7 @@
 ///
 /// Ô TODO mở lần lượt: ô sau khoá tới khi ô trước khớp đáp án mẫu; ô khớp tự
 /// thu gọn thành một dòng và ô kế mở ra. Chỉ một ô mở (accordion).
+/// Ô mở chỉ là bản xem trước; chạm vào → [CellEditorPage] toàn màn hình.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,8 +19,8 @@ import '../../domain/merge.dart';
 import '../../domain/models.dart';
 import '../../domain/progression.dart';
 import '../../shared/widgets.dart';
+import 'cell_editor_page.dart';
 import 'challenge_tab.dart' show LabelTag;
-import 'code_input.dart';
 import 'run_result_view.dart';
 import 'session_controller.dart';
 import 'session_providers.dart';
@@ -35,14 +36,12 @@ class CodeTab extends ConsumerStatefulWidget {
 
 class _CodeTabState extends ConsumerState<CodeTab>
     with AutomaticKeepAliveClientMixin {
-  final _toolbar = CodeToolbarController();
   final _scroll = ScrollController();
-  final Map<String, FocusNode> _focus = {};
   final Map<String, String> _cells = {};
 
   late final List<TemplateSegment> _segments;
 
-  /// Ô đang/đã focus gần nhất — nút Gợi ý nhắm vào ô này.
+  /// Ô đang/đã mở gần nhất — nút Gợi ý nhắm vào ô này.
   late String _activeLabel;
 
   /// Ô đang mở editor; null = mọi ô thu gọn.
@@ -66,15 +65,6 @@ class _CodeTabState extends ConsumerState<CodeTab>
     final drafts = ref.read(progressProvider)[_exercise.id]?.drafts ?? const {};
     for (final b in _exercise.blocks) {
       _cells[b.label] = drafts[b.label] ?? '';
-      final node = FocusNode(debugLabel: 'cell-${b.label}');
-      // Rebuild mỗi lần đổi focus: thanh phím chỉ hiện khi có ô đang gõ.
-      node.addListener(() {
-        if (!mounted) return;
-        setState(() {
-          if (node.hasFocus) _activeLabel = b.label;
-        });
-      });
-      _focus[b.label] = node;
     }
     _open = _frontier();
     _activeLabel = _open ?? _exercise.blocks.first.label;
@@ -119,12 +109,30 @@ class _CodeTabState extends ConsumerState<CodeTab>
 
   @override
   void dispose() {
-    for (final n in _focus.values) {
-      n.dispose();
-    }
-    _toolbar.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Mở màn soạn code toàn màn hình cho ô [label]; đóng lại thì notebook
+  /// hiện code mới (ô xong đã thu gọn, ô kế đã mở sẵn).
+  Future<void> _openEditor(String label) async {
+    _activity();
+    setState(() => _activeLabel = label);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => CellEditorPage(
+          exercise: _exercise,
+          label: label,
+          codeOf: (l) => _cells[l] ?? '',
+          onChanged: _onCellChanged,
+          isDone: (l) => _isDone(_block(l)),
+          nextAfter: _nextAfter,
+          onActivity: _activity,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   void _activity() =>
@@ -144,18 +152,19 @@ class _CodeTabState extends ConsumerState<CodeTab>
     if (done && _open == label) _advanceFrom(label);
   }
 
-  /// Ô vừa xong: thu gọn nó, mở và focus ô chưa xong kế tiếp.
-  void _advanceFrom(String label) {
+  /// Ô chưa xong kế tiếp sau [label]; null = không còn.
+  String? _nextAfter(String label) {
     final blocks = _exercise.blocks;
     final after = blocks.skip(blocks.indexWhere((b) => b.label == label) + 1);
-    final next = after.where((b) => !_isDone(b)).firstOrNull;
+    return after.where((b) => !_isDone(b)).firstOrNull?.label;
+  }
+
+  /// Ô vừa xong: thu gọn nó, mở ô chưa xong kế tiếp.
+  void _advanceFrom(String label) {
+    final next = _nextAfter(label);
     setState(() {
-      _open = next?.label;
-      if (next != null) _activeLabel = next.label;
-    });
-    if (next == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focus[next.label]!.requestFocus();
+      _open = next;
+      if (next != null) _activeLabel = next;
     });
   }
 
@@ -272,15 +281,12 @@ class _CodeTabState extends ConsumerState<CodeTab>
     final progress = ref.watch(progressProvider.select((m) => m[_exercise.id]));
     final showPassed = _result?.status == JudgeStatus.passed;
     final labels = _exercise.blocks.map((b) => b.label).toList();
-    final known = knownIdentifiersFor(_exercise, _exercise.blocks.length);
-    final vocab = {for (final b in _exercise.blocks) ...b.vocab}.toList();
-    final typing = _focus.values.any((n) => n.hasFocus);
     var promptNo = 0;
 
     return Column(
       children: [
         Expanded(
-          // Ít ô nên dựng hết một lượt (không lazy); chỉ ô đang mở có editor.
+          // Ít ô nên dựng hết một lượt (không lazy).
           child: SingleChildScrollView(
             key: const Key('code-scroll'),
             controller: _scroll,
@@ -345,13 +351,6 @@ class _CodeTabState extends ConsumerState<CodeTab>
             ),
           ),
         ),
-        // Không ô nào focus thì phím bị vô hiệu → ẩn cho code có chỗ.
-        if (typing)
-          CodeToolbar(
-            controller: _toolbar,
-            knownIdentifiers: known,
-            vocab: vocab,
-          ),
         Container(
           padding: const EdgeInsets.all(AppSpace.s2),
           decoration: BoxDecoration(
@@ -442,12 +441,7 @@ class _CodeTabState extends ConsumerState<CodeTab>
     final p = context.palette;
     final isEmpty = _emptyLabels.contains(label);
     final used = progress?.hintsUsed[label] ?? 0;
-    final where = b.indentLevel >= 2
-        ? 'trong vòng for'
-        : b.indentLevel == 1
-        ? 'trong hàm'
-        : '';
-    final focus = _focus[label]!;
+    final where = cellWhere(b);
     final prompt = _runCount > 0 ? '[$_runCount]:' : '[ ]:';
 
     return Column(
@@ -504,53 +498,20 @@ class _CodeTabState extends ConsumerState<CodeTab>
               ),
             ),
             Expanded(
-              child: AnimatedBuilder(
-                animation: focus,
-                builder: (context, child) {
-                  final bad = isError || isEmpty;
-                  return Container(
-                    key: Key('cell-$label-frame'),
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(
-                        6,
-                      ), // ôm ô code góc 4px
-                      border: Border.all(
-                        color: bad ? p.danger : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        child!,
-                        if (focus.hasFocus)
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: 3,
-                            child: ColoredBox(
-                              key: Key('cell-$label-bar'),
-                              color: p.primary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-                child: CodeInput(
-                  keyPrefix: 'cell-$label',
-                  showBars: false,
-                  toolbar: _toolbar,
-                  focusNode: focus,
-                  initialCode: _cells[label] ?? '',
-                  knownIdentifiers: knownIdentifiersFor(
-                    _exercise,
-                    _exercise.blocks.indexOf(b),
+              child: Container(
+                key: Key('cell-$label-frame'),
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6), // ôm ô code góc 4px
+                  border: Border.all(
+                    color: isError || isEmpty ? p.danger : Colors.transparent,
+                    width: 2,
                   ),
-                  vocab: b.vocab,
-                  onChanged: (c) => _onCellChanged(label, c),
-                  onActivity: _activity,
+                ),
+                child: _CodePreview(
+                  key: Key('cell-$label-field'),
+                  code: _cells[label] ?? '',
+                  onTap: () => _openEditor(label),
                 ),
               ),
             ),
@@ -695,15 +656,7 @@ class _LockedCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final base = AppText.code.copyWith(color: p.ink);
-    final styles = <String, TextStyle>{
-      'keyword': TextStyle(color: p.primary),
-      'built_in': TextStyle(color: p.primary),
-      'literal': TextStyle(color: p.primary),
-      'number': TextStyle(color: p.primary),
-      'string': TextStyle(color: p.inkMuted),
-      'comment': TextStyle(color: p.outline, fontStyle: FontStyle.italic),
-      'title': const TextStyle(fontWeight: FontWeight.w500),
-    };
+    final styles = _codeStyles(p);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -756,6 +709,77 @@ class _LockedCell extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+Map<String, TextStyle> _codeStyles(AppPalette p) => {
+  'keyword': TextStyle(color: p.primary),
+  'built_in': TextStyle(color: p.primary),
+  'literal': TextStyle(color: p.primary),
+  'number': TextStyle(color: p.primary),
+  'string': TextStyle(color: p.inkMuted),
+  'comment': TextStyle(color: p.outline, fontStyle: FontStyle.italic),
+  'title': const TextStyle(fontWeight: FontWeight.w500),
+};
+
+/// Ô đang mở trong notebook: code (highlight + số dòng) chỉ để xem; chạm
+/// → màn soạn code toàn màn hình.
+class _CodePreview extends StatelessWidget {
+  const _CodePreview({super.key, required this.code, required this.onTap});
+
+  final String code;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final base = AppText.code.copyWith(color: p.ink);
+    final empty = code.trim().isEmpty;
+    final lines = empty ? 1 : '\n'.allMatches(code).length + 1;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(p.ink.withValues(alpha: 0.04), p.surface),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: p.outline.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              [for (var i = 1; i <= lines; i++) '$i'].join('\n'),
+              textAlign: TextAlign.right,
+              style: base.copyWith(color: p.inkMuted.withValues(alpha: 0.6)),
+            ),
+            const SizedBox(width: AppSpace.s2),
+            Expanded(
+              child: empty
+                  ? Text(
+                      '# chạm để viết code',
+                      style: base.copyWith(
+                        color: p.inkMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  : Text.rich(
+                      TextSpan(
+                        style: base,
+                        children: _spans(
+                          hl.highlight.parse(code, language: 'python').nodes,
+                          _codeStyles(p),
+                        ),
+                      ),
+                    ),
+            ),
+            Icon(Icons.open_in_full, size: 14, color: p.inkMuted),
+          ],
+        ),
+      ),
     );
   }
 }

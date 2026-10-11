@@ -72,16 +72,20 @@ void main() {
     expect(find.byKey(const Key('exercise-title')), findsOneWidget);
     expect(find.byKey(const Key('run-button')), findsOneWidget);
 
-    // Draft seed đã có ô A đúng ⇒ A thu gọn, B mở. Gõ B đúng thì C tự mở.
+    // Draft seed đã có ô A đúng ⇒ A thu gọn, B mở. Chạm B → màn soạn toàn
+    // màn hình; gõ B đúng thì màn tự sang C, gõ C đúng thì tự đóng.
     final exercise = testContent.exerciseById('split-chunks');
     expect(find.byKey(const Key('cell-A-collapsed')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('cell-B-field')));
+    await tester.pumpAndSettle();
     for (final b in exercise.blocks.skip(1)) {
       await tester.enterText(
-        find.byKey(Key('cell-${b.label}-field')),
+        find.byKey(const Key('editor-field')),
         b.acceptedAnswers.first,
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
     }
+    expect(find.byKey(const Key('editor-field')), findsNothing);
 
     await tester.tap(find.byKey(const Key('run-button')));
     await tester.pumpAndSettle();
