@@ -262,3 +262,79 @@ def test_admin_demoted_loses_mcp(granted, signer, loaded_session):
     user.roles = ["learner"]
     loaded_session.flush()
     assert call(granted, signer, "list_projects")["isError"]
+
+
+# --- Đồng thời + biên (review external T-04) -----------------------------------------------------
+
+
+def test_concurrent_requests_do_not_share_claims(granted, signer, monkeypatch):
+    # Hai request chạy CÙNG LÚC: sub đã cấp và sub chưa cấp. Claims để ở biến global sẽ lẫn nhau.
+    import threading
+
+    other = "11111111-2222-3333-4444-555555555555"
+    barrier, db_lock, seen = threading.Barrier(2, timeout=10), threading.Lock(), []
+    real = mcp_server.authorize_sub
+
+    def gated(session, sub):
+        seen.append(sub)
+        barrier.wait()  # cả hai request đều đã vào tool rồi mới đi tiếp
+        with db_lock:  # session test dùng chung một connection: không cho hai thread chạm cùng lúc
+            return real(session, sub)
+
+    monkeypatch.setattr(mcp_server, "authorize_sub", gated)
+    results: dict[str, dict] = {}
+
+    def run(sub: str):
+        r = rpc(granted, "tools/call", {"name": "list_projects", "arguments": {}}, signer.token(sub=sub))
+        results[sub] = r.json()["result"]
+
+    threads = [threading.Thread(target=run, args=(s,)) for s in (SUB, other)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(15)
+    assert sorted(seen) == sorted([SUB, other])
+    assert not results[SUB].get("isError")
+    assert results[other]["isError"] and other in _text(results[other])
+
+
+def test_write_between_validate_and_lock_is_refused(granted, signer, loaded_session, content_data, monkeypatch):
+    # Người khác lưu đúng lúc tool vừa validate xong (trước khi có khoá): tool phải từ chối, không
+    # ghi đè. Bỏ lock_content hoặc bỏ bước so version dưới khoá thì test này đỏ.
+    from app import content_ops
+    from app.export_content import export_content
+    from app.load_content import load_content as real_load
+    from app.load_content import lock_content as real_lock
+
+    def lock_then_competing_write(session):
+        real_lock(session)
+        competing = content_ops.update_project(export_content(session), content_data["themes"][0]["id"], {"name": "Người khác vừa sửa"})
+        real_load(session, competing, validated=True)
+
+    monkeypatch.setattr(mcp_server, "lock_content", lock_then_competing_write)
+    lesson = _new_lesson(content_data)
+    result = call(granted, signer, "create_lesson", file_id=_first_file(content_data), lesson=lesson)
+    # Session test dùng chung nên rollback của tool xoá cả dữ liệu fixture — chỉ kiểm được thông điệp.
+    assert result["isError"] and "người khác sửa" in _text(result)
+
+
+def test_gate_rejects_without_reading_body(env):
+    import asyncio
+
+    async def receive():
+        raise AssertionError("cổng đã đọc body trước khi xác thực")
+
+    sent = []
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {"type": "http", "method": "POST", "path": "/mcp", "headers": [(b"content-type", b"application/json")]}
+    asyncio.run(mcp_server.McpGate()(scope, receive, send))
+    assert sent[0]["status"] == 401
+
+
+def test_body_over_limit_is_413(mcp, signer):
+    big = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"pad": "x" * 70_000}})
+    r = mcp.post("/mcp", content=big, headers=_headers(signer.token()))
+    assert r.status_code == 413

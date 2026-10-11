@@ -13,7 +13,6 @@ SDK chạy stateless + JSON response: mỗi POST là một request độc lập,
 from __future__ import annotations
 
 import contextvars
-import json
 import logging
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
@@ -124,9 +123,10 @@ def _write(tool: str, op: Callable[[dict], dict], dry_run: bool) -> dict:
     return {"ok": True, "version": version}
 
 
-_READ = ToolAnnotations(read_only_hint=True)
-_WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False)
-_UPDATE = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True)
+# open_world_hint=False: tool chỉ chạm DB nội dung của app này (mặc định của spec là True).
+_READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+_WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
+_UPDATE = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False)
 
 
 @mcp.tool(annotations=_READ)
@@ -287,8 +287,3 @@ async def lifespan() -> AsyncIterator[None]:
     )
     async with mcp.session_manager.run():
         yield
-
-
-def describe_tools() -> str:
-    """Tên tool, dùng cho log/README."""
-    return json.dumps(sorted(t.name for t in mcp._tool_manager.list_tools()))

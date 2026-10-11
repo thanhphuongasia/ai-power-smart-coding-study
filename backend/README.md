@@ -80,6 +80,25 @@ JUDGE0_LIVE=1 .venv/bin/python -m pytest -q    # thêm 1 test gọi Judge0 thậ
   `app/runner.py`, thêm nhánh trong `runner_from_env()`, đặt `CODE_RUNNER=<tên>`. Harness, API và
   app không đổi.
 
+## Kết nối Claude (MCP)
+
+Connector cho claude.ai, URL: `https://codewithphuong.jacons-corp.com/mcp`
+
+1. claude.ai → Customize → Connectors → Add custom connector → dán URL → Connect.
+2. Đăng nhập GitHub qua identity-service (`https://identity.jacons-corp.com`).
+3. Lần đầu, tool báo "sub=… chưa được cấp quyền": admin chạy trên VPS (cùng cách `set_password` trong `deploy/README.md`):
+
+```bash
+ssh vps 'cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.mcp_access allow <sub> --as <email admin>'
+```
+
+Tool (12): `list_projects`, `get_project`, `get_lesson`, `get_authoring_guide` (đọc); `create_project`,
+`update_project`, `create_module`, `update_module`, `create_file`, `update_file`, `create_lesson`,
+`update_lesson` (ghi, nhận `dry_run`).
+
+- Mọi thay đổi có hiệu lực ngay với học viên. Luôn thử `dry_run=true` trước, rồi mới ghi thật.
+- Thu hồi quyền: `python -m app.mcp_access revoke <sub>`, chạy theo cùng cách như trên.
+
 ## Giới hạn
 
 - `ce.judge0.com` là máy chủ công khai: code bài tập được gửi tới bên thứ ba, có giới hạn tần suất
