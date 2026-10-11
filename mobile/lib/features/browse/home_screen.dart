@@ -13,6 +13,7 @@ import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_controller.dart';
 import '../exercise/session_providers.dart';
+import '../stats/activity.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -30,9 +31,11 @@ class HomeScreen extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Text('Luyện tập hôm nay', style: AppText.display),
+                _StreakChip(
+                  activity: ref.watch(activityProvider),
+                  today: dayOf(ref.read(clockProvider)()),
                 ),
+                const Spacer(),
                 IconButton(
                   key: const Key('admin-button'),
                   icon: const Icon(Icons.fact_check_outlined),
@@ -42,6 +45,8 @@ class HomeScreen extends ConsumerWidget {
                 const ThemeModeButton(),
               ],
             ),
+            const SizedBox(height: AppSpace.s2),
+            const Text('Luyện tập hôm nay', style: AppText.display),
             const SizedBox(height: AppSpace.s6),
             if (inProgress != null) ...[
               _ContinueCard(exercise: inProgress, progress: progress),
@@ -55,6 +60,190 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Số ngày liên tiếp + ngọn lửa ở thanh đầu trang (kiểu Coddy/Duolingo).
+/// Lửa xám khi hôm nay chưa làm gì — nhắc giữ chuỗi. Chạm để xem tuần này.
+class _StreakChip extends StatelessWidget {
+  const _StreakChip({required this.activity, required this.today});
+
+  final Map<DateTime, int> activity;
+  final DateTime today;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final streak = currentStreak(activity, today);
+    final color = (activity[today] ?? 0) > 0 ? p.accent : p.outline;
+
+    return Semantics(
+      button: true,
+      label: '$streak ngày liên tiếp',
+      excludeSemantics: true,
+      child: InkWell(
+        key: const Key('streak-chip'),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: p.surfaceRaised,
+          builder: (_) => SafeArea(
+            child: _StreakDetail(activity: activity, today: today),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s2,
+            vertical: AppSpace.s1,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$streak',
+                key: const Key('streak-count'),
+                style: AppText.title.copyWith(
+                  color: color,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: AppSpace.s1),
+              Icon(Icons.local_fire_department, size: 28, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chi tiết chuỗi trong bottom sheet: ngọn lửa lớn + số ngày, và hàng 7 ngày
+/// của tuần hiện tại (T2 → CN).
+class _StreakDetail extends StatelessWidget {
+  const _StreakDetail({required this.activity, required this.today});
+
+  final Map<DateTime, int> activity;
+  final DateTime today;
+
+  static const _weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final streak = currentStreak(activity, today);
+    final doneToday = (activity[today] ?? 0) > 0;
+    final monday = addDays(today, -(today.weekday - 1));
+    final flameColor = doneToday ? p.accent : p.outline;
+
+    final String message;
+    if (doneToday) {
+      message = 'Hôm nay đã giữ chuỗi';
+    } else if (streak > 0) {
+      message = 'Làm 1 block hôm nay để giữ chuỗi';
+    } else {
+      message = 'Làm 1 block để bắt đầu chuỗi mới';
+    }
+
+    return Padding(
+      key: const Key('streak-detail'),
+      padding: const EdgeInsets.all(AppSpace.s6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.local_fire_department, size: 40, color: flameColor),
+              const SizedBox(width: AppSpace.s2),
+              Text(
+                '$streak',
+                style: AppText.display.copyWith(
+                  color: doneToday ? p.accent : p.ink,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: AppSpace.s2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('ngày liên tiếp', style: AppText.label),
+                    Text(
+                      message,
+                      style: AppText.caption.copyWith(color: p.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.s4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (var i = 0; i < 7; i++)
+                _StreakDay(
+                  label: _weekdayLabels[i],
+                  day: addDays(monday, i),
+                  today: today,
+                  active: (activity[addDays(monday, i)] ?? 0) > 0,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakDay extends StatelessWidget {
+  const _StreakDay({
+    required this.label,
+    required this.day,
+    required this.today,
+    required this.active,
+  });
+
+  final String label;
+  final DateTime day;
+  final DateTime today;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final isToday = day == today;
+    final isFuture = day.isAfter(today);
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: AppText.caption.copyWith(
+            color: isToday ? p.ink : p.inkMuted,
+            fontWeight: isToday ? FontWeight.w600 : null,
+          ),
+        ),
+        const SizedBox(height: AppSpace.s1),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active ? p.accent : Colors.transparent,
+            border: Border.all(
+              color: isToday
+                  ? p.accent
+                  : p.outline.withValues(alpha: isFuture ? 0.3 : 0.6),
+              width: isToday ? 2 : 1,
+            ),
+          ),
+          child: active
+              ? Icon(Icons.local_fire_department, size: 18, color: p.onAccent)
+              : null,
+        ),
+      ],
     );
   }
 }
@@ -168,7 +357,9 @@ class _ThemeCard extends StatelessWidget {
                 const SizedBox(width: AppSpace.s2),
                 Text(
                   '$done/$total block',
-                  style: AppText.caption.copyWith(color: context.palette.inkMuted),
+                  style: AppText.caption.copyWith(
+                    color: context.palette.inkMuted,
+                  ),
                 ),
               ],
             ),

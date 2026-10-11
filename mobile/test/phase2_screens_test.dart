@@ -61,6 +61,21 @@ void main() {
     expect(_brightness(tester), Brightness.light);
   });
 
+  testWidgets('Home: chip streak hiện số ngày, chạm mở chi tiết tuần', (
+    tester,
+  ) async {
+    await _pumpApp(tester);
+    // Seed: 6 ngày liên tiếp tới hôm qua, hôm nay (T3 10/3) chưa làm gì.
+    final count = tester.widget<Text>(find.byKey(const Key('streak-count')));
+    expect(count.data, '6');
+
+    await tester.tap(find.byKey(const Key('streak-chip')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('streak-detail')), findsOneWidget);
+    expect(find.text('Làm 1 block hôm nay để giữ chuỗi'), findsOneWidget);
+    expect(find.text('CN'), findsOneWidget);
+  });
+
   testWidgets('bottom nav chuyển qua 4 tab, badge Ôn tập hiện số thẻ', (
     tester,
   ) async {
@@ -164,6 +179,9 @@ void main() {
     tester,
   ) async {
     await _pumpApp(tester);
+    // Airline đứng đầu + streak chip → card RAG có thể nằm dưới mép màn hình.
+    await tester.ensureVisible(find.byKey(const Key('theme-rag')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('theme-rag')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('topic-rag-chunking')));
