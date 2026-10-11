@@ -121,6 +121,23 @@ def test_nested_modules_stored_preorder_with_parent(db_session):
     assert db_session.get(Exercise, "e1").class_name is None
 
 
+def test_sibling_order_kept_and_reload_replaces_tree(db_session):
+    d = nested()
+    sub = d["themes"][0]["topics"][0]["modules"][0]
+    sub["modules"].append({"id": "leaf2", "name": "L2", "description": "d", "files": [], "modules": []})
+    load_content(db_session, d)
+    load_content(db_session, copy.deepcopy(d))  # nạp lại cùng id: không lỗi FK/unique
+    order = db_session.scalars(select(Topic.id).order_by(Topic.position)).all()
+    assert order == ["tp", "sub", "leaf", "leaf2", "tp2"]
+
+    d2 = nested()
+    d2["themes"][0]["topics"][0]["modules"] = []  # bỏ cả nhánh sub
+    d2["exercises"]["e2"]["class_name"] = None
+    load_content(db_session, d2)
+    assert db_session.scalars(select(Topic.id).order_by(Topic.position)).all() == ["tp", "tp2"]
+    assert db_session.get(CodeFile, "f3") is None
+
+
 def test_duplicate_module_id_across_levels_rejected(db_session):
     d = nested()
     d["themes"][0]["topics"][0]["modules"][0]["modules"][0]["id"] = "tp"

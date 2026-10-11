@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/merge.dart';
 import 'package:smart_coding_study/domain/models.dart';
+import 'package:smart_coding_study/features/exercise/session_controller.dart';
 
 const _splitSolution =
     'def split_chunks(text, size):\n'
@@ -81,5 +82,73 @@ void main() {
       'B',
       'C',
     ]);
+  });
+
+  Block blk(String label, String answer) => Block(
+    id: 'x-$label',
+    title: '',
+    prompt: '',
+    indentLevel: 1,
+    acceptedAnswers: [answer],
+    expectedOutput: '',
+    hints: const ['', '', ''],
+    vocab: const ['x'],
+    label: label,
+  );
+
+  Exercise ex(String template, List<Block> blocks, {String? cls}) => Exercise(
+    id: 't',
+    title: 't',
+    functionName: 'search',
+    className: cls,
+    params: const ['origin', 'dest'],
+    blocks: blocks,
+    template: template,
+  );
+
+  test('cellLocation split-chunks: A,C trong hàm; B qua đáp án ô A', () {
+    expect(cellLocation(split, 'A'), 'trong hàm');
+    expect(cellLocation(split, 'B'), 'trong vòng for');
+    expect(cellLocation(split, 'C'), 'trong hàm');
+    expect(cellLocation(split, 'Z'), '');
+  });
+
+  const methodTemplate =
+      'class FlightService:\n'
+      '    def __init__(self):\n'
+      '        self.flights = []\n'
+      '\n'
+      '    def search(self, origin, dest):\n'
+      '        result = []\n'
+      '        # TODO A\n'
+      '            # TODO B\n'
+      '        return result';
+  final method = ex(methodTemplate, [
+    blk('A', 'for f in self.flights:'),
+    blk('B', 'result.append(f)'),
+  ], cls: 'FlightService');
+
+  test('cellLocation method: A trong method, B theo đáp án A', () {
+    expect(cellLocation(method, 'A'), 'trong method');
+    expect(cellLocation(method, 'B'), 'trong vòng for');
+  });
+
+  test('cellLocation: cha if, class level, hàm tự do', () {
+    final e = ex(
+      'class C:\n    # TODO A\n    def f(self):\n        if x:\n'
+      '            # TODO B',
+      [blk('A', 'x = 1'), blk('B', 'pass')],
+      cls: 'C',
+    );
+    expect(cellLocation(e, 'A'), 'trong class');
+    expect(cellLocation(e, 'B'), 'trong if');
+    expect(cellLocation(ex('# TODO A', [blk('A', 'x')]), 'A'), '');
+  });
+
+  test('knownIdentifiersFor method có self, tên class, thuộc tính', () {
+    final ids = knownIdentifiersFor(method, 0);
+    expect(ids, containsAll(['self', 'FlightService', 'flights', 'search']));
+    final free = knownIdentifiersFor(split, 0);
+    expect(free.contains('self'), isFalse);
   });
 }

@@ -241,5 +241,21 @@ def test_nested_modules_and_class_name_round_trip(db_session, content_data, clie
     sub = body["themes"][0]["topics"][0]["modules"][-1]
     assert sub["id"] == "nested-a" and sub["modules"][0]["files"] == [moved]
     assert body["exercises"][ex_id]["class_name"] == "Svc"
+
+    # Thứ tự bài = preorder, file của module TRƯỚC sub-module (khớp Topic.allFiles ở app).
+    def preorder_ids(topics):
+        for tp in topics:
+            for f in tp["files"]:
+                yield from f["exercise_ids"]
+            yield from preorder_ids(tp["modules"])
+
+    expected: list[str] = []
+    for th in data["themes"]:
+        for i in preorder_ids(th["topics"]):
+            if i not in expected:
+                expected.append(i)
+    expected += sorted(i for i in data["exercises"] if i not in expected)
+    assert list(body["exercises"]) == expected
+    assert expected.index(ex_id) > expected.index(first["files"][0]["exercise_ids"][0])
     assert read_judge(db_session, ex_id).class_name == "Svc"
     assert read_judge(db_session, "split-chunks").class_name is None

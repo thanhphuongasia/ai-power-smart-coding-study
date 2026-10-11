@@ -45,8 +45,10 @@ List<TemplateSegment> templateSegments(Exercise exercise) {
     final label = m.group(2)!;
     final block = exercise.blocks.where((b) => b.label == label).firstOrNull;
     if (block == null) {
-      throw ArgumentError('Template ${exercise.id} có marker $label nhưng '
-          'không có block cùng nhãn');
+      throw ArgumentError(
+        'Template ${exercise.id} có marker $label nhưng '
+        'không có block cùng nhãn',
+      );
     }
     segments.add(TodoSegment(block));
   }
@@ -71,8 +73,7 @@ List<String> _normalizeCell(String raw) {
   }
   if (common <= 0) return lines;
   return [
-    for (final line in lines)
-      line.trim().isEmpty ? '' : line.substring(common),
+    for (final line in lines) line.trim().isEmpty ? '' : line.substring(common),
   ];
 }
 
@@ -99,4 +100,76 @@ MergedCode mergeCells(Exercise exercise, Map<String, String> cellsByLabel) {
     }
   }
   return MergedCode(code: code.join('\n'), lineOrigin: origin);
+}
+
+int _indentOf(String line) => line.length - line.trimLeft().length;
+
+String _classifyHeader(String header, {required bool insideClass}) {
+  final m = RegExp(
+    r'^(async\s+def|def|class|for|while|if|elif|else|try|except|'
+    r'finally|with)\b',
+  ).firstMatch(header.trim());
+  if (m == null) return '';
+  switch (m.group(1)!) {
+    case 'for':
+      return 'trong vòng for';
+    case 'while':
+      return 'trong vòng while';
+    case 'if' || 'elif' || 'else':
+      return 'trong if';
+    case 'try' || 'except' || 'finally':
+      return 'trong try';
+    case 'with':
+      return 'trong with';
+    case 'def' || 'async def':
+      return insideClass ? 'trong method' : 'trong hàm';
+    case 'class':
+      return 'trong class';
+  }
+  return '';
+}
+
+/// Nhãn vị trí của ô [label] suy từ template: nhìn dòng cha gần nhất (thụt lề
+/// nhỏ hơn). Cha là marker ô khác → dùng dòng đầu đáp án mẫu của ô đó.
+/// Không xác định được → ''.
+String cellLocation(Exercise exercise, String label) {
+  final lines = exercise.template.replaceAll('\t', '    ').split('\n');
+  final at = lines.indexWhere((l) {
+    final m = _markerPattern.firstMatch(l);
+    return m != null && m.group(2) == label;
+  });
+  if (at < 0) return '';
+  final n = _indentOf(lines[at]);
+
+  // Dòng không trống gần nhất phía trên có thụt lề < [indent], từ [from] lùi.
+  int parentOf(int from, int indent) {
+    for (var i = from - 1; i >= 0; i--) {
+      if (lines[i].trim().isEmpty) continue;
+      if (_indentOf(lines[i]) < indent) return i;
+    }
+    return -1;
+  }
+
+  final p = parentOf(at, n);
+  if (p < 0) return '';
+  var header = lines[p];
+  var headerIdx = p;
+  final pm = _markerPattern.firstMatch(header);
+  if (pm != null) {
+    final x = exercise.blocks.where((b) => b.label == pm.group(2)).firstOrNull;
+    if (x == null || x.acceptedAnswers.isEmpty) return '';
+    final first = x.acceptedAnswers.first
+        .replaceAll('\t', '    ')
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    header = first;
+    // def trong đáp án mẫu: không biết có nằm trong class, coi là hàm.
+    headerIdx = -1;
+  }
+  var insideClass = false;
+  if (headerIdx >= 0) {
+    final c = parentOf(headerIdx, _indentOf(lines[headerIdx]));
+    insideClass = c >= 0 && lines[c].trimLeft().startsWith('class ');
+  }
+  return _classifyHeader(header, insideClass: insideClass);
 }
