@@ -130,60 +130,121 @@ class _Clock:
         return self.now
 
 
-def test_unknown_kid_refetches_at_most_once_per_interval(signer):
-    calls = []
-    clock = _Clock()
-    cache = JwksCache("u", fetch=lambda url: calls.append(url) or signer.jwks, min_refresh=60, clock=clock)
-    other = Signer(kid="random-kid")
-    for _ in range(20):  # kẻ tấn công gửi kid ngẫu nhiên liên tục
+def _with_kid(signer: Signer, kid: str) -> str:
+    claims = {"iss": ISS, "aud": AUD, "sub": SUB, "exp": int(time.time()) + 60}
+    return jwt.encode(claims, signer.private, algorithm="RS256", headers={"kid": kid})
+
+
+class _Fetch:
+    """JWKS giả bật/tắt được, đếm số lần gọi."""
+
+    def __init__(self, jwks):
+        self.jwks, self.up, self.calls = jwks, True, 0
+
+    def __call__(self, url):
+        self.calls += 1
+        if not self.up:
+            raise httpx.ConnectError("down")
+        return self.jwks
+
+
+def test_unknown_kids_refetch_at_most_once_per_interval(signer):
+    fetch, clock = _Fetch(signer.jwks), _Clock()
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, clock=clock)
+    for i in range(20):  # kẻ tấn công gửi kid ngẫu nhiên, mỗi lần một kid khác
         with pytest.raises(InvalidToken):
-            _verify(signer, other.token(), keys=cache)
-    assert len(calls) == 1
+            _verify(signer, _with_kid(signer, f"random-{i}"), keys=cache)
+    assert fetch.calls == 1
     clock.now += 61
     with pytest.raises(InvalidToken):
-        _verify(signer, other.token(), keys=cache)
-    assert len(calls) == 2
+        _verify(signer, _with_kid(signer, "random-x"), keys=cache)
+    assert fetch.calls == 2
     assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB
-    assert len(calls) == 2  # kid đã biết: không tải lại
+    assert fetch.calls == 2  # kid đã biết: không tải lại
 
 
 def test_key_rotation_picked_up_after_min_refresh(signer):
     clock = _Clock()
     new = Signer(kid="k2")
-    current = {"jwks": signer.jwks}
-    cache = JwksCache("u", fetch=lambda url: current["jwks"], min_refresh=60, clock=clock)
+    fetch = _Fetch(signer.jwks)
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, clock=clock)
     assert _verify(signer, signer.token(), keys=cache)
-    current["jwks"] = {"keys": signer.jwks["keys"] + new.jwks["keys"]}
+    fetch.jwks = {"keys": signer.jwks["keys"] + new.jwks["keys"]}
     clock.now += 61
     assert _verify(new, new.token(), keys=cache)["sub"] == SUB
 
 
-def test_jwks_down_without_cached_keys_is_unavailable_not_invalid(signer):
-
-
-    def down(url):
-        raise httpx.ConnectError("down")
-
-    with pytest.raises(JwksUnavailable):
-        _verify(signer, signer.token(), keys=JwksCache("u", fetch=down))
-
-
-def test_jwks_down_keeps_cached_keys(signer):
-
-
-    clock = _Clock()
-    state = {"up": True}
-
-    def fetch(url):
-        if not state["up"]:
-            raise httpx.ConnectError("down")
-        return signer.jwks
-
-    cache = JwksCache("u", fetch=fetch, max_age=100, clock=clock)
-    assert _verify(signer, signer.token(), keys=cache)
-    state["up"] = False
-    clock.now += 200  # khoá cũ quá hạn, tải lại thất bại → vẫn dùng khoá đang có
+def test_outage_is_503_for_every_request_then_recovers(signer):
+    # Review T-01 M1: lần 2, 3 trong cooldown từng thành 401 → claude.ai bắt đăng nhập lại.
+    fetch, clock = _Fetch(signer.jwks), _Clock()
+    fetch.up = False
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, clock=clock)
+    for _ in range(3):
+        with pytest.raises(JwksUnavailable):
+            _verify(signer, signer.token(), keys=cache)
+        clock.now += 5
+    assert fetch.calls == 1
+    fetch.up = True
+    clock.now += 60
     assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB
+
+
+def test_outage_unknown_kid_is_503_not_401(signer):
+    # Khoá mới vừa xoay mà identity đang chết: không biết token sai hay khoá mới → 503.
+    fetch, clock = _Fetch(signer.jwks), _Clock()
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, clock=clock)
+    assert _verify(signer, signer.token(), keys=cache)
+    fetch.up = False
+    clock.now += 61
+    with pytest.raises(JwksUnavailable):
+        _verify(signer, _with_kid(signer, "k-new"), keys=cache)
+    assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB  # kid cũ vẫn dùng được
+
+
+def test_stale_keys_have_bounded_grace(signer):
+    # Review external Major: khoá cũ không được sống mãi khi identity chết.
+    fetch, clock = _Fetch(signer.jwks), _Clock()
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, max_age=100, grace=100, clock=clock)
+    assert _verify(signer, signer.token(), keys=cache)
+    fetch.up = False
+    clock.now += 150  # quá max_age, còn trong grace
+    assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB
+    clock.now += 100  # quá max_age + grace
+    with pytest.raises(JwksUnavailable):
+        _verify(signer, signer.token(), keys=cache)
+    fetch.up = True
+    clock.now += 60
+    assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB
+
+
+@pytest.mark.parametrize("body", [None, [], "x", {"keys": "x"}, {"nokeys": []}, {"keys": []}, {"keys": [{"kty": "oct", "k": "AA", "kid": "s"}]}])
+def test_bad_jwks_body_is_503_not_500(signer, body):
+    with pytest.raises(JwksUnavailable):
+        _verify(signer, signer.token(), keys=JwksCache("u", fetch=lambda url: body))
+
+
+def test_empty_jwks_does_not_wipe_working_keys(signer):
+    fetch, clock = _Fetch(signer.jwks), _Clock()
+    cache = JwksCache("u", fetch=fetch, min_refresh=60, clock=clock)
+    assert _verify(signer, signer.token(), keys=cache)
+    fetch.jwks = {"keys": []}
+    clock.now += 61
+    with pytest.raises(JwksUnavailable):
+        _verify(signer, _with_kid(signer, "k-new"), keys=cache)
+    assert _verify(signer, signer.token(), keys=cache)["sub"] == SUB
+
+
+def test_rejects_rs384_and_missing_kid(signer):
+    claims = {"iss": ISS, "aud": AUD, "sub": SUB, "exp": int(time.time()) + 60}
+    rs384 = jwt.encode(claims, signer.private, algorithm="RS384", headers={"kid": signer.kid})
+    no_kid = jwt.encode(claims, signer.private, algorithm="RS256")
+    for token in (rs384, no_kid):
+        with pytest.raises(InvalidToken):
+            _verify(signer, token)
+
+
+def test_exp_within_leeway_accepted(signer):
+    assert _verify(signer, signer.token(exp=int(time.time()) - 10))["sub"] == SUB
 
 
 # --- Quyền theo mcp_access (INV-04) --------------------------------------------------------------

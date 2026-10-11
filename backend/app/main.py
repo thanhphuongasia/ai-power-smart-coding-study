@@ -1,6 +1,7 @@
 """API: `GET /content` (nội dung học từ Postgres, xem content_api.py), `POST /run` (ghép
 harness + test case của bài trong DB rồi gửi cho máy chấm; có Bearer hợp lệ thì ghi `passed` cho
-user), và `/api/*` (đăng nhập — auth.py, tiến độ — progress.py, quản trị nội dung — admin_api.py).
+user), `/api/*` (đăng nhập — auth.py, tiến độ — progress.py, quản trị nội dung — admin_api.py), và `/mcp`
+(Claude trên claude.ai soạn nội dung, đăng nhập qua identity-service — mcp_server.py, mcp_auth.py).
 
 Chạy: `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000` (xem README.md).
 """
@@ -11,6 +12,7 @@ import asyncio
 import json
 import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
@@ -21,12 +23,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.exc import DataError, OperationalError
 
-from app import harness
+from app import harness, mcp_server
 from app.admin_api import router as admin_router
 from app.auth import UserLookup, get_user_lookup, optional_bearer
 from app.auth import router as auth_router
 from app.content_api import ContentNotLoaded, JudgeLookup, get_judge_lookup
 from app.content_api import router as content_router
+from app.mcp_auth import router as mcp_auth_router
 from app.progress import PassRecorder, get_pass_recorder
 from app.progress import router as progress_router
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
@@ -45,11 +48,22 @@ _RUN_SLOTS = asyncio.Semaphore(4)
 # Tạo lúc import: CODE_RUNNER sai thì server không khởi động được, thay vì 500 ở request đầu.
 _RUNNER = runner_from_env()
 
-app = FastAPI(title="Smart Coding Study")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp_server.lifespan():
+        yield
+
+
+app = FastAPI(title="Smart Coding Study", lifespan=lifespan)
 app.include_router(content_router)
 app.include_router(auth_router)
 app.include_router(progress_router)
 app.include_router(admin_router)
+app.include_router(mcp_auth_router)
+# ASGI thô (không qua FastAPI): cổng JWT phải chạy trước khi SDK MCP đọc body.
+app.router.add_route("/mcp", mcp_server.McpGate(), include_in_schema=False)
 
 
 def _body_limit(path: str) -> int:

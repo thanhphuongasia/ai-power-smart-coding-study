@@ -80,8 +80,16 @@ class JwksCache:
     """Khoá công khai của identity-service, theo `kid`.
 
     Không dùng thẳng `PyJWKClient`: nó tải lại JWKS mỗi lần gặp `kid` lạ, nên ai cũng gửi được token
-    `kid` ngẫu nhiên để bắt server gọi identity-service liên tục. Ở đây `kid` lạ chỉ được tải lại tối đa
-    một lần mỗi `min_refresh` giây; khoá cũ giữ tối đa `max_age` giây (xoay khoá vẫn nhận ra).
+    `kid` ngẫu nhiên để bắt server gọi identity-service liên tục. Ở đây mọi lần tải (thành công hay lỗi)
+    cách nhau ít nhất `min_refresh` giây.
+
+    - Khoá hợp lệ `max_age` giây kể từ lần tải THÀNH CÔNG gần nhất; quá hạn thì tải lại.
+    - Tải lại lỗi: dùng tiếp khoá cũ thêm tối đa `grace` giây rồi thôi (khoá đã bị thu hồi ở identity
+      không được sống mãi chỉ vì identity chết).
+    - Lần tải gần nhất lỗi mà không có khoá dùng được → `JwksUnavailable` (503) cho MỌI request trong
+      lúc đó, không lẫn thành 401 — claude.ai coi 401 là token hỏng và bắt đăng nhập lại.
+
+    Giữ khoá suốt lần tải (≤5s, tối đa một lần mỗi `min_refresh`): request khác chờ chứ không bắn thêm.
     """
 
     def __init__(
@@ -90,42 +98,60 @@ class JwksCache:
         fetch: Callable[[str], Any] = _http_get_json,
         min_refresh: float = 60.0,
         max_age: float = 3600.0,
+        grace: float = 3600.0,
         clock: Callable[[], float] = time.monotonic,
     ):
         self.url = url
         self._fetch = fetch
         self._min_refresh = min_refresh
         self._max_age = max_age
+        self._grace = grace
         self._clock = clock
         self._keys: dict[str, Any] = {}
-        self._fetched_at: float | None = None
+        self._last_success: float | None = None
+        self._last_attempt: float | None = None
+        self._last_failed = False
         self._lock = threading.Lock()
 
-    def _refresh(self, now: float) -> None:
-        self._fetched_at = now  # kể cả khi lỗi: identity-service chết thì không dội request vào nó
+    def _load(self) -> dict[str, Any]:
         try:
             data = self._fetch(self.url)
+            if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
+                raise ValueError("jwks shape")
             jwks = jwt.PyJWKSet.from_dict(data)
-        except (httpx.HTTPError, ValueError, jwt.PyJWTError) as exc:
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError, KeyError, jwt.PyJWTError) as exc:
             raise JwksUnavailable(type(exc).__name__) from None
-        self._keys = {k.key_id: k.key for k in jwks.keys if k.key_id and k.key_type == "RSA"}
+        keys = {k.key_id: k.key for k in jwks.keys if k.key_id and k.key_type == "RSA"}
+        if not keys:
+            raise JwksUnavailable("no RSA keys")  # không xoá khoá đang dùng được
+        return keys
+
+    def _try_refresh(self, now: float) -> None:
+        self._last_attempt = now
+        try:
+            keys = self._load()
+        except JwksUnavailable:
+            self._last_failed = True
+            return
+        self._keys, self._last_success, self._last_failed = keys, now, False
 
     def key_for(self, kid: str) -> Any:
         with self._lock:
             now = self._clock()
-            age = None if self._fetched_at is None else now - self._fetched_at
-            stale = age is None or age >= self._max_age
-            may_refresh = age is None or age >= self._min_refresh
-            if stale or (kid not in self._keys and may_refresh):
-                try:
-                    self._refresh(now)
-                except JwksUnavailable:
-                    if not self._keys:
-                        raise
-            key = self._keys.get(kid)
-        if key is None:
-            raise InvalidToken("unknown kid")
-        return key
+            age = None if self._last_success is None else now - self._last_success
+            want = age is None or age >= self._max_age or kid not in self._keys
+            may = self._last_attempt is None or now - self._last_attempt >= self._min_refresh
+            if want and may:
+                self._try_refresh(now)
+                age = None if self._last_success is None else now - self._last_success
+            usable = age is not None and age < self._max_age + self._grace
+            key = self._keys.get(kid) if usable else None
+            failed = self._last_failed
+        if key is not None:
+            return key
+        if failed or not usable:
+            raise JwksUnavailable("jwks")
+        raise InvalidToken("unknown kid")
 
 
 _caches: dict[str, JwksCache] = {}

@@ -195,6 +195,6 @@ class McpAccess(Base):
 
     sub: Mapped[str] = mapped_column(String(100), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    label: Mapped[str] = mapped_column(Text, default="")
+    label: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
