@@ -16,16 +16,16 @@ Bảng API (mọi đường dẫn nằm dưới `/api`, router `backend/app/auth
 
 | Endpoint | Cần | Thành công | Lỗi | file:dòng |
 | --- | --- | --- | --- | --- |
-| `POST /api/auth/login` `{email,password}` | không | 200 `{token, user:{email,roles}}` | 401 `invalid_credentials` · 429 `too_many_attempts` | backend/app/auth.py:222-245 |
-| `POST /api/auth/logout` | Bearer | 204 (xoá đúng phiên này) | 401 | backend/app/auth.py:248-252 |
-| `GET /api/me` | Bearer | `{email, roles}` | 401 | backend/app/auth.py:255-257 |
-| `POST /api/auth/password` `{current_password,new_password}` | Bearer | 204, thu hồi các phiên KHÁC | 401 `wrong_password` · 400 `weak_password` (<10 ký tự) · 429 | backend/app/auth.py:260-281 |
+| `POST /api/auth/login` `{email,password}` | không | 200 `{token, user:{email,roles}}` | 401 `invalid_credentials` · 429 `too_many_attempts` | backend/app/auth.py:249-272 |
+| `POST /api/auth/logout` | Bearer | 204 (xoá đúng phiên này; ở chế độ mở không xoá gì) | 401 | backend/app/auth.py:275-279 |
+| `GET /api/me` | Bearer (hoặc không có, nếu chế độ mở bật) | `{email, roles, open}`; `open=true` khi phiên là user mở | 401 | backend/app/auth.py:282-284 |
+| `POST /api/auth/password` `{current_password,new_password}` | Bearer | 204, thu hồi các phiên KHÁC | 401 `wrong_password` · 400 `weak_password` (<10 ký tự) · 429 · 403 `open_mode` (phiên mở) | backend/app/auth.py:287-309 |
 | `GET /api/progress` | Bearer | `{exercises:{id:{passed,drafts,hints_used,solution_viewed}}, state:{review,activity}}` | 401 | backend/app/progress.py:196-216 |
 | `PUT /api/progress/{exercise_id}` `{drafts,hints_used,solution_viewed}` | Bearer | 204 | 404 `exercise_not_found` · 422 `unknown_labels` hoặc có field `passed` · 413 | backend/app/progress.py:219-256 |
 | `PUT /api/progress/state` `{review,activity}` | Bearer | 204 | 401 · 422 | backend/app/progress.py:179-193 |
-| `POST /run` (kèm Bearer tuỳ chọn) | không | như cũ; `passed` + token hợp lệ thì server ghi passed | token sai/hết hạn: chấm như khách, không 401 | backend/app/main.py:131-146 |
+| `POST /run` (kèm Bearer tuỳ chọn) | không | như cũ; `passed` + token hợp lệ thì server ghi passed | token sai/hết hạn: chấm như khách, không 401 (chế độ mở: không token cũng ra user mở, ghi passed cho user đó) | backend/app/main.py:131-147 |
 
-Hợp đồng 401/403: không có token, token sai hoặc hết hạn (phiên sống 30 ngày) đều là 401 `not_authenticated` kèm `WWW-Authenticate: Bearer` (backend/app/auth.py:155-165, 35); đã đăng nhập nhưng thiếu role `admin` ở route admin là 403 `admin_required`, role đọc lại từ DB mỗi request (backend/app/auth.py:168-171). Phía app, `ApiClient` thấy 401 cho đúng token đang dùng thì xoá phiên local và `AuthGate` hiện lại màn đăng nhập (mobile/lib/data/api_client.dart:59-75, mobile/lib/app/auth_gate.dart:13-36).
+Hợp đồng 401/403: không có token, token sai hoặc hết hạn (phiên sống 30 ngày) đều là 401 `not_authenticated` kèm `WWW-Authenticate: Bearer` (backend/app/auth.py:158-165); đã đăng nhập nhưng thiếu role `admin` ở route admin là 403 `admin_required`, role đọc lại từ DB mỗi request (backend/app/auth.py:191-194). Phía app, `ApiClient` thấy 401 cho đúng token đang dùng thì xoá phiên local và `AuthGate` hiện lại màn đăng nhập (mobile/lib/data/api_client.dart:59-75, mobile/lib/app/auth_gate.dart:13-36).
 
 Chống dò mật khẩu (đếm trong RAM): đăng nhập sai quá 5 lần/15 phút theo cặp (IP, email) hoặc quá 30 lần/15 phút theo IP trên mọi email thì 429; đổi mật khẩu sai cũng bị đếm theo (IP, user). Một lượt thử được "giữ chỗ" trước khi verify, trong cùng một lock, để nhiều request song song không cùng lọt qua; đăng nhập đúng thì trả chỗ lại. Email không tồn tại vẫn tốn thời gian verify như email thật (băm sẵn một hash giả) để không lộ email nào có tài khoản.
 
@@ -37,6 +37,21 @@ def create_session(session: Session, user_id: int) -> str:
     return token
 ```
 (backend/app/auth.py:216-219)
+
+### Chế độ mở (`AUTH_OPEN_AS`)
+
+Để demo không cần màn đăng nhập, backend đọc biến môi trường `AUTH_OPEN_AS=<email>` mỗi lần cần (không cache). Request không có token hoặc token sai được coi là user có email đó, với đúng role trong DB, nên `/api/admin/*` cũng mở theo role của user này. Token thật vẫn thắng: người đăng nhập thật không bị biến thành user mở. Biến rỗng hoặc email không có trong DB thì `open_user` trả None và mọi thứ chạy y như chưa có tính năng này (401/403 như trước).
+
+| Việc | Hành vi ở chế độ mở | file:dòng |
+| --- | --- | --- |
+| Chọn user | `resolve_user`: token hợp lệ trước, rồi `open_user`; vẫn None thì 401 | backend/app/auth.py:166-189 |
+| Nhận diện phiên | `session_id = 0` (không có dòng `user_sessions` nào) | backend/app/auth.py:163, 175 |
+| `GET /api/me` | thêm `open: true/false` (`session_id == 0`) | backend/app/auth.py:224-226, 282-284 |
+| `POST /api/auth/password` | 403 `open_mode`, vì đổi mật khẩu sẽ thu hồi mọi phiên thật của user | backend/app/auth.py:293-296 |
+| `POST /api/auth/logout` | 204, không xoá gì | backend/app/auth.py:275-279 |
+| `POST /run` | `lookup_user` luôn được gọi (kể cả token None) nên passed ghi cho user mở | backend/app/main.py:147, backend/app/auth.py:200-207 |
+
+Cách app vào: nếu không có token lưu, `restore()` gọi `GET /api/me` không header; chỉ khi 200 và `open == true` mới tạo `AuthSession(token: '', open: true)` và vào thẳng Home, mọi trường hợp khác về màn đăng nhập (mobile/lib/data/auth_repository.dart:84, 114-123). Nếu có token cũ trong prefs mà server trả `open: true`, token bị xoá và app vào bằng phiên mở (mobile/lib/data/auth_repository.dart:96-101). `ApiClient` không gửi `Authorization` khi token rỗng và 401 với token rỗng không gọi `expire()`, tránh vòng lặp đăng xuất (mobile/lib/data/api_client.dart:68-72). Menu tài khoản ở phiên mở ẩn "Đổi mật khẩu" và "Đăng xuất", chỉ hiện email và "Chế độ mở"; nút "Đăng xuất" ở màn lỗi tải tiến độ cũng ẩn (mobile/lib/features/browse/home_screen.dart:66-72, mobile/lib/app/auth_gate.dart:63). Bật/tắt trên VPS xem `docs/modules/deploy.md`.
 
 Dữ liệu tiến độ nằm ở hai bảng không thuộc vòng "xoá hết rồi nạp lại" của nội dung:
 
@@ -65,6 +80,8 @@ Phía app: `AuthController` lưu token ở SharedPreferences khoá `auth.token` 
 | `/run` chấm như khách khi token sai | trả 401 | Run không bị chặn bởi phiên hỏng; đổi lại có lệch local/server (Giới hạn) |
 | Tiến độ "mới nhất thắng", không gộp | gộp theo thời gian | một học viên một thiết bị là chính; gộp tốn công cho ít lợi |
 
+Chế độ mở đổi "phân quyền kiểm ở server" thành "ai có link là user đó": chọn vậy vì demo không muốn mật khẩu, và giữ nguyên code đăng nhập (chỉ tắt cờ là quay lại) thay vì xoá auth.
+
 Không làm: đăng ký tự do (user chỉ tạo qua `seed_users`), quản lý user (thêm/xoá, đổi role), quên mật khẩu, xếp hạng giữa người học. Mật khẩu mới chỉ cần ≥10 ký tự (backend/app/auth.py:36), không có luật độ phức tạp. Giới hạn kích thước: mỗi bài draft tổng ≤64KB, hint ≤3 mỗi ô, `activity` ≤400 mục khoá `YYYY-MM-DD`, `review` ≤2000 mục / 64KB / sâu ≤32 và cấm ký tự NUL hoặc surrogate lẻ vì Postgres JSONB không lưu được (backend/app/progress.py:62-70, 73-105).
 
 ## Giới hạn đã biết
@@ -77,7 +94,10 @@ Không làm: đăng ký tự do (user chỉ tạo qua `seed_users`), quản lý 
 - Draft sát 64KB bị middleware body chặn 413 `body_too_large` trước nhánh `draft_too_large`; client nuốt lỗi (DEVIATIONS.md).
 - Backend: `activity` không có cận trên cho giá trị số; JSONB có thể đổi float lớn thành int; test DB dùng chung nên hai pytest song song đỏ lẻ tẻ.
 - Chưa xác minh: luồng UI thật trên Chrome/VPS do reviewer chạy (e2e tự chạy bằng script API 20/20 và widget test).
+- Chế độ mở: ai có link là `AUTH_OPEN_AS` (mặc định test@gmail.com, có role admin, gồm `/api/admin/*`); chỉ nên bật cho demo (planning/crew/2026-10-11-auth-open-mode/PLAN.md).
+- Chế độ mở: phiên mở nằm trong RAM của app; server tắt cờ giữa chừng thì 401 không tự đưa về màn đăng nhập (token rỗng không `expire()`); mở thẳng `/account/password` bằng URL ở phiên mở báo "phiên hết hạn"; mất mạng lúc khởi động thì `_restoreOpen` trả null và hiện màn đăng nhập tới khi tải lại (planning/crew/2026-10-11-auth-open-mode/STATUS.md Backlog, reviews/SEAM.md #3).
+- Chưa xác minh: chạy trình duyệt thật chế độ mở (e2e dùng pytest 331, flutter test 438 và script API local/VPS).
 
 ## Nguồn
 
-backend/app/auth.py:1-281; backend/app/progress.py:1-256; backend/app/tables.py:128-184; backend/migrations/versions/0004_users_progress.py:1-65; backend/app/main.py:131-184; mobile/lib/data/auth_repository.dart; mobile/lib/data/api_client.dart; mobile/lib/data/progress_api.dart; mobile/lib/app/auth_gate.dart; mobile/lib/features/exercise/session_controller.dart; mobile/lib/features/account/; planning/crew/2026-10-11-users-progress-admin/PLAN.md (INV-01..05), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.
+backend/app/auth.py:1-281; backend/app/progress.py:1-256; backend/app/tables.py:128-184; backend/migrations/versions/0004_users_progress.py:1-65; backend/app/main.py:131-184; mobile/lib/data/auth_repository.dart; mobile/lib/data/api_client.dart; mobile/lib/data/progress_api.dart; mobile/lib/app/auth_gate.dart; mobile/lib/features/exercise/session_controller.dart; mobile/lib/features/account/; planning/crew/2026-10-11-users-progress-admin/PLAN.md (INV-01..05), reviews/SEAM.md, DEVIATIONS.md, STATUS.md; planning/crew/2026-10-11-auth-open-mode/PLAN.md (INV-01..04), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.

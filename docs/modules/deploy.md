@@ -59,13 +59,25 @@ INITIAL_PASSWORDS_FILE=/etc/smart-coding-study/initial-passwords .venv/bin/pytho
 | Mật khẩu ban đầu | sinh ngẫu nhiên, APPEND vào `/etc/smart-coding-study/initial-passwords` (file 0600 mở bằng `O_NOFOLLOW`, thư mục 0700); stdout chỉ in `created N user(s)`, không bao giờ in mật khẩu | backend/app/seed_users.py:34-42, 73-74 |
 | File mật khẩu dev | `backend/.initial-passwords` bị rsync loại trừ và bị `rm -f` trên server trước khi mở quyền đọc thư mục app | deploy/deploy.sh:27, 83 |
 | Lấy mật khẩu | chủ VPS tự đọc `ssh vps sudo cat /etc/smart-coding-study/initial-passwords`, đăng nhập, đổi mật khẩu, rồi xoá file | deploy/README.md:44-54 |
-| Smoke test | `/api/me` không token qua nginx phải trả 401, ngược lại deploy dừng (chứng minh `location /api/` đã đi vào backend) | deploy/deploy.sh:114-116 |
+| Chế độ mở | biến local `DEPLOY_AUTH_OPEN_AS` (mặc định `test@gmail.com`; đặt rỗng để tắt), kiểm dạng email ở máy local rồi lại ở server; trước `systemctl restart`, xoá dòng `AUTH_OPEN_AS=` cũ trong env file và ghi lại dòng mới nếu khác rỗng (đúng 1 dòng, idempotent) | deploy/deploy.sh:14-21, 96-100 |
+| Smoke test | `/api/me` không token qua nginx phải trả 200 khi chế độ mở bật, 401 khi tắt, ngược lại deploy dừng (chứng minh `location /api/` đã đi vào backend và cờ đã tới backend) | deploy/deploy.sh:128-131 |
 
 Cấu hình đi kèm: deploy/nginx/smart-coding-study.conf (nghe 8090; `location = /content` và `= /run` proxy tới
 127.0.0.1:8100; `location /api/` proxy tới cùng chỗ với `proxy_read_timeout 15s`; `location /api/admin/` cho body tới 4200k và timeout 60s
 vì admin gửi cả bộ nội dung (backend cho 4MB); còn lại `try_files` về `index.html`; `index.html` và service worker `no-cache`) và
 deploy/systemd/smart-coding-study-api.service (uvicorn `127.0.0.1:8100 --proxy-headers`, `User=smartcs`,
 `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome`, `ReadOnlyPaths`, `Restart=on-failure`).
+
+Bật/tắt chế độ mở (người dùng không cần đăng nhập khi bật, xem `docs/modules/auth-progress.md`):
+
+```bash
+deploy/deploy.sh                                 # mặc định: mở, user test@gmail.com
+DEPLOY_AUTH_OPEN_AS=<email> deploy/deploy.sh     # mở dưới user khác (email phải có trong DB)
+DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh            # TẮT: bật lại màn đăng nhập
+```
+(deploy/README.md:43-48, deploy/deploy.sh:14-16)
+
+Lưu ý: mặc định của `deploy.sh` là BẬT, nên chạy deploy không đặt biến sẽ mở lại chế độ mở dù lần trước đã tắt. Email không có trong DB thì backend coi như tắt, smoke test mong 200 sẽ thất bại và deploy báo lỗi rõ ràng.
 
 ## Ranh giới & đánh đổi
 
@@ -86,6 +98,7 @@ có rollback khi `nginx -t` lỗi).
 
 - `/content` và `/run` vẫn công khai, không `limit_req`; code học viên chuyển tới Judge0 công khai nên IP VPS có
   thể bị chặn (deploy/README.md:66-69).
+- Chế độ mở bật mặc định: ai có link là user mở (admin, gồm `/api/admin/*`); đây là giới hạn đã khai của run, tắt bằng `DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh` (planning/crew/2026-10-11-auth-open-mode/PLAN.md).
 - HTTP thường, chưa domain/HTTPS: mật khẩu và token đăng nhập đi không mã hoá; token lưu localStorage 30 ngày
   (deploy/README.md:70-72). Cần domain + HTTPS trước khi dùng thật.
 - `nginx` giới hạn body `/api/` ở 80k trừ `/api/admin/` (4200k) (deploy/nginx/smart-coding-study.conf:10, 43); `nginx -t` mới chỉ chạy qua deploy thật, chưa có kiểm riêng cho location admin.
@@ -99,6 +112,6 @@ có rollback khi `nginx -t` lỗi).
 
 ## Nguồn
 
-deploy/deploy.sh:1-121; deploy/README.md:1-75; deploy/nginx/smart-coding-study.conf:1-65; backend/app/seed_users.py:1-79; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 7), STATUS.md;
+deploy/deploy.sh:1-135; deploy/README.md:1-82; planning/crew/2026-10-11-auth-open-mode/PLAN.md, STATUS.md; deploy/nginx/smart-coding-study.conf:1-65; backend/app/seed_users.py:1-79; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 7), STATUS.md;
 deploy/systemd/smart-coding-study-api.service:1-22; backend/app/main.py:34-36;
 planning/crew/2026-10-11-deploy-vps-web/STATUS.md; reviews/SEAM.md; DEVIATIONS.md.

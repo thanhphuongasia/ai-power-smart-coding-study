@@ -362,7 +362,8 @@ Phân quyền kiểm ở server; UI ẩn nút Admin chỉ để gọn. Chi tiế
 | Chặng | Làm gì | file:dòng |
 | --- | --- | --- |
 | Đăng nhập | 401 `invalid_credentials`; sai 5 lần/15 phút theo (IP, email) hoặc 30 lần/IP thì 429; phiên sống 30 ngày | backend/app/auth.py:222-245, backend/app/auth.py:35-41 |
-| Kiểm quyền | không token hợp lệ: 401 `not_authenticated`; thiếu role admin: 403 `admin_required` | backend/app/auth.py:160-171 |
+| Kiểm quyền | không token hợp lệ: 401 `not_authenticated`; thiếu role admin: 403 `admin_required` | backend/app/auth.py:184-194 |
+| Chế độ mở | env `AUTH_OPEN_AS=<email>`: không token (hoặc token sai) = user đó, token thật thắng; `/api/me` có `open`; đổi mật khẩu 403 `open_mode`; app vào thẳng bằng phiên token rỗng (xem `docs/modules/auth-progress.md`) | backend/app/auth.py:166-189, mobile/lib/data/auth_repository.dart:114-123 |
 | Tiến độ | `GET /api/progress` (ẩn id bài không còn), `PUT /api/progress/{id}` và `/state`; không nhận `passed` | backend/app/progress.py:179-256 |
 | Ghi passed | chỉ `/run` ghi, khi máy chấm trả passed và request có Bearer hợp lệ | backend/app/progress.py:28-44, backend/app/main.py:178-184 |
 | Bảng | `users`, `user_sessions`, `user_progress` (khoá `(user_id, exercise_id)`, KHÔNG FK tới bài), `user_state` | backend/app/tables.py:128-184 |

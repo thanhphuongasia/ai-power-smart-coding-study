@@ -588,3 +588,15 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: chủ VPS phải tự đọc file qua ssh rồi đổi mật khẩu và xoá file; nhiều dòng cùng email (seed lỗi giữa chừng) thì dòng cuối đúng. Bác bỏ external T-04 LOW "stdout in đường dẫn file" vì đường dẫn không phải bí mật.
 
 **Nguồn**: backend/app/seed_users.py:1-79; deploy/deploy.sh:27,70-83; deploy/README.md:44-54; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 7, INV-03), DEVIATIONS.md.
+
+### Demo không đăng nhập bằng cờ `AUTH_OPEN_AS`, không gỡ code auth
+
+**Quyết định**: biến môi trường `AUTH_OPEN_AS=<email>` bật chế độ mở: request không có token hợp lệ được coi là user đó (token thật vẫn thắng). `/api/me` trả thêm `open`; app thấy `open: true` thì vào thẳng bằng phiên token rỗng, không gửi Bearer, ẩn đăng xuất/đổi mật khẩu; `POST /api/auth/password` ở phiên mở trả 403 `open_mode`. `deploy.sh` bật mặc định cho `test@gmail.com`, tắt bằng `DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh`.
+
+**Vì sao**: user đang demo và không muốn mật khẩu; một cờ giữ nguyên toàn bộ code auth, tắt cờ là về hành vi cũ (INV-01), gỡ auth thì mất tiến độ theo user và phân quyền admin. Đổi mật khẩu bị chặn vì phiên ảo không có phiên để giữ lại, nên đổi sẽ xoá hết phiên thật của user (review mối nối #1).
+
+**Phương án đã bỏ / lệch plan**: bác bỏ finding "Critical" của external về giá trị `DEPLOY_AUTH_OPEN_AS` phá quote/chèn lệnh qua ssh: chỉ operator đặt được, nhưng sửa rẻ nên kiểm dạng email ở local và server. Thêm chặn đổi mật khẩu ngoài plan ban đầu.
+
+**Đánh đổi đã chấp nhận**: ai có link là `test@gmail.com` (admin, gồm `/api/admin/*`); mặc định deploy là BẬT; phiên mở trong RAM nên server tắt cờ giữa chừng thì app không tự về màn đăng nhập tới khi tải lại.
+
+**Nguồn**: backend/app/auth.py:163-189, 224-226, 282-296; backend/app/main.py:147; mobile/lib/data/auth_repository.dart:84-123; mobile/lib/data/api_client.dart:68-72; deploy/deploy.sh:14-21, 96-100, 128-131; planning/crew/2026-10-11-auth-open-mode/PLAN.md (INV-01..04), DEVIATIONS.md, reviews/SEAM.md.
