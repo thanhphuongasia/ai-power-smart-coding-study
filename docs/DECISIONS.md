@@ -600,3 +600,15 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: ai có link là `test@gmail.com` (admin, gồm `/api/admin/*`); mặc định deploy là BẬT; phiên mở trong RAM nên server tắt cờ giữa chừng thì app không tự về màn đăng nhập tới khi tải lại.
 
 **Nguồn**: backend/app/auth.py:163-189, 224-226, 282-296; backend/app/main.py:147; mobile/lib/data/auth_repository.dart:84-123; mobile/lib/data/api_client.dart:68-72; deploy/deploy.sh:14-21, 96-100, 128-131; planning/crew/2026-10-11-auth-open-mode/PLAN.md (INV-01..04), DEVIATIONS.md, reviews/SEAM.md.
+
+### Admin đi từng tầng (drill-down), không dùng accordion/cây phẳng
+
+**Quyết định**: trang Admin chia thành các màn riêng theo tầng `/admin` → `/admin/theme/:themeId` → `/admin/module/:moduleId` → `/admin/exercise/:id`, mỗi màn có breadcrumb, thẻ lớn, menu ⋯ và một thanh lưu ghim dùng chung; không gộp cả cây vào một màn xổ ra/thu vào (accordion).
+
+**Vì sao**: cây phẳng nhiều icon sửa/thêm/xoá chữ to rất rối trên điện thoại (ảnh user gửi); user chọn drill-down. Mỗi tầng ít phần tử, chạm to, back và URL web đúng theo tầng, và các hành động hiếm (đổi tên, xoá) gom vào ⋯. Controller/API giữ nguyên (chỉ thêm `addTheme`, `addExercise(functionName, className)`), nên dirty/409/422/xác nhận Hủy sửa không đổi.
+
+**Phương án đã bỏ**: accordion trong một màn (user không chọn; run không ghi lý do chi tiết hơn). Chấm đỏ lỗi hiện ở thẻ bài/module/project thay cho danh sách lỗi dài.
+
+**Đánh đổi đã chấp nhận**: đi sâu tốn nhiều chạm hơn cây một màn; breadcrumb phải xử lý cả stack push và mở thẳng URL (`adminGoToLevel`); chấm đỏ phụ thuộc định dạng chuỗi lỗi server `bài <id>`, nên lỗi không kèm id bài chỉ hiện ở chip "N lỗi". Seam review ban đầu bắt lỗi regex bỏ sót `bài <id> ô <X>:`, đã sửa trước khi commit.
+
+**Nguồn**: mobile/lib/app/router.dart:88-110; mobile/lib/features/admin/admin_widgets.dart:14-35,117-130; planning/crew/2026-10-11-admin-ux-levels/PLAN.md, reviews/SEAM.md, reviews/T-02.md.

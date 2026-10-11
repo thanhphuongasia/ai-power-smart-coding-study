@@ -64,7 +64,41 @@ CLI (backend/app/load_content.py:390-416):
 
 Quy trình sửa nội dung bằng file: `export_content` → sửa file → `load_content --force`. Không có `--if-empty` hay `--force` thì lệnh từ chối chạy (exit 2), nên không còn cách "vô tình ghi đè" (backend/app/load_content.py:398-400).
 
-Màn Admin trong app: `AdminScreen` hiện cây theme → module lồng → file → bài; sửa tên/mô tả theme, module, file; thêm module/file/bài; xoá bài (có xác nhận); sửa sơ đồ class dạng JSON theo theme. "Kiểm tra" gọi validate, "Lưu" gọi PUT kèm `version` đang giữ; 409 hiện banner xung đột (tải lại sẽ bỏ thay đổi chưa lưu), 422 hiện danh sách lỗi ngay trên form. `ExerciseEditorScreen` (route `/admin/exercise/:id`) là form sửa một bài: field chính, từng ô, template/solution, judge cases dạng JSON; sửa trên bản nháp, chỉ khi bấm "Áp dụng" mới ghi vào cây, và có ghép thử đáp án vào template để báo lệch với solution. Sau khi Lưu thành công, `AdminController` gọi `contentProvider.notifier.refresh()` để Home thấy tên mới ngay; thiếu bước này admin lưu xong vẫn thấy dữ liệu cũ tới khi tải lại trang (mobile/lib/features/admin/admin_controller.dart:456-480, mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/exercise_editor.dart:380).
+Màn Admin trong app đi từng tầng (drill-down: chạm một thẻ để xuống tầng sâu hơn, mỗi tầng một màn riêng), thay cho cây phẳng nhiều icon trước đây. Bốn route go_router đều đăng ký ở `mobile/lib/app/router.dart:88-110`, và mỗi tầng được `push` từ tầng trên nên nút back lùi đúng một tầng:
+
+| Tầng | Route | Màn | Hiện gì |
+| --- | --- | --- | --- |
+| 1 | `/admin` | `AdminScreen` | thẻ project (theme): tên, mô tả, "N module · M bài", nút sơ đồ class (dialog JSON), menu ⋯ "Đổi tên / mô tả"; nút lớn "Thêm project" |
+| 2 | `/admin/theme/:themeId` | `AdminThemeScreen` | thẻ module cấp 1 (sub-module đếm gộp), menu ⋯ đổi tên/mô tả, nút "Thêm module" |
+| 3 | `/admin/module/:moduleId` | `AdminModuleScreen` | mỗi file là một nhóm (⋯ "Đổi tên"), bài là thẻ nhỏ (tiêu đề, `class.hàm`, số ô), ⋯ trên thẻ bài là "Xoá" (có xác nhận); "Thêm bài" cuối mỗi file, "Thêm file", sub-module là thẻ, "Thêm module con" |
+| 4 | `/admin/exercise/:id` | `ExerciseEditorScreen` | form sửa một bài (không đổi so với trước) |
+
+**Breadcrumb**: mỗi màn có một hàng ngắn kiểu "Projects / Airline / Flight"; chạm một mục là quay về cấp đó. `adminGoToLevel` pop đúng số tầng nếu stack đúng là chuỗi đã đi xuống, còn không (mở thẳng URL sâu, refresh web) thì `go` thẳng tới route cấp đó (mobile/lib/features/admin/admin_widgets.dart:117-130).
+
+**Menu ⋯** (`AdminActionMenu` + `AdminMenuEntry`) gom hành động phụ của thẻ vào một nút; thao tác thêm dùng nút lớn `AdminAddButton`. **Hộp thoại thêm bài** có ba ô: Tiêu đề, Tên hàm, Class (tuỳ chọn); tên hàm và class phải là định danh Python (`^[A-Za-z_][A-Za-z0-9_]*$`), tiêu đề rỗng thì không tạo. Bấm Thêm thì tạo bài với template khung đúng hàm/class đó rồi mở thẳng form sửa bài.
+
+**Thanh dưới ghim** `AdminSaveBar` dùng chung cho cả ba tầng: "Đã đồng bộ" hoặc "● Chưa lưu", nút Kiểm tra và Lưu; có lỗi thì hiện chip "N lỗi" chạm mở bottom sheet danh sách lỗi; "Hủy sửa" có hộp xác nhận. 409 hiện `AdminConflictBanner` (tải lại sẽ bỏ thay đổi chưa lưu); 422 đưa lỗi vào chip/sheet. Mọi ghi đi qua controller (`updateNode`, `addTheme`, `addModule`, `addFile`, `addExercise`, `deleteExercise`, ...), không màn nào sửa JSON trực tiếp, nên dirty/409/422 giữ nguyên hành vi cũ.
+
+**Chấm đỏ** trên thẻ bài, module và project lấy từ chuỗi lỗi server (hàm `exerciseIdsWithErrors` đổi chuỗi lỗi thành tập id bài), nhận ba dạng:
+
+| Dạng lỗi server | Ví dụ | Khớp bằng |
+| --- | --- | --- |
+| `bài <id>: …` | `bài e1: thiếu judge.solution` | `_errorIdPattern` |
+| `bài <id> ô <X>: …` | `bài e1 ô A: cần ít nhất 1 đáp án` | `_errorIdPattern` (nhóm `ô <X>` tuỳ chọn) |
+| `… (bài <id>)` ở cuối dòng | `theme X: thiếu class C (bài e1)` | `_errorTrailingIdPattern` |
+
+Lỗi không đúng dạng nào (ví dụ pydantic `exercises.<id>.field: msg`, lỗi cấp theme không kèm id bài) bị bỏ qua: chỉ thấy qua chip "N lỗi", không có chấm đỏ.
+
+**Controller**: `addTheme(name, {description})` tạo theme rỗng (sơ đồ `{classes:[],relations:[]}`, `topics: []`), trả id mới hoặc null nếu tên rỗng. `addExercise(fileId, title, {functionName, className})` dựng khung qua `exerciseScaffold`:
+
+```dart
+final template = cls == null
+    ? 'def $fn():\n    # TODO A'
+    : 'class $cls:\n    def $fn(self):\n        # TODO A';
+// ... 'indent_level': cls == null ? 1 : 2,
+```
+
+Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Sau khi Lưu thành công, `AdminController` gọi `contentProvider.notifier.refresh()` để Home thấy tên mới ngay; thiếu bước này admin lưu xong vẫn thấy dữ liệu cũ tới khi tải lại trang.
 
 ## Ranh giới & đánh đổi
 
@@ -86,6 +120,7 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 
 - Luật nội dung có hai bản cài (Dart `mergeCells` cho preview/test, Python `content_rules.py` cho server); không có test so trực tiếp hai bản nên có thể trôi dần. Server là nguồn quyết định (backend/app/content_rules.py:8-11).
 - Form editor chỉ cảnh báo 4 trong 12 luật; "Tải lại" ở banner 409 không có hộp xác nhận; sửa trong lúc đang tải lại bị ghi đè; field lạ trong `challenge.small/project` mất khi "Áp dụng"; chưa rõ lý do khi `replaceExercise` trả false (STATUS.md Backlog).
+- UI drill-down: web luôn mở lại Home khi tải trang nên deep link `/admin/...` chưa dùng được (có từ trước); đếm số bài/lỗi tính lại mỗi lần build, chưa đo; test chưa phân biệt nhánh pop/go của breadcrumb trên stack sâu (planning/crew/2026-10-11-admin-ux-levels/reviews/T-02.md Backlog).
 - Admin đổi nhãn ô thì lịch ôn khoá theo `block.id` cũ thành mồ côi (SEAM #3).
 - Backend: giữ kết nối DB khi đọc body admin; chưa có test tranh khoá bằng hai kết nối thật; phép kiểm chéo CPU của sơ đồ được đo <1s ở payload xấu nhất bằng test hiệu năng, nhưng run đóng sau 3 vòng review (vòng 3 vẫn CẦN SỬA, orchestrator sửa rồi đóng, không có vòng 4; user duyệt).
 - Admin lưu xong, học viên đang mở bài giữ nội dung cũ tới lần tải kế; bài bị xoá thì `/run` trả 404.
@@ -93,4 +128,4 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 
 ## Nguồn
 
-backend/app/admin_api.py:1-124; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-60; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart, admin_screen.dart, exercise_editor.dart); mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.
+backend/app/admin_api.py:1-124; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-60; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:88-110; planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.

@@ -29,7 +29,7 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | features/exercise | màn bài 3 tab (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
 | features/review, stats, practice, shell | ôn tập, thống kê, luyện, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
-| features/admin + account | màn Admin (cây nội dung, form sửa bài; mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/exercise_editor.dart:380), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
+| features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài (mobile/lib/features/admin/exercise_editor.dart:380), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
 | deploy | triển khai lên VPS dùng chung: nginx cổng 8090 phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:70-79, deploy/README.md:11-20 | docs/modules/deploy.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
@@ -379,7 +379,7 @@ Chạy qua HTTP thường nên mật khẩu và token chưa được mã hoá kh
 
 ### Là gì
 
-Admin sửa nội dung ngay trong app: màn Admin có cây theme → module → file → bài và form sửa từng bài. Bấm "Kiểm tra" chạy bộ luật
+Admin sửa nội dung ngay trong app: màn Admin đi từng tầng theme → module → file/bài (mỗi tầng một màn, có breadcrumb) và form sửa từng bài. Bấm "Kiểm tra" chạy bộ luật
 nội dung ở server mà không ghi, bấm "Lưu" ghi cả bộ nội dung kèm số phiên bản đang giữ; nếu người khác đã lưu trước thì server trả 409 để
 không ai âm thầm xoá việc của nhau. CLI và nút Lưu cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
 `docs/modules/content-admin.md`.
