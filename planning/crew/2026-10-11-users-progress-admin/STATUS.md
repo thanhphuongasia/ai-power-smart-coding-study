@@ -2,7 +2,7 @@ Worktree: (không dùng — thẳng trên main)
 Branch:   main
 Issue:    #23 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/23
 
-# Status: open (đã qua seam gate, đang commit + deploy)
+# Status: done — commit c17baa1 trên main, đã deploy http://178.105.5.12:8090
 
 | Task | Trạng thái | Review |
 |---|---|---|
@@ -29,4 +29,7 @@ Kiểm chứng: backend `pytest -q` 320 passed, 2 skipped · mobile `flutter ana
 - Backend: activity value không có cận trên; giữ kết nối DB khi đọc body admin; JSONB đổi float lớn → int; test DB dùng chung (2 pytest song song đỏ lẻ tẻ); chưa có test tranh khoá bằng 2 kết nối thật.
 - App: client không chặn mật khẩu >256 ký tự; chưa có trang quản lý user.
 
-Next action: commit + push main → deploy → kiểm VPS (không đăng nhập hộ) → comment issue #23 → distill.
+Deploy: content `skip` (DB đã có, version VPS = content.json sha256:f42bc893…), `created 2 user(s)`. VPS không đăng nhập: /api/me, /api/progress, /api/admin/content → 401; login sai ×5 → 401, lần 6 → 429; /run khách → passed; file mật khẩu 600 trong thư mục 700; log deploy/journal không có mật khẩu.
+Issue #23 đóng (Closes trong commit) + comment kết quả: https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/23#issuecomment-6108020542
+
+Next action: (không) — user lấy mật khẩu `ssh vps sudo cat /etc/smart-coding-study/initial-passwords`, đổi mật khẩu, xoá file.
