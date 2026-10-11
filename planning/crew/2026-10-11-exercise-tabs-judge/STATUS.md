@@ -3,6 +3,7 @@
 Worktree: /Users/phuongmacbook/Developer/Personal/Projects/ai-power-coding-study.worktrees/crew-2026-10-11-exercise-tabs-judge
 Branch:   crew/2026-10-11-exercise-tabs-judge
 Issue:    #8 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/8
+PR:       #9 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/9
 
 State: done (chờ user merge PR) — mọi task đóng, verify-seam exit 0
 
