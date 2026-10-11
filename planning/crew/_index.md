@@ -9,4 +9,4 @@
 | 2026-10-11-class-diagram | Sơ đồ class trong tab Challenge (#21) | done (main) |
 | 2026-10-11-reservation-rules-outbox | Nghiệp vụ đặt chỗ + Notifier + Outbox dùng chung (#22) | done (main) |
 | 2026-10-11-users-progress-admin | User + đăng nhập + tiến độ server + admin nội dung (#23) | done (main c17baa1) |
-| 2026-10-11-auth-open-mode | Chế độ mở: bỏ màn đăng nhập bằng cờ AUTH_OPEN_AS | open (main) |
+| 2026-10-11-auth-open-mode | Chế độ mở: bỏ màn đăng nhập bằng cờ AUTH_OPEN_AS | done (main a12ee78) |
