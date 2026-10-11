@@ -382,6 +382,8 @@ chuyển tới Judge0 công khai nên IP VPS có thể bị chặn; HTTP thườ
 reviews/SEAM.md.
 
 **Bổ sung (commit c17baa1)**: nginx proxy thêm `location /api/` và `location /api/admin/`; deploy nạp nội dung chỉ khi DB rỗng và seed user; link không còn "không mật khẩu" cho phần `/api/*` (nhưng `/content`, `/run` vẫn công khai; vẫn HTTP thường).
+
+**Cập nhật (commit a25b41d)**: origin không còn `http://<ip>:8090` mà là `https://codewithphuong.jacons-corp.com` (nginx 443); `:8090` và `:80` chỉ trả 308 sang domain — xem mục "HTTPS bằng domain riêng" cuối file. Các nhận xét "HTTP thường" ở mục này là hiện trạng trước commit đó.
 ### Module lồng nhau = `topics.parent_id` + `position` theo thứ tự duyệt trước (preorder)
 
 **Quyết định**: module con là hàng `topics` tự tham chiếu qua `parent_id` (FK về `topics.id`, CASCADE, nullable);
@@ -612,3 +614,25 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: đi sâu tốn nhiều chạm hơn cây một màn; breadcrumb phải xử lý cả stack push và mở thẳng URL (`adminGoToLevel`); chấm đỏ phụ thuộc định dạng chuỗi lỗi server `bài <id>`, nên lỗi không kèm id bài chỉ hiện ở chip "N lỗi". Seam review ban đầu bắt lỗi regex bỏ sót `bài <id> ô <X>:`, đã sửa trước khi commit.
 
 **Nguồn**: mobile/lib/app/router.dart:88-110; mobile/lib/features/admin/admin_widgets.dart:14-35,117-130; planning/crew/2026-10-11-admin-ux-levels/PLAN.md, reviews/SEAM.md, reviews/T-02.md.
+
+### HTTPS bằng domain riêng + Let's Encrypt, không dùng sslip.io hay ngoại lệ ATS
+
+**Quyết định** (run 2026-10-11-testflight-prep): phục vụ web và API tại `https://codewithphuong.jacons-corp.com` (nginx cổng 443, cert Let's Encrypt lấy một lần bằng `certbot certonly --nginx`, chỉ lấy cert, không để certbot sửa conf; `certbot.timer` có sẵn tự gia hạn). Web (`PUBLIC_URL`) và iOS (`API_URL`) cùng trỏ origin này. `deploy.sh` kiểm cert tồn tại TRƯỚC mọi thay đổi (thiếu thì dừng, in lệnh certbot), smoke test qua HTTPS bằng `curl --resolve`, và `rollback_site` trả site nginx cũ nếu smoke lỗi. `PUBLIC_URL` không còn là biến ghi đè được.
+
+**Vì sao**: TestFlight cần app gọi server qua HTTPS (iOS chặn HTTP thường, ATS). User đã có domain trỏ về VPS và tài khoản certbot sẵn trên VPS dùng chung, nên cert hợp lệ do CA công khai cấp là đường ít bất ngờ nhất: cùng cách các site khác trên VPS đang làm, cert tự gia hạn, không cần cấu hình đặc biệt trong app.
+
+**Phương án đã bỏ**: (1) sslip.io (domain kiểu `<ip>.sslip.io`) — phụ thuộc dịch vụ ngoài và giới hạn phát cert của CA, địa chỉ khó nhớ; (2) ngoại lệ ATS (khai `NSAllowsArbitraryLoads` trong Info.plist) — vẫn truyền mật khẩu/token không mã hoá và có nguy cơ bị Apple hỏi lý do khi duyệt; app chỉ giữ `NSAllowsLocalNetworking` cho dev. Lý do bỏ hai phương án này suy từ PLAN.md (mục Context/Thiết kế) chứ run không ghi tranh luận riêng.
+
+**Đánh đổi đã chấp nhận**: deploy phụ thuộc cert có sẵn trên VPS (chưa có thì dừng); domain lặp ở `deploy/deploy.sh`, `deploy/ios-build.sh` và `server_name`/`return` trong file nginx, đổi domain phải sửa cả ba; chưa bật HSTS; chế độ mở vẫn khiến mọi người cài TestFlight là `test@gmail.com` (admin).
+
+**Nguồn**: deploy/deploy.sh:16-18, 30-33, 142-158; deploy/nginx/smart-coding-study.conf:1-30; deploy/ios-build.sh:11-12, 27-29; planning/crew/2026-10-11-testflight-prep/PLAN.md, STATUS.md, reviews/SEAM.md (INV-01, INV-02).
+
+### Chuyển hướng 308, không phải 301, cho `:80` và `:8090`
+
+**Quyết định**: server `:8090` (link cũ `http://<ip>:8090`) và server `:80` của domain đều `return 308 https://codewithphuong.jacons-corp.com$request_uri`. Smoke test của deploy đòi `:8090` trả đúng 308.
+
+**Vì sao**: 308 buộc client giữ nguyên method và body khi theo chuyển hướng, còn 301 cho phép (và nhiều client làm) đổi POST thành GET. App có `POST /run` và các `POST/PUT /api/*`; client cũ còn trỏ vào `:8090` sẽ gửi body đến đích đúng. Review external (Codex) của T-01 nêu điểm này; plan ban đầu ghi 301 và được sửa thành 308. Kiểm thật: POST `/run` qua `:8090` giữ POST và trả kết quả `passed`.
+
+**Đánh đổi đã chấp nhận**: client rất cũ không hiểu 308 có thể không theo chuyển hướng (không đo); domain hardcode trong hai `return`.
+
+**Nguồn**: deploy/nginx/smart-coding-study.conf:7-20; deploy/deploy.sh:156-158; planning/crew/2026-10-11-testflight-prep/DEVIATIONS.md, STATUS.md.

@@ -31,7 +31,8 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | features/review, stats, practice, shell | ôn tập, thống kê, luyện, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
 | features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài (mobile/lib/features/admin/exercise_editor.dart:380), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
-| deploy | triển khai lên VPS dùng chung: nginx cổng 8090 phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:70-79, deploy/README.md:11-20 | docs/modules/deploy.md:1 |
+| deploy | triển khai lên VPS dùng chung: nginx cổng 443 (HTTPS, domain `codewithphuong.jacons-corp.com`, cert Let's Encrypt; :80 và :8090 trả 308) phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:87-97, deploy/nginx/smart-coding-study.conf:8-27 | docs/modules/deploy.md:1 |
+| deploy/ios | build bản iOS cho TestFlight: `flutter build ipa` trỏ cùng origin HTTPS; icon tạm sinh bằng script — deploy/ios-build.sh:11-35, deploy/IOS-TESTFLIGHT.md:1, mobile/tool/make_app_icon.py:1 | docs/modules/deploy.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
 
 ## backend — chấm bài bằng Python thật
@@ -373,7 +374,7 @@ Phân quyền kiểm ở server; UI ẩn nút Admin chỉ để gọn. Chi tiế
 
 Chưa có đăng ký tự do, quản lý user, quên mật khẩu; user chỉ tạo qua `seed_users` (backend/app/seed_users.py:27-30). Đồng bộ "mới nhất thắng", không gộp.
 Bộ đếm đăng nhập sai nằm trong RAM nên mất khi restart và chỉ đúng với một process uvicorn (backend/app/auth.py:5-7).
-Chạy qua HTTP thường nên mật khẩu và token chưa được mã hoá khi truyền (deploy/README.md:70-72).
+Mật khẩu và token đi qua HTTPS (deploy/nginx/smart-coding-study.conf:22-30); chưa bật HSTS (header buộc trình duyệt luôn dùng https) (planning/crew/2026-10-11-testflight-prep/STATUS.md Backlog).
 
 ## Quản trị nội dung — DB là nguồn chính, một đường ghi
 
@@ -405,7 +406,7 @@ Lưu là thay toàn bộ nội dung, nên học viên đang mở bài giữ bả
 ### Là gì
 
 Phần triển khai đưa app lên một VPS dùng chung với dịch vụ khác để có một link thử trên trình duyệt.
-Trình duyệt chỉ nói chuyện với một địa chỉ duy nhất (cổng 8090 của nginx). nginx trả file web Flutter đã
+Trình duyệt và app iOS chỉ nói chuyện với một địa chỉ duy nhất, `https://codewithphuong.jacons-corp.com` (cổng 443 của nginx; iOS chặn HTTP thường nên bắt buộc HTTPS). nginx trả file web Flutter đã
 build sẵn, và chuyển các đường dẫn của backend (`/content`, `/run`, `/api/*`) vào uvicorn đang nghe ở
 `127.0.0.1:8100`. Vì web và API cùng "origin" (cùng giao thức, host, cổng) nên trình duyệt không áp luật
 chặn gọi chéo nguồn (CORS) và backend không phải cấu hình gì thêm. Chi tiết vận hành xem
@@ -416,7 +417,8 @@ chặn gọi chéo nguồn (CORS) và backend không phải cấu hình gì thê
 Đường đi của một request:
 
 ```text
-trình duyệt --HTTP--> nginx :8090
+trình duyệt / app iOS --HTTPS--> nginx :443 (domain, cert Let's Encrypt)
+  :80 và :8090 (link cũ http://<ip>:8090) -> 308 sang https://<domain>$request_uri
   nếu /content, /run hoặc /api/* -> uvicorn 127.0.0.1:8100 -> Postgres smart_coding_study
                                                    -> Judge0 CE công khai (chỉ /run)
   còn lại                -> /opt/smart-coding-study/web (file tĩnh, fallback index.html)
@@ -424,18 +426,20 @@ trình duyệt --HTTP--> nginx :8090
 
 | Thứ | Ở đâu | file:dòng |
 | --- | --- | --- |
-| Địa chỉ công khai + cổng mặc định, truyền vào bản build web làm `API_URL` | biến `PUBLIC_URL` | deploy/deploy.sh:13, deploy/deploy.sh:18 |
-| Build web ở máy dev (VPS không có Flutter), rồi rsync lên server | bước 1-2 của script | deploy/deploy.sh:17-28 |
-| User hệ thống riêng `smartcs`, không shell | `useradd` nếu chưa có | deploy/deploy.sh:40 |
-| Role + DB Postgres riêng; mật khẩu sinh trên server, đi qua stdin của psql | `openssl rand` + `pg` | deploy/deploy.sh:44-61 |
-| Bí mật chỉ nằm ở `/etc/smart-coding-study.env` (root:smartcs, 640), ghi file tạm rồi `mv` | `ENV_FILE` | deploy/deploy.sh:37-57 |
-| Migration; nạp nội dung CHỈ khi DB rỗng (DB là nguồn chính, deploy không ghi đè); seed user | `alembic upgrade head`, `app.load_content --if-empty`, `app.seed_users` | deploy/deploy.sh:70-79 |
-| Mật khẩu ban đầu chỉ vào `/etc/smart-coding-study/initial-passwords` (root, 0600, thư mục 0700); log deploy chỉ có số lượng; file dev bị loại khỏi rsync và xoá trên server | `INITIAL_PASSWORDS_FILE` | deploy/deploy.sh:27, deploy/deploy.sh:78-83 |
-| Cài unit systemd, `enable` + `restart` | `smart-coding-study-api` | deploy/deploy.sh:88-92 |
-| nginx: `nginx -t` trước, lỗi thì trả site cũ và dừng, sạch mới `reload` | khối nginx | deploy/deploy.sh:94-104 |
-| Smoke test: `/content` qua 8100 và 8090, `/` qua 8090, `/api/me` không token phải trả 401 | `curl -fsS` | deploy/deploy.sh:106-116 |
+| Địa chỉ công khai, hằng số `PUBLIC_URL="https://$DOMAIN"` (không còn override), truyền vào bản build web làm `API_URL` | biến `DOMAIN`, `PUBLIC_URL` | deploy/deploy.sh:16, deploy/deploy.sh:18 |
+| Kiểm cert Let's Encrypt tồn tại trước mọi thay đổi; thiếu thì in lệnh certbot và dừng | `ssh ... test -f .../fullchain.pem` | deploy/deploy.sh:30-33 |
+| Build web ở máy dev (VPS không có Flutter), rồi rsync lên server | bước 1-2 của script | deploy/deploy.sh:35-49 |
+| User hệ thống riêng `smartcs`, không shell | `useradd` nếu chưa có | deploy/deploy.sh:59 |
+| Role + DB Postgres riêng; mật khẩu sinh trên server, đi qua stdin của psql | `openssl rand` + `pg` | deploy/deploy.sh:62-80 |
+| Bí mật chỉ nằm ở `/etc/smart-coding-study.env` (root:smartcs, 640), ghi file tạm rồi `mv` | `ENV_FILE` | deploy/deploy.sh:56-75 |
+| Migration; nạp nội dung CHỈ khi DB rỗng (DB là nguồn chính, deploy không ghi đè); seed user | `alembic upgrade head`, `app.load_content --if-empty`, `app.seed_users` | deploy/deploy.sh:87-97 |
+| Mật khẩu ban đầu chỉ vào `/etc/smart-coding-study/initial-passwords` (root, 0600, thư mục 0700); log deploy chỉ có số lượng; file dev bị loại khỏi rsync và xoá trên server | `INITIAL_PASSWORDS_FILE` | deploy/deploy.sh:45, deploy/deploy.sh:96-101 |
+| Cài unit systemd, `enable` + `restart` | `smart-coding-study-api` | deploy/deploy.sh:112-116 |
+| nginx: kiểm cert, `nginx -t` trước, lỗi thì trả site cũ và dừng, sạch mới `reload` | khối nginx | deploy/deploy.sh:118-133 |
+| Smoke test qua HTTPS (`curl --resolve <domain>:443:127.0.0.1`): `/content` và `/` 200, `/api/me` không token 200 (chế độ mở) hoặc 401 (tắt), `:8090` phải 308; sai thì `rollback_site` trả site nginx cũ rồi reload | `curl` + `rollback_site` | deploy/deploy.sh:135-158 |
+| Build iOS: kiểm Xcode + `DEVELOPMENT_TEAM`, `curl /content` qua HTTPS, `flutter build ipa --dart-define=API_URL=https://<domain>`, build number `yyMMddHH` | `deploy/ios-build.sh` | deploy/ios-build.sh:11-35 |
 
-Cấu hình nginx (deploy/nginx/smart-coding-study.conf:18-49) mở `/content` và `/run` bằng `location =`, thêm
+Cấu hình nginx có ba server: `:8090` và `:80` chỉ `return 308` sang https (308 giữ method/body của POST `/run`), `:443 ssl` chứa mọi location (deploy/nginx/smart-coding-study.conf:8-27). Server 443 mở `/content` và `/run` bằng `location =`, thêm
 `location /api/` (timeout 15s) và `location /api/admin/` (body tới 4200k, timeout 60s vì admin gửi cả bộ nội dung);
 mọi đường dẫn khác rơi vào `try_files ... /index.html` để router của web hoạt động:
 
@@ -453,13 +457,12 @@ location / {
 Unit systemd (deploy/systemd/smart-coding-study-api.service:7-19; uvicorn chạy `--proxy-headers` để rate limit theo IP thật, deploy/systemd/smart-coding-study-api.service:12) chạy uvicorn bằng user `smartcs`, nạp env từ
 file bí mật, và siết quyền: `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome`,
 `ReadOnlyPaths=/opt/smart-coding-study`. Ba mốc thời gian lồng nhau: HTTP timeout của runner 15s, nginx
-`proxy_read_timeout` 18s (conf:31), client app 20s (mobile/lib/data/judge_client.dart:63). Body: nginx cho tới
-80k (conf:10), lớn hơn giới hạn 64KB của backend để chính backend trả 413 (backend/app/main.py:30-31); riêng `/api/admin/` nginx 4200k, backend 4MB.
+`proxy_read_timeout` 18s (conf:56), client app 20s (mobile/lib/data/judge_client.dart:63). Body: nginx cho tới
+80k (conf:33), lớn hơn giới hạn 64KB của backend để chính backend trả 413 (backend/app/main.py:30-31); riêng `/api/admin/` nginx 4200k, backend 4MB.
 
 ### Ranh giới
 
-Chỉ chạm tài nguyên tên `smart-coding-study`/`smartcs` vì VPS dùng chung (deploy/deploy.sh:7-9). Không có
-HTTPS hay domain: mật khẩu và token đăng nhập đi bằng HTTP thường, token lưu localStorage 30 ngày (deploy/README.md:70-72). `/run` vẫn
+Chỉ chạm tài nguyên tên `smart-coding-study`/`smartcs` vì VPS dùng chung (deploy/deploy.sh:10-12). Chưa bật HSTS; token lưu localStorage 30 ngày. Không ký/upload app lên Apple: user tự làm theo deploy/IOS-TESTFLIGHT.md. `/run` vẫn
 công khai và không giới hạn tốc độ: ai có link đều chạy được code, và code được chuyển tới Judge0 công khai nên IP VPS
 có thể bị Judge0 chặn nếu bị lạm dụng (deploy/README.md:66-69).
 Không có CI deploy: chỉ chạy tay từ máy có Flutter và SSH tới host `vps`.
@@ -490,12 +493,10 @@ widget test tạm dùng `JudgeClient` thật gọi backend thật + Judge0 thậ
 widget test, chưa chạy e2e.
 
 Deploy VPS (run 2026-10-11-deploy-vps-web): `/run` có thể trả 504 khi tải cao vì hàng đợi Semaphore(4)
-(backend/app/main.py:36) cộng 15s Judge0 vượt `proxy_read_timeout` 18s; cổng 8090/8100 lặp ở ba file
-(deploy/deploy.sh:13, deploy/README.md:9, deploy/systemd/smart-coding-study-api.service:12) và chỉ smoke test
-bắt được lệch; thư mục tạm `/root/.smart-coding-study-deploy` không tự dọn nếu script chết giữa chừng
-(deploy/deploy.sh:22). Review chéo bằng model họ khác không chạy được (Codex timeout 2 lần).
+(backend/app/main.py:36) cộng 15s Judge0 vượt `proxy_read_timeout` 18s; domain lặp ở ba file (deploy/deploy.sh:16, deploy/ios-build.sh:11, deploy/nginx/smart-coding-study.conf:12) và cổng 8100 ở nginx/systemd, chỉ smoke test (phía server) bắt được lệch; thư mục tạm `/root/.smart-coding-study-deploy` không tự dọn nếu script chết giữa chừng
+(deploy/deploy.sh:40). Review chéo bằng model họ khác không chạy được (Codex timeout 2 lần).
 
-Tài khoản, tiến độ và quản trị (run users-progress-admin, planning/crew/2026-10-11-users-progress-admin/STATUS.md Backlog): HTTP thường;
+Tài khoản, tiến độ và quản trị (run users-progress-admin, planning/crew/2026-10-11-users-progress-admin/STATUS.md Backlog; HTTPS đã có từ run testflight-prep):
 code học viên in giả dòng kết quả "passed" thì server vẫn ghi passed (backend/app/main.py:178-184); "xong bài" có thể lệch local/server khi token
 hết hạn đúng lúc Run vì `/run` không trả 401 (reviews/SEAM.md mục 1); PUT tiến độ không tuần tự hoá và không flush khi app vào nền; lịch ôn theo
 `block.id` mồ côi khi admin đổi nhãn ô; form admin chỉ cảnh báo 4 trong 12 luật nội dung; chưa có trang quản lý user. Test backend dùng chung một DB test nên hai
