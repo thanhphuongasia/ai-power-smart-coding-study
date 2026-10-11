@@ -2813,11 +2813,13 @@
           {
             "steps": [
               "from datetime import datetime",
-              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})"
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)",
+              "svc.flights['VN1']['price'] = 1800000"
             ],
-            "call": "svc.change_flight('R99', 'VN3', datetime(2026, 10, 30, 8, 0))",
+            "call": "svc.change_flight(rid, 'VN3', datetime(2026, 10, 30, 8, 0))",
             "expect": {
-              "raises": "ValueError"
+              "return": 1000000
             }
           }
         ]
