@@ -35,6 +35,8 @@ def _walk_topics(topics: list[dict], parent_id: str | None = None):
 
 Sơ đồ class: loader kiểm tên class duy nhất, `from`/`to` là class có trong sơ đồ, `via` là tập con methods của `from` (backend/app/load_content.py:70-87, gọi ở dòng 118). `kind` ∈ association/aggregation/composition/dependency và `group` ∈ core/support chặn bằng `Literal` (backend/app/content_schema.py:79,98). Key quan hệ chỉ là `from` — `from_` bị từ chối vì `extra="forbid"` (backend/app/content_schema.py:96, test backend/tests/test_load_content.py:221). `/content` phát nguyên `theme.diagram` (backend/app/content_api.py:118). Sơ đồ khớp code bài do test Dart kiểm: thuộc tính (`self.<attr> =`) và method (`def <m>(`) phải có trong đúng thân `class <Name>` ở code ghép của các bài cùng theme (mobile/test/content_contract_test.dart:13-27,383-425).
 
+Bài dùng chung nhiều project: cùng tên file và cùng danh sách `exercise_ids` ở hai theme (hiện có `reliability/outbox.py` ở `airline` và `twitter-feed`, backend/content/content.json:498-501,708-711). App gom bằng `locateFilesNamed` (mobile/lib/domain/content.dart:123-132) để hiện nhãn "Dùng ở N theme" (mobile/lib/features/browse/topic_detail_screen.dart:656,710). Tiến độ `passed` khoá theo exercise id nên bài xong ở theme này là xong ở theme kia; thứ tự mở khoá tính theo từng file (mobile/lib/domain/progression.dart:18-30). Mỗi theme dùng chung phải có class của bài trong `diagram` của chính nó, test hợp đồng lặp theo mọi theme chứa bài (mobile/test/content_contract_test.dart:398-410,442-461). Số đếm hiện tại: 22 bài, 17 bài method (backend/tests/test_load_content.py:65, mobile/test/content_contract_test.dart:114-120).
+
 Kiểm lúc nạp: `validate` bắt id trùng, `exercise_ids` trỏ bài không có, label ô trùng, case kịch bản không compile được, và bài `class_name` có case không phải dạng `call` (backend/app/load_content.py:74-132).
 
 ## Ranh giới & đánh đổi
@@ -55,6 +57,7 @@ Không làm: giới hạn độ sâu module; tiến độ theo module (thẻ mod
 - `/content` không kiểm module con có cùng `theme_id` với cha; chỉ đúng khi DB do loader ghi, sửa DB tay có thể làm sai (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog T-07).
 - Dựng danh sách bài dùng `in` trên list, O(n²), chưa đo (backend/app/content_api.py:99; STATUS.md Backlog T-07).
 - Sub-module hiện trước file của chính module cha ở màn Topic; thẻ module chưa có tiến độ; chưa test ≥3 tầng ở 375px (STATUS.md Backlog T-06).
+- Bài dùng chung: tiến độ không tách theo theme; harness không có timeout riêng cho lời giải lặp vô hạn (planning/crew/2026-10-11-reservation-rules-outbox/STATUS.md, Backlog).
 - Chưa có test cho bài dùng chung giữa file cha và module con (STATUS.md Backlog, `content_json_test`).
 
 ## Nguồn
@@ -66,5 +69,6 @@ Không làm: giới hạn độ sâu module; tiến độ theo module (thẻ mod
 - Domain Dart: mobile/lib/domain/models.dart:57-135,304-360; mobile/lib/domain/content.dart:28-64
 - Seed mẫu: backend/content/content.json:6,36-51,195
 - Tổng quan: docs/ARCHITECTURE.md mục "Cây nội dung"; case kịch bản: docs/modules/judge-backend.md
+- Bài dùng chung/Outbox: planning/crew/2026-10-11-reservation-rules-outbox/PLAN.md, STATUS.md; docs/DECISIONS.md
 - Run: planning/crew/2026-10-11-project-tree-airline/PLAN.md, STATUS.md, DEVIATIONS.md
 - Sơ đồ class (loader/schema/migration/test): backend/app/load_content.py:70-87, backend/app/content_schema.py:76-113, backend/migrations/versions/0003_theme_diagram.py:22-38, mobile/test/content_contract_test.dart:367-426; run: planning/crew/2026-10-11-class-diagram/PLAN.md, STATUS.md

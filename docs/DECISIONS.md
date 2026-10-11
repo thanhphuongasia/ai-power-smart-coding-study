@@ -498,3 +498,43 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: test không kiểm nhãn quan hệ khớp code, cũng không kiểm quan hệ.
 
 **Nguồn**: mobile/test/content_contract_test.dart:13-27,367-426; planning/crew/2026-10-11-class-diagram/reviews/T-05.md.
+
+### Bài nghiệp vụ có thời gian: `now` truyền vào, hoàn/chênh giá dùng giá lưu trên đặt chỗ
+
+**Quyết định**: các method nghiệp vụ của `ReservationService` (`cancel`, `change_seats`, `change_flight`) nhận `now: datetime` làm tham số thay vì gọi `datetime.now()`; case chấm dựng giờ cố định. Số tiền hoàn/chênh lệch tính theo `price` đã lưu trong đặt chỗ lúc `book`, không đọc giá hiện tại của chuyến. Biên 24 giờ: còn đúng 24 giờ vẫn được huỷ, dưới 24 giờ (kể cả đã bay) thì `ValueError`.
+
+**Vì sao**: judge phải xác định, kết quả Run không được đổi theo ngày giờ chạy (INV-02 của run). Dùng giá hiện tại thì khách bị hoàn sai số đã trả; case chấm cố ý sửa giá chuyến sau khi đặt để mutant "đọc giá hiện tại" bị bắt.
+
+**Đánh đổi đã chấp nhận**: luật 24h/hoàn tiền là chính sách mẫu, không theo hãng cụ thể; giảm ghế sát giờ bị cấm (không hoàn tiền) là lựa chọn của bài. Backlog: `change_seats` chưa có case `new_seats == 0` và `now == giờ bay` (code khoá, không ở ô người học).
+
+**Nguồn**: backend/content/content.json:2278-2290 (params có `now`), :2355-2359 (`refund = res["seats"] * res["price"]` + giải thích), :2372 (solution: `hours_left(rid, now) < 24`), :2379 (case đổi `price` sau khi đặt); planning/crew/2026-10-11-reservation-rules-outbox/PLAN.md mục "Quyết định thiết kế" 1-2, STATUS.md Backlog.
+
+### Bài dùng chung nhiều project: cùng tên file + cùng exercise id; tiến độ theo exercise id
+
+**Quyết định**: `reliability/outbox.py` có mặt ở theme `airline` (module `airline-reliability`) và `twitter-feed` (module `feed-reliability`) với cùng danh sách `exercise_ids` (`outbox-save`, `outbox-relay`); bài chỉ lưu một lần trong `exercises`. App nhận ra dùng chung bằng `locateFilesNamed(tên file)` rồi hiện nhãn "Dùng ở N theme". Hệ quả: tập "đã passed" khoá theo exercise id, nên làm xong bài ở project này thì bài đó cũng tính xong ở project kia; thứ tự mở khoá (bài trước trong file) tính theo từng file nên vẫn mở độc lập. Mỗi theme dùng chung phải có đủ các class của bài trong `diagram` của chính nó (Outbox, OutboxRelay, Broker).
+
+**Vì sao**: một bài viết một lần, dùng ở nhiều ngữ cảnh (huỷ vé, đăng/like bài); tránh hai bản lệch nhau. Mô hình cây vốn cho phép id bài xuất hiện ở nhiều file (docs/modules/content-model.md).
+
+**Đánh đổi đã chấp nhận**: không có tiến độ riêng theo theme cho bài dùng chung; câu chữ của bài phải trung tính theo project (review T-02 ghi nhận lỗi câu chữ riêng Airline). Ví dụ trong bài phải tự đủ, không dựa vào ngữ cảnh một theme.
+
+**Nguồn**: backend/content/content.json:205-250 và :603-648 (diagram/khai file hai theme), :498-501 và :708-711 (cùng `exercise_ids`); mobile/lib/domain/content.dart:123-132 (`locateFilesNamed`); mobile/lib/domain/progression.dart:18-30 (`passed.contains(exerciseId)`); mobile/lib/features/browse/topic_detail_screen.dart:656,710; mobile/test/content_contract_test.dart:105-111.
+
+### Test hợp đồng sơ đồ lặp theo mọi theme chứa bài (thay vì theme đầu tiên tìm được)
+
+**Quyết định**: INV-02/INV-03 trong `content_contract_test.dart` không còn dùng `locateExercise(id).theme` (chỉ trả một theme). Với mỗi theme, gom các bài có trong `theme.allFiles`, kiểm member của sơ đồ trên code ghép của chúng; và với bài có `class_name`, class phải có trong `diagram` của MỌI theme chứa bài đó.
+
+**Vì sao**: bài dùng chung thuộc 2 theme; test cũ chỉ kiểm theme đầu nên sơ đồ theme thứ hai có thể thiếu class mà test vẫn xanh.
+
+**Đánh đổi đã chấp nhận**: test dài hơn và vòng lặp lồng; số đếm cứng (22 bài, 17 bài method) phải cập nhật tay mỗi lần thêm bài.
+
+**Nguồn**: mobile/test/content_contract_test.dart:398-410 (themeCodes theo `theme.allFiles`), :442-461 (lặp theo theme); backend/tests/test_load_content.py:65 (22 bài); planning/crew/2026-10-11-reservation-rules-outbox/reviews/T-02.md (m3).
+
+### Review nội dung bài phải chạy mutant lời giải sai qua harness
+
+**Quyết định**: chấm một bài mới không dừng ở "lời giải mẫu pass, thân `pass` fail". Reviewer dựng các lời giải sai hợp lý (mutant: dùng giá hiện tại, bỏ dedup, `pop` trước `publish`, `continue` sau lỗi, ghi state trước validate…) và chạy qua harness; mutant nào pass ở ô người học là finding. Mutant chỉ sống ở code khoá (ngoài ô) thì chấp nhận.
+
+**Vì sao**: run này, T-01 cần 3 vòng review chính vì mutant lọt: "giá hiện tại" ở cancel/change_seats, `new−old` ở change_flight; T-02 lọt mutant "đánh dấu seen trước khi kiểm type". Chỉ chạy lời giải mẫu không bắt được case chấm thiếu.
+
+**Đánh đổi đã chấp nhận**: tốn công review; harness không có timeout riêng — mutant `while pending … continue` lặp vô hạn, chỉ dừng nhờ giới hạn runner/Judge0 (backend/app/runner.py:75; Backlog của run).
+
+**Nguồn**: planning/crew/2026-10-11-reservation-rules-outbox/reviews/T-01.md:3-5, reviews/T-02.md:3-5, STATUS.md Backlog.
