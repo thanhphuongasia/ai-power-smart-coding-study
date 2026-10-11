@@ -43,7 +43,7 @@ def client_for():
         app.dependency_overrides[get_session] = lambda: session
         app.dependency_overrides[get_judge_lookup] = lambda: (lambda i: read_judge(session, i))
         app.dependency_overrides[get_runner] = lambda: LocalRunner()
-        app.dependency_overrides[auth.get_user_lookup] = lambda: (lambda t: user_for_token(session, t))
+        app.dependency_overrides[auth.get_user_lookup] = lambda: (lambda t: auth.resolve_user(session, t))
         app.dependency_overrides[get_pass_recorder] = lambda: (lambda uid, ex: record_pass(session, uid, ex))
         return TestClient(app)
 
@@ -106,7 +106,7 @@ def test_me_requires_valid_token(db_session, client_for):
     assert client.get("/api/me", headers=bearer("forged")).status_code == 401
     assert client.get("/api/me", headers={"Authorization": "Basic abc"}).status_code == 401
     token = login(client).json()["token"]
-    assert client.get("/api/me", headers=bearer(token)).json() == {"email": "test@gmail.com", "roles": ["learner"]}
+    assert client.get("/api/me", headers=bearer(token)).json() == {"email": "test@gmail.com", "roles": ["learner"], "open": False}
 
 
 def test_expired_session_is_401(db_session, client_for):

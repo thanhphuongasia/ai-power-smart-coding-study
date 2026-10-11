@@ -63,17 +63,25 @@ class HomeScreen extends ConsumerWidget {
                         key: const Key('account-email'),
                       ),
                     ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem<String>(
-                      value: 'password',
-                      key: Key('account-change-password'),
-                      child: Text('Đổi mật khẩu'),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'logout',
-                      key: Key('account-logout'),
-                      child: Text('Đăng xuất'),
-                    ),
+                    if (ref.read(authControllerProvider).value?.open ?? false)
+                      const PopupMenuItem<String>(
+                        enabled: false,
+                        key: Key('account-open-mode'),
+                        child: Text('Chế độ mở'),
+                      )
+                    else ...[
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'password',
+                        key: Key('account-change-password'),
+                        child: Text('Đổi mật khẩu'),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'logout',
+                        key: Key('account-logout'),
+                        child: Text('Đăng xuất'),
+                      ),
+                    ],
                   ],
                 ),
                 const ThemeModeButton(),

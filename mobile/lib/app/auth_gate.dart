@@ -41,32 +41,36 @@ class _ProgressLoadError extends ConsumerWidget {
   const _ProgressLoadError();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    body: Center(
-      key: const Key('progress-load-error'),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Không tải được tiến độ học'),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('progress-retry'),
-              onPressed: () => ref.invalidate(progressSnapshotProvider),
-              child: const Text('Thử lại'),
-            ),
-            TextButton(
-              key: const Key('progress-logout'),
-              onPressed: () =>
-                  ref.read(authControllerProvider.notifier).logout(),
-              child: const Text('Đăng xuất'),
-            ),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final open = ref.watch(authControllerProvider).value?.open ?? false;
+    return Scaffold(
+      body: Center(
+        key: const Key('progress-load-error'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Không tải được tiến độ học'),
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const Key('progress-retry'),
+                onPressed: () => ref.invalidate(progressSnapshotProvider),
+                child: const Text('Thử lại'),
+              ),
+              if (!open)
+                TextButton(
+                  key: const Key('progress-logout'),
+                  onPressed: () =>
+                      ref.read(authControllerProvider.notifier).logout(),
+                  child: const Text('Đăng xuất'),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Splash extends StatelessWidget {

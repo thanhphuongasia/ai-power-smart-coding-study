@@ -11,6 +11,14 @@ set -euo pipefail
 
 HOST="${DEPLOY_HOST:-vps}"
 PUBLIC_URL="${PUBLIC_URL:-http://178.105.5.12:8090}"
+# Chế độ mở (demo, không màn đăng nhập): request không token = user này. Rỗng → bật lại đăng nhập:
+#   DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh
+AUTH_OPEN_AS="${DEPLOY_AUTH_OPEN_AS-test@gmail.com}"
+# Chỉ nhận dạng email (giá trị đi qua ssh và được ghi vào env file mà shell sẽ source).
+if [ -n "$AUTH_OPEN_AS" ] && ! printf '%s' "$AUTH_OPEN_AS" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$'; then
+  echo "DEPLOY_AUTH_OPEN_AS không phải email hợp lệ: từ chối" >&2
+  exit 1
+fi
 APP_DIR=/opt/smart-coding-study
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -33,7 +41,7 @@ scp -q "$ROOT/deploy/nginx/smart-coding-study.conf" "$ROOT/deploy/systemd/smart-
 echo "==> 3/4 cài đặt trên server"
 # Heredoc nháy đơn: mọi $ bên trong là của server; APP_DIR truyền từ máy local qua môi trường.
 # shellcheck disable=SC2029
-ssh "$HOST" "APP_DIR=$APP_DIR TMP=$STAGE bash -s" <<'REMOTE'
+ssh "$HOST" "APP_DIR=$APP_DIR TMP=$STAGE AUTH_OPEN_AS='$AUTH_OPEN_AS' bash -s" <<'REMOTE'
 set -euo pipefail
 ENV_FILE=/etc/smart-coding-study.env
 
@@ -85,6 +93,12 @@ rm -f "$APP_DIR/backend/.initial-passwords"
 chown -R root:root "$APP_DIR"
 chmod -R u=rwX,go=rX "$APP_DIR"
 
+# Chế độ mở: ghi ngay trước khi restart (bước trước lỗi thì cấu hình cũ giữ nguyên). Xoá dòng cũ rồi
+# ghi lại theo lần deploy này (idempotent; systemd đọc qua EnvironmentFile). Giá trị đã kiểm dạng email.
+case "$AUTH_OPEN_AS" in *[!A-Za-z0-9._%+@-]*) echo "AUTH_OPEN_AS không hợp lệ" >&2; exit 1 ;; esac
+sed -i '/^AUTH_OPEN_AS=/d' "$ENV_FILE"
+if [ -n "$AUTH_OPEN_AS" ]; then printf 'AUTH_OPEN_AS=%s\n' "$AUTH_OPEN_AS" >> "$ENV_FILE"; fi
+
 # systemd.
 install -m 644 "$TMP/smart-coding-study-api.service" /etc/systemd/system/smart-coding-study-api.service
 systemctl daemon-reload
@@ -111,9 +125,10 @@ done
 curl -fsS -o /dev/null http://127.0.0.1:8100/content
 curl -fsS -o /dev/null http://127.0.0.1:8090/content
 curl -fsS -o /dev/null http://127.0.0.1:8090/
-# /api đi qua nginx và chặn khi chưa đăng nhập.
-[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/me)" = 401 ] \
-  || { echo "/api/me qua nginx không trả 401 — kiểm location /api/ trong nginx" >&2; exit 1; }
+# /api đi qua nginx: chế độ mở → /api/me không token trả 200; tắt → 401.
+want=401; [ -n "$AUTH_OPEN_AS" ] && want=200
+[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/me)" = "$want" ] \
+  || { echo "/api/me qua nginx không trả $want — kiểm location /api/ và AUTH_OPEN_AS" >&2; exit 1; }
 rm -rf "$TMP"
 echo "server OK"
 REMOTE

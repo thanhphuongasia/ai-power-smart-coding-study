@@ -26,9 +26,16 @@ class AuthUser {
 }
 
 class AuthSession {
-  const AuthSession({required this.token, required this.user});
+  const AuthSession({
+    required this.token,
+    required this.user,
+    this.open = false,
+  });
   final String token;
   final AuthUser user;
+
+  /// Server chạy chế độ mở: không cần token, [token] rỗng, không lưu prefs.
+  final bool open;
 }
 
 enum AuthErrorKind {
@@ -74,7 +81,7 @@ class AuthRepository {
   Future<AuthSession?> restore() async {
     final prefs = await _prefs();
     final token = prefs.getString(tokenKey);
-    if (token == null) return null;
+    if (token == null) return _restoreOpen();
     final cached = _readCachedUser(prefs);
     try {
       final r = await _http
@@ -85,9 +92,14 @@ class AuthRepository {
         return null;
       }
       if (r.statusCode == 200) {
-        final user = AuthUser.fromJson(
-          jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>,
-        );
+        final json =
+            jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+        final user = AuthUser.fromJson(json);
+        if (json['open'] == true) {
+          // Token cũ không còn ý nghĩa: server đang mở, vào bằng phiên mở.
+          await clearLocal();
+          return AuthSession(token: '', user: user, open: true);
+        }
         await prefs.setString(userKey, jsonEncode(user.toJson()));
         return AuthSession(token: token, user: user);
       }
@@ -95,6 +107,20 @@ class AuthRepository {
       // mạng hỏng / phản hồi lạ: rơi xuống bản đã lưu
     }
     return cached == null ? null : AuthSession(token: token, user: cached);
+  }
+
+  /// Không có token đã lưu: hỏi /api/me không kèm Authorization. Chỉ khi server
+  /// báo `open: true` mới vào thẳng; mọi trường hợp khác → null (màn đăng nhập).
+  Future<AuthSession?> _restoreOpen() async {
+    try {
+      final r = await _http.get(_baseUrl.resolve('/api/me')).timeout(timeout);
+      if (r.statusCode != 200) return null;
+      final json = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      if (json['open'] != true) return null;
+      return AuthSession(token: '', user: AuthUser.fromJson(json), open: true);
+    } catch (_) {
+      return null;
+    }
   }
 
   AuthUser? _readCachedUser(SharedPreferences prefs) {

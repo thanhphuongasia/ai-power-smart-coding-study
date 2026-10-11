@@ -18,13 +18,20 @@ class FakeAuthController extends AuthController {
   Future<void> expire() async => state = const AsyncData(null);
 }
 
-AuthSession fakeSession({Set<String> roles = const {'learner'}}) => AuthSession(
-  token: 'fake-token',
+AuthSession fakeSession({
+  Set<String> roles = const {'learner'},
+  bool open = false,
+}) => AuthSession(
+  token: open ? '' : 'fake-token',
   user: AuthUser(email: 'learner@example.com', roles: roles.toList()),
+  open: open,
 );
 
-List<Override> authOverrides({Set<String> roles = const {'learner'}}) => [
+List<Override> authOverrides({
+  Set<String> roles = const {'learner'},
+  bool open = false,
+}) => [
   authControllerProvider.overrideWith(
-    () => FakeAuthController(fakeSession(roles: roles)),
+    () => FakeAuthController(fakeSession(roles: roles, open: open)),
   ),
 ];

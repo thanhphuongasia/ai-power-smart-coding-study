@@ -7,11 +7,14 @@
   trong RAM: mất khi restart, chỉ đúng với 1 process uvicorn (đúng cấu hình hiện tại).
 - `current_user` / `require_admin` là dependency cho mọi API cần đăng nhập. Phân quyền kiểm ở server,
   UI ẩn nút chỉ là phụ.
+- Chế độ mở (demo): env `AUTH_OPEN_AS=<email>` → request không có token hợp lệ được coi là user đó.
+  Token thật vẫn thắng. Không đặt biến (hoặc email không có trong DB) → hành vi đăng nhập bình thường.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import threading
 import time
@@ -157,9 +160,29 @@ def _unauthorized() -> HTTPException:
     return HTTPException(status_code=401, detail="not_authenticated", headers={"WWW-Authenticate": "Bearer"})
 
 
-def current_user(request: Request, session: Session = Depends(get_session)) -> CurrentUser:
-    token = _bearer(request)
+OPEN_SESSION_ID = 0  # phiên "ảo" của chế độ mở: không có dòng user_sessions nào
+
+
+def open_user(session: Session) -> CurrentUser | None:
+    """User của chế độ mở (env AUTH_OPEN_AS), đọc lúc gọi; None nếu tắt hoặc email không có."""
+    email = normalize_email(os.environ.get("AUTH_OPEN_AS", ""))
+    if not email:
+        return None
+    row = session.execute(select(User.id, User.email, User.roles).where(User.email == email)).first()
+    if row is None:
+        return None
+    user_id, email, roles = row
+    return CurrentUser(id=user_id, email=email, roles=tuple(roles), session_id=OPEN_SESSION_ID)
+
+
+def resolve_user(session: Session, token: str | None) -> CurrentUser | None:
+    """Token hợp lệ thắng; không có/sai → user chế độ mở (nếu bật)."""
     user = user_for_token(session, token) if token else None
+    return user or open_user(session)
+
+
+def current_user(request: Request, session: Session = Depends(get_session)) -> CurrentUser:
+    user = resolve_user(session, _bearer(request))
     if user is None:
         raise _unauthorized()
     return user
@@ -171,15 +194,15 @@ def require_admin(user: CurrentUser = Depends(current_user)) -> CurrentUser:
     return user
 
 
-UserLookup = Callable[[str], "CurrentUser | None"]
+UserLookup = Callable[["str | None"], "CurrentUser | None"]
 
 
 def get_user_lookup() -> UserLookup:
     """Cho `/run`: tra user bằng session DB ngắn, trả kết nối ngay (không giữ trong lúc chờ máy chấm)."""
 
-    def lookup(token: str) -> CurrentUser | None:
+    def lookup(token: str | None) -> CurrentUser | None:
         with SessionLocal() as session:
-            return user_for_token(session, token)
+            return resolve_user(session, token)
 
     return lookup
 
@@ -196,6 +219,10 @@ class LoginRequest(BaseModel):
 class UserOut(BaseModel):
     email: str
     roles: list[str]
+
+
+class MeOut(UserOut):
+    open: bool  # True: phiên của chế độ mở (không đăng nhập) — app ẩn Đăng xuất/Đổi mật khẩu
 
 
 class LoginResponse(BaseModel):
@@ -252,9 +279,9 @@ def logout(user: CurrentUser = Depends(current_user), session: Session = Depends
     return Response(status_code=204)
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: CurrentUser = Depends(current_user)) -> UserOut:
-    return UserOut(email=user.email, roles=list(user.roles))
+@router.get("/me", response_model=MeOut)
+def me(user: CurrentUser = Depends(current_user)) -> MeOut:
+    return MeOut(email=user.email, roles=list(user.roles), open=user.session_id == OPEN_SESSION_ID)
 
 
 @router.post("/auth/password", status_code=204)
@@ -264,6 +291,9 @@ def change_password(
     user: CurrentUser = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> Response:
+    if user.session_id == OPEN_SESSION_ID:
+        # Phiên ảo của chế độ mở: không có phiên để giữ lại → đổi mật khẩu sẽ xoá hết phiên thật của user.
+        raise HTTPException(status_code=403, detail="open_mode")
     # Token lọt (vd XSS) không được thành công cụ dò mật khẩu không giới hạn.
     key = (_client_ip(request), f"pw:{user.id}")
     if not throttle.attempt(key):

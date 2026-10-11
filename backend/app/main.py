@@ -142,8 +142,9 @@ async def run(
     judge = await run_in_threadpool(lookup_judge, request.exercise_id)
     if judge is None:
         raise HTTPException(status_code=404, detail="exercise_not_found")
-    # Token sai/hết hạn: vẫn chấm như khách (không ghi tiến độ), không chặn việc Run.
-    user = await run_in_threadpool(lookup_user, token) if token else None
+    # Token sai/hết hạn: vẫn chấm như khách (không ghi tiến độ), không chặn việc Run. Chế độ mở
+    # (AUTH_OPEN_AS): không token cũng ra user mở → ghi tiến độ cho user đó.
+    user = await run_in_threadpool(lookup_user, token)
 
     payload = json.dumps(
         {

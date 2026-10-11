@@ -40,6 +40,13 @@ cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env &&
 `--force` kiểm cùng bộ luật với admin (schema, ghép đáp án == lời giải, ≤3 ô, sơ đồ khớp code…); sai
 thì không ghi gì. Tiến độ học viên nằm ở bảng riêng, không bị xoá khi thay nội dung.
 
+## Chế độ mở (demo, không đăng nhập)
+
+Mặc định deploy bật `AUTH_OPEN_AS=test@gmail.com` trong `/etc/smart-coding-study.env`: mở link là vào
+thẳng app dưới tài khoản đó (admin + học viên), tiến độ lưu cho tài khoản đó. Ai có link cũng là user
+này. Bật lại đăng nhập: `DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh`. Đổi user mở:
+`DEPLOY_AUTH_OPEN_AS=<email> deploy/deploy.sh`.
+
 ## Tài khoản
 
 `app.seed_users` tạo `test@gmail.com` (học viên + admin, tài khoản test) và `phuongtt.tech1508@gmail.com` (admin + học viên)

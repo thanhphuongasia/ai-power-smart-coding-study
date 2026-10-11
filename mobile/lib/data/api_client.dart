@@ -65,9 +65,11 @@ class ApiClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final token = _ref.read(authControllerProvider).value?.token;
-    if (token != null) request.headers['authorization'] = 'Bearer $token';
+    if (token != null && token.isNotEmpty) {
+      request.headers['authorization'] = 'Bearer $token';
+    }
     final response = await _inner.send(request);
-    if (response.statusCode == 401 && token != null) {
+    if (response.statusCode == 401 && token != null && token.isNotEmpty) {
       // Chỉ đăng xuất nếu token vừa bị từ chối vẫn là phiên hiện tại.
       if (_ref.read(authControllerProvider).value?.token == token) {
         await _ref.read(authControllerProvider.notifier).expire();
