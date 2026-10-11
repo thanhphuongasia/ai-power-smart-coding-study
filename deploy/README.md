@@ -6,13 +6,14 @@ Một lệnh, chạy từ máy có Flutter và SSH tới VPS (host `vps` trong `
 deploy/deploy.sh
 ```
 
-Link test: **http://178.105.5.12:8090** (web + API cùng origin).
+Link: **https://codewithphuong.jacons-corp.com** (web + API cùng origin; link cũ `http://178.105.5.12:8090` chuyển hướng 308 sang đây). App iOS (TestFlight) gọi cùng origin — xem `deploy/IOS-TESTFLIGHT.md`.
 
 ## Trên server có gì
 
 | Thứ | Ở đâu |
 |---|---|
-| Web Flutter (build/web) | `/opt/smart-coding-study/web`, nginx phục vụ ở cổng 8090 |
+| Web Flutter (build/web) | `/opt/smart-coding-study/web`, nginx phục vụ HTTPS 443 cho domain (cổng 80 và 8090 chỉ chuyển hướng) |
+| HTTPS | cert Let's Encrypt `/etc/letsencrypt/live/codewithphuong.jacons-corp.com/` (lấy một lần bằng `sudo certbot certonly --nginx -d codewithphuong.jacons-corp.com`; `certbot.timer` tự gia hạn) |
 | Backend FastAPI | `/opt/smart-coding-study/backend`, systemd `smart-coding-study-api`, `127.0.0.1:8100` |
 | nginx site | `/etc/nginx/sites-enabled/smart-coding-study.conf` (`/content`, `/run` → 8100; còn lại → web) |
 | Bí mật | `/etc/smart-coding-study.env` (root:smartcs, 640) — `DATABASE_URL` có mật khẩu sinh ngẫu nhiên |
@@ -66,8 +67,9 @@ printf '%s' 'MAT_KHAU' | ssh vps 'cd /opt/smart-coding-study/backend && set -a &
 
 Chưa có trang quản lý user: thêm user = thêm vào `SEED_USERS` trong `backend/app/seed_users.py` rồi deploy.
 
-Đổi IP/cổng: `PUBLIC_URL=http://<ip>:<cổng> deploy/deploy.sh` (cổng nginx sửa ở
-`deploy/nginx/smart-coding-study.conf`).
+Đổi domain: sửa `DOMAIN` trong `deploy/deploy.sh` + `deploy/ios-build.sh` + `server_name`/đường dẫn cert
+trong `deploy/nginx/smart-coding-study.conf`, lấy cert cho domain mới, rồi deploy. Deploy dừng (không đụng
+nginx) nếu chưa có cert.
 
 ## Xem log / thao tác tay
 
@@ -80,8 +82,6 @@ ssh vps systemctl restart smart-coding-study-api
 
 - Link **công khai, không mật khẩu, không giới hạn** — ai có link đều Run được; backend chuyển code
   tới Judge0 công khai, bị lạm dụng thì IP VPS có thể bị Judge0 chặn.
-- HTTP thường, chưa có domain/HTTPS: **mật khẩu và token đăng nhập đi không mã hoá** — ai nghe lén
-  được mạng (wifi công cộng…) lấy được. Cần domain + HTTPS (vd Caddy/certbot) trước khi dùng thật.
 - Token lưu ở localStorage của trình duyệt (30 ngày): trang dính XSS thì lộ token.
 - Giới hạn đăng nhập sai (5 lần/15 phút theo IP+email, 30 lần/IP) đếm trong RAM: restart là reset.
 - VPS dùng chung với dịch vụ khác: script chỉ chạm tài nguyên tên `smart-coding-study`/`smartcs`.

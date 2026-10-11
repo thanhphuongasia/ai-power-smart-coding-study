@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Deploy Smart Coding Study (backend FastAPI + web Flutter) lên VPS. Chạy từ máy có Flutter:
 #
-#   deploy/deploy.sh                      # mặc định: host ssh "vps", link http://178.105.5.12:8090
-#   DEPLOY_HOST=vps PUBLIC_URL=http://1.2.3.4:8090 deploy/deploy.sh
+#   deploy/deploy.sh                      # mặc định: host ssh "vps", link https://codewithphuong.jacons-corp.com
+#   DEPLOY_HOST=vps deploy/deploy.sh
+#
+# HTTPS: cert lấy MỘT lần trên VPS (certbot.timer tự gia hạn), deploy chỉ kiểm có cert:
+#   ssh vps sudo certbot certonly --nginx -d codewithphuong.jacons-corp.com
 #
 # Chạy lại bao nhiêu lần cũng được (idempotent). Chỉ chạm tài nguyên của app này:
 # /opt/smart-coding-study, user/role smartcs, DB smart_coding_study, /etc/smart-coding-study.env,
@@ -10,7 +13,9 @@
 set -euo pipefail
 
 HOST="${DEPLOY_HOST:-vps}"
-PUBLIC_URL="${PUBLIC_URL:-http://178.105.5.12:8090}"
+DOMAIN=codewithphuong.jacons-corp.com
+# Web và iOS cùng gọi origin này (iOS chặn HTTP thường). nginx: deploy/nginx/smart-coding-study.conf.
+PUBLIC_URL="https://$DOMAIN"
 # Chế độ mở (demo, không màn đăng nhập): request không token = user này. Rỗng → bật lại đăng nhập:
 #   DEPLOY_AUTH_OPEN_AS= deploy/deploy.sh
 AUTH_OPEN_AS="${DEPLOY_AUTH_OPEN_AS-test@gmail.com}"
@@ -21,6 +26,11 @@ if [ -n "$AUTH_OPEN_AS" ] && ! printf '%s' "$AUTH_OPEN_AS" | grep -Eq '^[A-Za-z0
 fi
 APP_DIR=/opt/smart-coding-study
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Cert phải có TRƯỚC mọi thay đổi trên server (không để nửa chừng: web mới trỏ HTTPS chưa chạy).
+# shellcheck disable=SC2029
+ssh "$HOST" "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem" \
+  || { echo "Chưa có cert cho $DOMAIN — chạy: ssh $HOST sudo certbot certonly --nginx -d $DOMAIN" >&2; exit 1; }
 
 echo "==> 1/4 build web (API_URL=$PUBLIC_URL)"
 (cd "$ROOT/mobile" && flutter build web --release --dart-define=API_URL="$PUBLIC_URL")
@@ -41,7 +51,7 @@ scp -q "$ROOT/deploy/nginx/smart-coding-study.conf" "$ROOT/deploy/systemd/smart-
 echo "==> 3/4 cài đặt trên server"
 # Heredoc nháy đơn: mọi $ bên trong là của server; APP_DIR truyền từ máy local qua môi trường.
 # shellcheck disable=SC2029
-ssh "$HOST" "APP_DIR=$APP_DIR TMP=$STAGE AUTH_OPEN_AS='$AUTH_OPEN_AS' bash -s" <<'REMOTE'
+ssh "$HOST" "APP_DIR=$APP_DIR TMP=$STAGE DOMAIN=$DOMAIN AUTH_OPEN_AS='$AUTH_OPEN_AS' bash -s" <<'REMOTE'
 set -euo pipefail
 ENV_FILE=/etc/smart-coding-study.env
 
@@ -106,6 +116,11 @@ systemctl enable -q smart-coding-study-api
 systemctl restart smart-coding-study-api
 
 # nginx: thay site của app này, chỉ reload khi cả cấu hình sạch; lỗi thì trả bản cũ.
+# Site mới cần cert của domain; chưa có thì dừng TRƯỚC khi đụng nginx (VPS dùng chung).
+if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+  echo "Chưa có cert cho $DOMAIN — chạy: sudo certbot certonly --nginx -d $DOMAIN" >&2
+  exit 1
+fi
 SITE=/etc/nginx/sites-enabled/smart-coding-study.conf
 [ -f "$SITE" ] && cp "$SITE" "$TMP/site.bak"
 install -m 644 "$TMP/smart-coding-study.conf" "$SITE"
@@ -123,12 +138,24 @@ for i in $(seq 1 20); do
   sleep 1
 done
 curl -fsS -o /dev/null http://127.0.0.1:8100/content
-curl -fsS -o /dev/null http://127.0.0.1:8090/content
-curl -fsS -o /dev/null http://127.0.0.1:8090/
+# Smoke qua nginx lỗi → trả site cũ + reload (VPS dùng chung: không để cấu hình hỏng chạy tiếp).
+rollback_site() {
+  echo "smoke qua nginx lỗi — trả cấu hình site cũ" >&2
+  if [ -f "$TMP/site.bak" ]; then cp "$TMP/site.bak" "$SITE"; else rm -f "$SITE"; fi
+  nginx -t && systemctl reload nginx
+  exit 1
+}
+# Qua nginx bằng HTTPS thật (đúng tên miền + cert), không phụ thuộc DNS của chính VPS.
+R="--resolve $DOMAIN:443:127.0.0.1"
+curl -fsS -m 10 $R -o /dev/null "https://$DOMAIN/content" || rollback_site
+curl -fsS -m 10 $R -o /dev/null "https://$DOMAIN/" || rollback_site
 # /api đi qua nginx: chế độ mở → /api/me không token trả 200; tắt → 401.
 want=401; [ -n "$AUTH_OPEN_AS" ] && want=200
-[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/me)" = "$want" ] \
-  || { echo "/api/me qua nginx không trả $want — kiểm location /api/ và AUTH_OPEN_AS" >&2; exit 1; }
+[ "$(curl -s -m 10 $R -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/me")" = "$want" ] \
+  || { echo "/api/me qua nginx không trả $want — kiểm location /api/ và AUTH_OPEN_AS" >&2; rollback_site; }
+# Link cũ :8090 chuyển sang domain HTTPS.
+[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/)" = 308 ] \
+  || { echo ":8090 không chuyển hướng 308" >&2; rollback_site; }
 rm -rf "$TMP"
 echo "server OK"
 REMOTE
