@@ -56,14 +56,15 @@ def _unb64(value: str | None) -> str:
 class Judge0Runner:
     """Gọi Judge0 (`POST /submissions?wait=true`, base64) với Python 3.12.
 
-    Mã trạng thái Judge0 đã kiểm trên ce.judge0.com: 3 = Accepted, 5 = Time Limit Exceeded.
-    1/2 (còn trong hàng đợi dù đã `wait=true`) và 13/14 (lỗi nội bộ máy chấm) là lỗi hạ tầng.
+    Mã trạng thái Judge0: 3 = Accepted, 5 = Time Limit Exceeded (đã kiểm trên ce.judge0.com),
+    7–12 = Runtime Error (chương trình bị dừng). Mọi mã khác — hàng đợi (1/2), Compilation Error
+    (6, không thể xảy ra với harness cố định), lỗi nội bộ (13/14), mã lạ — là lỗi máy chấm.
     """
 
     PYTHON_3_12 = 100
     _ACCEPTED = 3
     _TIME_LIMIT_EXCEEDED = 5
-    _INFRA_ERRORS = {1, 2, 13, 14}
+    _RUNTIME_ERRORS = range(7, 13)
 
     def __init__(
         self,
@@ -115,13 +116,13 @@ class Judge0Runner:
         except (ValueError, KeyError, TypeError):
             raise RunnerUnavailable("judge0 response not understood") from None
 
-        if status_id in self._INFRA_ERRORS:
-            raise RunnerUnavailable(f"judge0 status {status_id}")
         if status_id == self._ACCEPTED:
             return Execution("ok", stdout, stderr)
         if status_id == self._TIME_LIMIT_EXCEEDED:
             return Execution("timeout", stdout, stderr, message or description)
-        return Execution("error", stdout, stderr, message or description)
+        if status_id in self._RUNTIME_ERRORS:
+            return Execution("error", stdout, stderr, message or description)
+        raise RunnerUnavailable(f"judge0 status {status_id}")
 
 
 def runner_from_env() -> CodeRunner:

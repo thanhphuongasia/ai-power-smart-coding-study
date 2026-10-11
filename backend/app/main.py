@@ -9,7 +9,6 @@ import asyncio
 import json
 import logging
 import time
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -27,10 +26,26 @@ APP_DIR = Path(__file__).parent
 HARNESS_SOURCE = (APP_DIR / "harness.py").read_text(encoding="utf-8")
 EXERCISES: dict[str, dict] = json.loads((APP_DIR / "exercises.json").read_text(encoding="utf-8"))
 MAX_CODE_CHARS = 8000
+# 8000 ký tự UTF-8 tối đa ~32KB, cộng JSON escape: 64KB là đủ rộng cho request hợp lệ.
+MAX_BODY_BYTES = 64 * 1024
 # Máy chấm công khai giới hạn theo IP: không bắn quá 4 bài cùng lúc từ một backend.
 _RUN_SLOTS = asyncio.Semaphore(4)
+# Tạo lúc import: CODE_RUNNER sai thì server không khởi động được, thay vì 500 ở request đầu.
+_RUNNER = runner_from_env()
 
 app = FastAPI(title="Smart Coding Study judge")
+
+
+@app.middleware("http")
+async def _limit_body(request: Request, call_next):
+    # Field(max_length) chỉ kiểm SAU khi đọc hết body; chặn body lớn trước khi đọc.
+    if request.method == "POST":
+        length = request.headers.get("content-length")
+        if length is None or not length.isdigit():
+            return JSONResponse(status_code=411, content={"detail": "length_required"})
+        if int(length) > MAX_BODY_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "body_too_large"})
+    return await call_next(request)
 
 
 class RunRequest(BaseModel):
@@ -67,9 +82,8 @@ class RunResponse(BaseModel):
     duration_ms: int
 
 
-@lru_cache
 def get_runner() -> CodeRunner:
-    return runner_from_env()
+    return _RUNNER
 
 
 @app.post("/run", response_model=RunResponse)

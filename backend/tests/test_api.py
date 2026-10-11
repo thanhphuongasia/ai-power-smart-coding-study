@@ -200,11 +200,33 @@ def test_judge0_time_limit_is_timeout():
     assert asyncio.run(judge0_with(handler).run("", "")).status == "timeout"
 
 
-def test_judge0_runtime_error_is_error():
-    handler = lambda r: httpx.Response(200, json={"stdout": None, "stderr": b64("boom"), "status": {"id": 11, "description": "Runtime Error (NZEC)"}})
+@pytest.mark.parametrize("status_id", [7, 11, 12])
+def test_judge0_runtime_error_is_error(status_id):
+    handler = lambda r: httpx.Response(200, json={"stdout": None, "stderr": b64("boom"), "status": {"id": status_id, "description": "Runtime Error"}})
     result = asyncio.run(judge0_with(handler).run("", ""))
     assert result.status == "error"
-    assert result.message == "Runtime Error (NZEC)"
+    assert result.message == "Runtime Error"
+
+
+def test_body_over_limit_is_413_before_parsing():
+    body = '{"exercise_id": "split-chunks", "code": "' + "x" * (70 * 1024) + '"}'
+    response = client_with(LocalRunner()).post("/run", content=body, headers={"Content-Type": "application/json"})
+    assert response.status_code == 413
+    assert response.json() == {"detail": "body_too_large"}
+
+
+def test_body_without_valid_length_is_411():
+    client = client_with(LocalRunner())
+    chunked = client.post("/run", content=iter([b'{"exercise_id": "x", "code": "y"}']), headers={"Content-Type": "application/json"})
+    assert chunked.status_code == 411
+    assert chunked.json() == {"detail": "length_required"}
+
+
+def test_unknown_code_runner_fails_at_startup():
+    env = {**os.environ, "CODE_RUNNER": "nope"}
+    proc = subprocess.run([sys.executable, "-c", "import app.main"], env=env, capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert "CODE_RUNNER" in proc.stderr
 
 
 @pytest.mark.parametrize(
@@ -215,8 +237,11 @@ def test_judge0_runtime_error_is_error():
         lambda r: httpx.Response(200, text="not json"),
         lambda r: httpx.Response(200, json={"status": {"id": 1}}),
         lambda r: httpx.Response(200, json={"status": {"id": 2}}),
+        lambda r: httpx.Response(200, json={"status": {"id": 4}}),
+        lambda r: httpx.Response(200, json={"status": {"id": 6}}),
         lambda r: httpx.Response(200, json={"status": {"id": 13}}),
         lambda r: httpx.Response(200, json={"status": {"id": 14}}),
+        lambda r: httpx.Response(200, json={"status": {"id": 99}}),
         lambda r: httpx.Response(302, headers={"Location": "https://elsewhere.test"}),
     ],
 )

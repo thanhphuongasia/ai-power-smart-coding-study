@@ -9,14 +9,15 @@ State: open — Wave 3/4: T-07b, T-09 đang chạy; review T-07, T-08 đang ch�
 | Task | Title | State |
 |---|---|---|
 | T-01 | Harness + dữ liệu test 5 bài | done — gate 0, review PASS với Minor |
-| T-02 | CodeRunner + Judge0 + /run | done — r1 CẦN SỬA → sửa → r2 PASS với Minor; external lần 2 đang chạy |
+| T-02 | CodeRunner + Judge0 + /run | external Codex: 1 Critical (bác — giới hạn đã khai) + 3 Major → vòng sửa 2 (body 413, whitelist status, fail-fast CODE_RUNNER), 54 pass + live pass; re-review r3 (cuối) đang chạy |
 | T-03 | Model + merge + seed mới | done — gate 0, review PASS với Minor |
 | T-04 | JudgeClient + contract test | done — gate 0, review PASS với Minor |
 | T-05 | Editor nhiều ô + toolbar chung | done — gate 0, review PASS với Minor |
 | T-06 | Progress + khoá bài | done — gate 0, review PASS với Minor |
-| T-07 | ExerciseRow/Stats/Review | gate 0; review đang chạy |
-| T-07b | Home continue card + Practice (task bổ sung) | dispatched |
-| T-08 | ExerciseScreen + Challenge + Solution | gate 0; review đang chạy |
+| T-07 | ExerciseRow/Stats/Review | done — gate 0, review PASS với Minor |
+| T-07b | Home continue card + Practice (task bổ sung) | done — gate 0, review PASS với Minor |
+| T-08 | ExerciseScreen + Challenge + Solution | done — gate 0, review PASS với Minor (INV-08 lệch + idle → T-11) |
+| T-11 | Correction: một quy tắc khoá + idle khi đọc đề | xong phần mình; chờ T-09 để gate (4 test cũ đỏ do code_tab.dart đang dở) |
 | T-09 | Tab Code + Run | dispatched |
 | T-10 | Dọn màn cũ + full suite | todo |
 
@@ -31,3 +32,6 @@ Backlog (Minor):
 - T-04: message timeout cứng 20s; thiếu test fixture tiếng Việt; duration_ms ép int; 422 gộp vào 'bận' (reviews/T-04.md)
 - T-02: JUDGE0_URL không kiểm scheme (token qua http); hàng chờ semaphore không timeout tổng; README thiếu Python tối thiểu (reviews/T-02.md)
 - T-06: luồng cũ CellScreen tạm gãy (xoá ở T-10); ExerciseProgress(passed:true) dựng tay → completedBlocks 0 (reviews/T-06.md)
+- T-07: ô đã xem lời giải bị kéo hạn ôn về ngày mai vĩnh viễn → ôn mỗi ngày mãi (reviews/T-07.md) — HỎI USER có muốn vậy không
+- T-07b: 'ô đã viết' đếm cả draft nhãn lạ; Practice xếp bài khoá có draft vào Đang dở
+- T-08: acceptedAnswers.first không guard rỗng (solution_tab.dart:124); test idle/timeout màn mới thiếu (T-10 port)
