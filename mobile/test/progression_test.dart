@@ -10,6 +10,10 @@ void main() {
       expect(isExerciseUnlocked('overlap-chunks', {'split-chunks'}), isTrue);
     });
 
+    test('bài đã passed luôn mở dù bài trước chưa pass (INV-08)', () {
+      expect(isExerciseUnlocked('overlap-chunks', {'overlap-chunks'}), isTrue);
+    });
+
     test('split-chunks luôn mở (bài đầu file doc-chunker-py)', () {
       expect(isExerciseUnlocked('split-chunks', {}), isTrue);
     });

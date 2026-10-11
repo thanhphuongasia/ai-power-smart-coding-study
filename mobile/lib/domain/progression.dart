@@ -18,8 +18,10 @@ Iterable<CodeFile> _allFiles() sync* {
 }
 
 /// Bài [exerciseId] đã mở chưa, biết tập bài đã passed [passed].
-/// Id không có trong seed thì coi là khoá.
+/// Bài đã passed luôn mở. Id không có trong seed (và chưa passed) thì khoá.
 bool isExerciseUnlocked(String exerciseId, Set<String> passed) {
+  // Bài đã pass luôn mở, kể cả khi bài trước chưa pass (khớp ExerciseRow).
+  if (passed.contains(exerciseId)) return true;
   for (final file in _allFiles()) {
     final index = file.exercises.indexWhere((e) => e.id == exerciseId);
     if (index < 0) continue;
