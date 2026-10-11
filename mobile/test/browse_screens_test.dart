@@ -119,6 +119,71 @@ void main() {
     },
   );
 
+  testWidgets('Lộ trình module: thanh tiến độ chia đoạn, START ở bài kế tiếp', (
+    tester,
+  ) async {
+    final container = await _pumpApp(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('theme-rag')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('topic-rag-chunking')));
+    await tester.pumpAndSettle();
+
+    // Seed: clean-text đã xong, split-chunks đang dở, overlap-chunks khoá.
+    final bar = find.byKey(const Key('module-progress'));
+    expect(
+      find.descendant(of: bar, matching: find.text('1/3')),
+      findsOneWidget,
+    );
+    // START ở bài đầu tiên đã mở mà chưa xong, không ở bài khoá/đã xong.
+    expect(find.byKey(const Key('start-split-chunks')), findsOneWidget);
+    expect(find.byKey(const Key('start-overlap-chunks')), findsNothing);
+    expect(find.byKey(const Key('start-clean-text')), findsNothing);
+
+    // Xong split-chunks → START dời sang overlap-chunks (vừa mở khoá).
+    container.read(progressProvider.notifier).markPassed('split-chunks');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: bar, matching: find.text('2/3')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('start-split-chunks')), findsNothing);
+    expect(find.byKey(const Key('start-overlap-chunks')), findsOneWidget);
+
+    container.read(progressProvider.notifier).markPassed('overlap-chunks');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: bar, matching: find.text('Hoàn thành')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Lộ trình: sub-module là chặng SAU các file của module', (
+    tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: '/topic/airline-flight');
+    await tester.pumpAndSettle();
+    final controller = find.byKey(
+      const Key('module-airline-flight-controller'),
+    );
+    // Đầu màn là bài đầu tiên của models/flight.py, chưa thấy chặng sub-module.
+    expect(
+      find.byKey(const Key('exercise-flight-init')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(controller.hitTestable(), findsNothing);
+    await tester.scrollUntilVisible(
+      controller,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(controller, findsOneWidget);
+    expect(
+      find.byKey(const Key('module-airline-flight-schedule')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('INV-08: row khoá không điều hướng; pass bài trước thì mở', (
     tester,
   ) async {
@@ -321,6 +386,7 @@ void main() {
       await pumpNested(tester, '/topic/booking');
       final card = find.byKey(const Key('module-search-mod'));
       expect(card, findsOneWidget);
+
       expect(
         find.descendant(of: card, matching: find.text('2 bài tập')),
         findsOneWidget,
