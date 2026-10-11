@@ -3,24 +3,28 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../data/content_providers.dart';
+import '../../domain/class_scope.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
+import 'class_diagram.dart';
 
 /// Index tab Code trong TabBar của ExerciseScreen.
 const int kCodeTabIndex = 1;
 
-class ChallengeTab extends StatefulWidget {
+class ChallengeTab extends ConsumerStatefulWidget {
   const ChallengeTab({super.key, required this.exercise});
 
   final Exercise exercise;
 
   @override
-  State<ChallengeTab> createState() => _ChallengeTabState();
+  ConsumerState<ChallengeTab> createState() => _ChallengeTabState();
 }
 
-class _ChallengeTabState extends State<ChallengeTab> {
+class _ChallengeTabState extends ConsumerState<ChallengeTab> {
   bool _project = true;
 
   @override
@@ -29,6 +33,16 @@ class _ChallengeTabState extends State<ChallengeTab> {
     final challenge = widget.exercise.challenge;
     final blocks = widget.exercise.blocks;
     final example = _project ? challenge.project : challenge.small;
+    final scope = classScope(widget.exercise);
+    final diagram = scope == null
+        ? null
+        : ref
+              .watch(contentIndexProvider)
+              .locateExercise(widget.exercise.id)
+              .theme
+              .diagram;
+    final showDiagram =
+        scope != null && diagram!.classNamed(scope.className) != null;
 
     return Column(
       children: [
@@ -84,6 +98,11 @@ class _ChallengeTabState extends State<ChallengeTab> {
                   ],
                 ),
               ),
+              if (showDiagram) ...[
+                const SizedBox(height: AppSpace.s4),
+                const SectionLabel('SƠ ĐỒ CLASS'),
+                ClassDiagramView(diagram: diagram, scope: scope),
+              ],
               const SizedBox(height: AppSpace.s6),
               SectionLabel('BẠN CẦN VIẾT ${blocks.length} Ô'),
               const SizedBox(height: AppSpace.s2),
@@ -158,17 +177,23 @@ class _ExampleBox extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (example.caption.isNotEmpty)
-            Text(example.caption,
-                style: AppText.caption.copyWith(color: p.inkMuted)),
+            Text(
+              example.caption,
+              style: AppText.caption.copyWith(color: p.inkMuted),
+            ),
           if (example.caption.isNotEmpty) const SizedBox(height: AppSpace.s1),
           Text(example.input, style: AppText.code.copyWith(color: p.ink)),
           const SizedBox(height: AppSpace.s1),
-          Text('→ ${example.output}',
-              style: AppText.code.copyWith(color: p.primary)),
+          Text(
+            '→ ${example.output}',
+            style: AppText.code.copyWith(color: p.primary),
+          ),
           if (example.note != null) ...[
             const SizedBox(height: AppSpace.s1),
-            Text(example.note!,
-                style: AppText.caption.copyWith(color: p.inkMuted)),
+            Text(
+              example.note!,
+              style: AppText.caption.copyWith(color: p.inkMuted),
+            ),
           ],
         ],
       ),
