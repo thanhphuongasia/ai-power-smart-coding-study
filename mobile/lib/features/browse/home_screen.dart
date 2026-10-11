@@ -66,7 +66,10 @@ class _ContinueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completed = progress[exercise.id]?.completedBlocks ?? 0;
+    final written = progress[exercise.id]?.drafts.values
+            .where((code) => code.trim().isNotEmpty)
+            .length ??
+        0;
     final total = exercise.blocks.length;
 
     return SurfaceCard(
@@ -81,20 +84,16 @@ class _ContinueCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SectionLabel('Tiếp tục'),
-                  Text(exercise.title, style: AppText.title),
+                  Text('Tiếp tục: ${exercise.title}', style: AppText.title),
                   const SizedBox(height: AppSpace.s1),
                   Text(
-                    'Tiếp tục Block ${completed + 1}/$total',
-                    style: AppText.body,
-                  ),
-                  const SizedBox(height: AppSpace.s1),
-                  Text(
-                    'Đã xong $completed/$total',
+                    '$written/$total ô đã viết',
                     style: AppText.body.copyWith(color: context.palette.inkMuted),
                   ),
                   const SizedBox(height: AppSpace.s2),
-                  ThinProgressBar(value: total == 0 ? 0 : completed / total),
+                  ThinProgressBar(
+                    value: total == 0 ? 0 : (written / total).clamp(0.0, 1.0),
+                  ),
                 ],
               ),
             ),

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/seed.dart';
 import '../../domain/models.dart';
+import '../../domain/progression.dart';
 import 'session_controller.dart';
 
 /// Nguồn thời gian hiện tại — override bằng clock giả (fakeAsync) trong
@@ -24,21 +25,28 @@ final progressProvider =
 final sessionProvider = NotifierProvider.autoDispose
     .family<SessionController, SessionState, String>(SessionController.new);
 
-/// Exercise đầu tiên đang làm dở (`0 < completed < tổng số block`), dùng để
-/// gợi ý "tiếp tục" ở màn Home.
+/// Exercise đầu tiên đang làm dở (`!passed` và có draft không rỗng — INV-09),
+/// dùng để gợi ý "tiếp tục" ở màn Home.
 final inProgressExerciseProvider = Provider<Exercise?>((ref) {
   final progress = ref.watch(progressProvider);
   for (final theme in seedThemes) {
     for (final topic in theme.topics) {
       for (final file in topic.files) {
         for (final exercise in file.exercises) {
-          final completed = progress[exercise.id]?.completedBlocks ?? 0;
-          if (completed > 0 && completed < exercise.blocks.length) {
-            return exercise;
-          }
+          if (progress[exercise.id]?.inProgress ?? false) return exercise;
         }
       }
     }
   }
   return null;
+});
+
+/// Bài [exerciseId] đã mở chưa (INV-08) — theo [isExerciseUnlocked].
+final exerciseUnlockedProvider = Provider.family<bool, String>((ref, id) {
+  final progress = ref.watch(progressProvider);
+  final passed = {
+    for (final e in progress.entries)
+      if (e.value.passed) e.key,
+  };
+  return isExerciseUnlocked(id, passed);
 });

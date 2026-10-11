@@ -7,13 +7,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/seed.dart';
-import '../../domain/answer_checker.dart';
 import '../../domain/models.dart';
 import '../stats/activity.dart';
 import 'session_providers.dart';
-
-/// Trạng thái một block so với tiến trình hiện tại của người học.
-enum BlockStatus { done, active, locked }
 
 /// Trạng thái đồng hồ của phiên làm bài.
 enum SessionPhase { active, idle, timedOut }
@@ -27,95 +23,114 @@ const idleCountdown = Duration(seconds: 60);
 /// Thời lượng tối đa một phiên làm bài trước khi tự thoát.
 const maxSessionDuration = Duration(minutes: 15);
 
-/// Tiến trình của một exercise: số block đã xong (`completedBlocks`), draft
-/// code đang gõ dở theo blockId, và số hint đã dùng theo blockId.
+/// Tiến trình của một exercise. "Đã xong" chỉ có MỘT nguồn: [passed] (chỉ đặt
+/// khi chạy đúng toàn bộ unit test). Draft/hint/lời giải key theo NHÃN ô
+/// (`Block.label`: A, B, C...).
 class ExerciseProgress {
   const ExerciseProgress({
-    required this.completedBlocks,
-    required this.drafts,
-    required this.hintsUsed,
+    this.passed = false,
+    this.totalBlocks = 0,
+    this.drafts = const {},
+    this.hintsUsed = const {},
+    this.solutionViewed = const {},
   });
 
-  final int completedBlocks;
+  final bool passed;
+
+  /// Số ô của bài, để suy ra [completedBlocks] (không phải trạng thái riêng).
+  final int totalBlocks;
   final Map<String, String> drafts;
   final Map<String, int> hintsUsed;
+  final Set<String> solutionViewed;
+
+  /// Suy ra từ [passed]: xong thì mọi ô xong, chưa thì 0.
+  int get completedBlocks => passed ? totalBlocks : 0;
+
+  /// "Đang làm dở" (INV-09): chưa passed và có ít nhất một draft không rỗng.
+  bool get inProgress =>
+      !passed && drafts.values.any((code) => code.trim().isNotEmpty);
 
   ExerciseProgress copyWith({
-    int? completedBlocks,
+    bool? passed,
     Map<String, String>? drafts,
     Map<String, int>? hintsUsed,
+    Set<String>? solutionViewed,
   }) {
     return ExerciseProgress(
-      completedBlocks: completedBlocks ?? this.completedBlocks,
+      passed: passed ?? this.passed,
+      totalBlocks: totalBlocks,
       drafts: drafts ?? this.drafts,
       hintsUsed: hintsUsed ?? this.hintsUsed,
+      solutionViewed: solutionViewed ?? this.solutionViewed,
     );
   }
 }
 
-/// Tiến trình của mọi exercise, khởi tạo từ [seedCompletedBlocks]. KHÔNG
-/// autoDispose — phải sống qua việc [SessionController] (autoDispose) bị
-/// huỷ khi người học rời màn hình.
+/// Tiến trình của mọi exercise, khởi tạo từ [seedPassedExercises] +
+/// [seedDrafts]. KHÔNG autoDispose — phải sống qua việc [SessionController]
+/// (autoDispose) bị huỷ khi người học rời màn hình.
 class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
   @override
   Map<String, ExerciseProgress> build() {
+    final ids = {...seedPassedExercises, ...seedDrafts.keys};
     return {
-      for (final entry in seedCompletedBlocks.entries)
-        entry.key: ExerciseProgress(
-          completedBlocks: entry.value,
-          drafts: const {},
-          hintsUsed: const {},
+      for (final id in ids)
+        id: ExerciseProgress(
+          passed: seedPassedExercises.contains(id),
+          totalBlocks: exerciseById(id).blocks.length,
+          drafts: Map.of(seedDrafts[id] ?? const {}),
         ),
     };
   }
 
   ExerciseProgress _progressOf(String exerciseId) {
     return state[exerciseId] ??
-        const ExerciseProgress(
-          completedBlocks: 0,
-          drafts: {},
-          hintsUsed: {},
-        );
+        ExerciseProgress(totalBlocks: exerciseById(exerciseId).blocks.length);
   }
 
-  /// Tăng `completedBlocks` CHỈ khi [blockIndex] đúng bằng block đang active
-  /// (tức bằng `completedBlocks` hiện tại) — chống báo pass sai thứ tự.
-  void markBlockPassed(String exerciseId, int blockIndex) {
+  /// Đánh dấu cả bài đã pass (backend trả `passed`). Idempotent: đã passed thì
+  /// không ghi hoạt động lần nữa.
+  void markPassed(String exerciseId) {
     final current = _progressOf(exerciseId);
-    if (blockIndex != current.completedBlocks) return;
+    if (current.passed) return;
     ref.read(activityProvider.notifier).record();
-    state = {
-      ...state,
-      exerciseId: current.copyWith(
-        completedBlocks: current.completedBlocks + 1,
-      ),
-    };
+    state = {...state, exerciseId: current.copyWith(passed: true)};
   }
 
-  /// Lưu draft code đang gõ dở cho block [blockId] của [exerciseId].
-  void saveDraft(String exerciseId, String blockId, String code) {
+  /// Lưu draft code đang gõ dở cho ô [label] của [exerciseId].
+  void saveDraft(String exerciseId, String label, String code) {
     final current = _progressOf(exerciseId);
     state = {
       ...state,
-      exerciseId: current.copyWith(
-        drafts: {...current.drafts, blockId: code},
-      ),
+      exerciseId: current.copyWith(drafts: {...current.drafts, label: code}),
     };
   }
 
-  /// Tăng số hint đã dùng cho [blockId], tối đa 3. Trả về số hint sau khi
+  /// Tăng số hint đã dùng cho ô [label], tối đa 3. Trả về số hint sau khi
   /// tăng (không tăng quá 3 dù gọi thêm bao nhiêu lần).
-  int useHint(String exerciseId, String blockId) {
+  int useHint(String exerciseId, String label) {
     final current = _progressOf(exerciseId);
-    final used = current.hintsUsed[blockId] ?? 0;
+    final used = current.hintsUsed[label] ?? 0;
     final next = used >= 3 ? used : used + 1;
     state = {
       ...state,
       exerciseId: current.copyWith(
-        hintsUsed: {...current.hintsUsed, blockId: next},
+        hintsUsed: {...current.hintsUsed, label: next},
       ),
     };
     return next;
+  }
+
+  /// Ghi nhận người học đã xem lời giải ô [label] (INV-07: ô này không sạch).
+  void viewSolution(String exerciseId, String label) {
+    final current = _progressOf(exerciseId);
+    if (current.solutionViewed.contains(label)) return;
+    state = {
+      ...state,
+      exerciseId: current.copyWith(
+        solutionViewed: {...current.solutionViewed, label},
+      ),
+    };
   }
 }
 
@@ -168,7 +183,9 @@ class SessionController extends Notifier<SessionState> {
   /// không làm đồng hồ nhảy về 00:00 mỗi lần.
   void start() {
     // Nếu timer đang chạy và chưa timedOut → chỉ đánh dấu activity
-    if (_timer != null && _timer!.isActive && state.phase != SessionPhase.timedOut) {
+    if (_timer != null &&
+        _timer!.isActive &&
+        state.phase != SessionPhase.timedOut) {
       activity();
       return;
     }
@@ -258,46 +275,19 @@ class SessionController extends Notifier<SessionState> {
     _timer?.cancel();
     _timer = null;
   }
-
-  /// Chấm code cho block [blockIndex]. Pass thì cập nhật tiến trình qua
-  /// [ProgressController.markBlockPassed].
-  RunResult run(int blockIndex, String code) {
-    final exercise = exerciseById(exerciseId);
-    final block = exercise.blocks[blockIndex];
-    final result = runBlock(code, block);
-    if (result.passed) {
-      ref
-          .read(progressProvider.notifier)
-          .markBlockPassed(exerciseId, blockIndex);
-    }
-    return result;
-  }
-}
-
-/// Trạng thái block [index] so với tiến trình [p]: done / active / locked.
-BlockStatus blockStatusOf(ExerciseProgress p, int index) {
-  if (index < p.completedBlocks) return BlockStatus.done;
-  if (index == p.completedBlocks) return BlockStatus.active;
-  return BlockStatus.locked;
 }
 
 final RegExp _assignmentPattern = RegExp(r'^([A-Za-z_]\w*)\s*=(?!=)');
 final RegExp _forLoopPattern = RegExp(r'^for\s+([A-Za-z_]\w*)\s+in\b');
 
-/// Định danh đã biết tại block [blockIndex]: tham số của hàm cộng tên biến
-/// được GÁN (`x = ...`) hoặc biến LẶP (`for x in ...`) xuất hiện trong
-/// `acceptedAnswers[0]` của các block TRƯỚC [blockIndex].
+/// Định danh đã biết tại block [blockIndex]: tên hàm, tham số, tên biến GÁN /
+/// biến LẶP trong phần code khoá của `template` (nhìn thấy ở mọi ô), cộng
+/// tên GÁN/LẶP trong `acceptedAnswers[0]` của các block TRƯỚC [blockIndex].
 List<String> knownIdentifiersFor(Exercise exercise, int blockIndex) {
-  final identifiers = <String>{...exercise.params};
+  final identifiers = <String>{exercise.functionName, ...exercise.params};
 
-  final upperBound = blockIndex < exercise.blocks.length
-      ? blockIndex
-      : exercise.blocks.length;
-  for (var i = 0; i < upperBound; i++) {
-    final block = exercise.blocks[i];
-    if (block.acceptedAnswers.isEmpty) continue;
-    final answer = block.acceptedAnswers.first;
-    for (final rawLine in answer.split('\n')) {
+  void collect(String code) {
+    for (final rawLine in code.split('\n')) {
       final line = rawLine.trim();
       final forMatch = _forLoopPattern.firstMatch(line);
       if (forMatch != null) {
@@ -309,6 +299,17 @@ List<String> knownIdentifiersFor(Exercise exercise, int blockIndex) {
         identifiers.add(assignMatch.group(1)!);
       }
     }
+  }
+
+  collect(exercise.template);
+
+  final upperBound = blockIndex < exercise.blocks.length
+      ? blockIndex
+      : exercise.blocks.length;
+  for (var i = 0; i < upperBound; i++) {
+    final block = exercise.blocks[i];
+    if (block.acceptedAnswers.isEmpty) continue;
+    collect(block.acceptedAnswers.first);
   }
   return identifiers.toList();
 }

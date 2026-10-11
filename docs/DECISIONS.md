@@ -38,6 +38,12 @@ mobile/pubspec.yaml:33-42 (danh sách dependencies thật).
 **Còn đúng tới khi nào**: tới khi phase 2 (issue #5, backend thật) quyết định app cần gọi API —
 lúc đó phải quyết định lại có đưa Dio/Retrofit trở lại hay dùng `http` package đơn giản hơn.
 
+**Cập nhật (run 2026-10-11-exercise-tabs-judge, commit 8b2ce52)**: phần "không HTTP client"
+đã bị thay — app giờ gọi backend chấm bài bằng gói `http` (đơn giản, không Dio/Retrofit). Phần
+"không get_it/injectable" vẫn đúng: Riverpod (`judgeClientProvider`) vẫn là DI duy nhất
+(mobile/lib/data/judge_client.dart:149, mobile/pubspec.yaml: dependency `http`). Xem mục
+"Chấm bài bằng Python thật qua backend" bên dưới.
+
 ### Bỏ Hive (lưu tiến độ qua restart) ở phase 1
 
 **Quyết định**: tiến độ làm bài (block đã xong, draft code, hint đã dùng) chỉ sống trong bộ nhớ
@@ -51,7 +57,13 @@ vào lưu trữ bền vững — mất tiến độ khi kill app là chấp nh�
 
 **Còn đúng tới khi nào**: tới phase 2 (issue #5) — đã liệt kê Hive là việc cần làm ở đó.
 
-### Run = so khớp đáp án đã chuẩn hoá, không chạy Python thật
+### ~~Run = so khớp đáp án đã chuẩn hoá, không chạy Python thật~~ (SUPERSEDED)
+
+**SUPERSEDED bởi run 2026-10-11-exercise-tabs-judge (commit 8b2ce52)**: Run giờ gửi code đã ghép lên
+backend và chấm bằng Python thật + unit test — xem "Chấm bài bằng Python thật qua backend" ở dưới.
+`runBlock`/`normalizeCode` còn trong repo nhưng chỉ phục vụ chế độ ôn tập "gõ lại" và gợi ý phụ
+"kiểm tra lại ô này" (mobile/lib/features/review/review_screen.dart:151,
+mobile/lib/features/exercise/code_tab.dart:177-189). Nội dung gốc giữ lại để biết vì sao từng chọn vậy:
 
 **Quyết định**: nút Run trong màn Cell không thực thi code Python — nó chuẩn hoá code người học
 gõ (`normalizeCode`) rồi so với danh sách `acceptedAnswers` viết sẵn trong seed cho từng block.
@@ -90,7 +102,7 @@ tự ném `RangeError` khi modifier trả về text không đổi — đã thử
 hướng.
 
 **Nguồn**: planning/crew/2026-09-24-flutter-demo-core/DEVIATIONS.md, dòng "Plan: overtype qua
-CodeModifier"; mobile/lib/features/exercise/code_input.dart:375-431.
+CodeModifier"; mobile/lib/features/exercise/code_input.dart:572-573 (override `set value`; `_overtype` từ dòng 585; số dòng cập nhật ở run 2026-10-11-exercise-tabs-judge).
 
 ### `start()` của session phải idempotent (không reset đồng hồ mỗi lần vào block mới)
 
@@ -105,4 +117,107 @@ hiện và sửa bằng task hẹp T-04b.
 
 **Nguồn**: planning/crew/2026-09-24-flutter-demo-core/STATUS.md, dòng "T-04b start() idempotent
 (timer reset mỗi block — lỗi mối nối T-04↔T-06)";
-mobile/lib/features/exercise/session_controller.dart:161-186.
+mobile/lib/features/exercise/session_controller.dart:184-205 (số dòng cập nhật ở run 2026-10-11-exercise-tabs-judge).
+
+### Chấm bài bằng Python thật qua backend, không còn so chuỗi (thay quyết định "Run = so chuỗi" và "không backend")
+
+**Quyết định**: nút Run gửi code đã ghép (template khoá + các ô học viên) tới backend FastAPI
+`POST /run`; backend chạy harness + unit test của bài bằng Python thật rồi trả `passed/failed/
+error/timeout`. Test case và lời giải tham chiếu chỉ nằm ở backend (`backend/app/exercises.json`),
+app không giữ.
+
+**Vì sao**: so chuỗi chấm sai mọi cách viết đúng nhưng khác `acceptedAnswers`, và không cho biết
+test nào hỏng. Backend riêng cũng để về sau tự host được; client không sửa được test.
+
+**Đánh đổi đã chấp nhận**: app cần backend chạy (mặc định `http://127.0.0.1:8000`, đổi bằng
+`--dart-define=JUDGE_URL`); chỉ chạy local trên simulator iOS (`NSAllowsLocalNetworking`);
+backend chưa chạy thì Run báo "không kết nối được máy chấm", không chấm được.
+
+**Nguồn**: planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md, "Quyết định thiết kế" 1, 10;
+backend/app/main.py:89-130; mobile/lib/data/judge_client.dart:57-107; mobile/ios/Runner/Info.plist:28-31.
+
+### Máy chấm qua interface `CodeRunner`; dùng Judge0 CE công khai bây giờ, tự host sau
+
+**Quyết định**: backend chỉ phụ thuộc `CodeRunner` (một hàm `run(source, stdin) -> Execution`).
+Bản duy nhất hiện có là `Judge0Runner` gọi `https://ce.judge0.com` (Python 3.12, id 100). Đổi sang
+self-host có hai đường không đụng harness/API/app: tự host Judge0 (chỉ đổi `JUDGE0_URL`) hoặc viết
+`DockerRunner` cùng interface (đổi `CODE_RUNNER`).
+
+**Vì sao**: cần chấm được ngay để làm UX, nhưng không muốn khoá vào một máy chấm. Chưa viết
+`DockerRunner` vì chưa có lần dùng thứ hai thật (luật "abstraction khi có lần hai").
+
+**Đánh đổi đã chấp nhận**: code học viên đi qua server Judge0 công khai của bên thứ ba, giới hạn
+tần suất theo IP — đủ cho dev local, không đủ production (khi đó phải tự host). Backend cũng giới
+hạn 4 request đồng thời tới máy chấm.
+
+**Nguồn**: backend/app/runner.py:1-9,42-43,128-136; backend/app/main.py:31-32;
+planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md, "Quyết định thiết kế" 2 và "Giới hạn đã biết".
+
+### Harness độc lập máy chấm, test case dạng JSON
+
+**Quyết định**: `backend/app/harness.py` là một chương trình thư viện chuẩn đọc stdin JSON
+`{code, function, cases}` và in đúng một dòng `__JUDGE_RESULT__{json}`; backend gửi harness làm
+`source`, payload làm `stdin`. Test case là JSON: `{"args": [...], "expect": {"return": v}}` hoặc
+`{"args": [...], "expect": {"arg": i, "value": v}}` (hàm sửa tham số tại chỗ).
+
+**Vì sao**: máy chấm nào cũng chỉ cần "chạy python với stdin" nên đổi runner không đổi cách chấm;
+JSON cho phép hiển thị "input / mong đợi / nhận được" thay vì chỉ đúng/sai.
+
+**Đánh đổi đã chấp nhận**: code học viên chạy cùng tiến trình với harness nên cố tình in dòng kết
+quả giả hoặc monkey-patch `json.dumps` thì tự mở khoá bài của mình — không chống gian lận (review
+external gắn Critical, bị bác vì đã khai trong PLAN). Harness so bằng `==` nên `True == 1` coi là
+bằng nhau. Case ném exception thì dừng, các case sau không chạy.
+
+**Nguồn**: backend/app/harness.py:1-16,48-109; backend/app/exercises.json:1-5;
+planning/crew/2026-10-11-exercise-tabs-judge/DEVIATIONS.md (dòng "T-02 review external").
+
+### Ghép ô TODO ở client (Dart), không ở backend
+
+**Quyết định**: template của bài chứa dòng `# TODO A`, `# TODO B`...; `mergeCells` thay mỗi dòng
+marker bằng nội dung ô (đã dedent) thụt theo đúng thụt lề của dòng marker, và trả thêm `lineOrigin`
+(dòng nào đến từ ô nào). Backend nhận code đã ghép và trả `error.line` 1-based; client tra
+`lineOrigin[line-1]` để tô đúng ô.
+
+**Vì sao**: học viên không phải gõ thụt lề; ghép ở một chỗ duy nhất thì ánh xạ dòng lỗi → ô chỉ có
+một nơi đúng.
+
+**Nguồn**: mobile/lib/domain/merge.dart:28,80-102; mobile/lib/features/exercise/run_result_view.dart:23-30.
+
+### "Bài đã xong" chỉ có một nguồn: `ExerciseProgress.passed`
+
+**Quyết định**: `passed` chỉ được đặt khi backend trả `passed` (`markPassed`). `completedBlocks` cũ
+thành getter suy ra (`passed ? totalBlocks : 0`); "đang làm dở" = `!passed` và có draft không rỗng.
+Mọi nơi hiện/đếm tiến độ (ExerciseRow, Home, Stats, Review, Practice) đọc từ đây.
+
+**Vì sao**: trước đó "xong" suy từ đếm block gõ đúng; có hai nguồn thì Run pass mà Home vẫn ghi "Mới".
+
+**Nguồn**: mobile/lib/features/exercise/session_controller.dart:29-52,93-98;
+mobile/lib/features/exercise/code_tab.dart:127-130; mobile/lib/features/exercise/session_providers.dart:28-42.
+
+### Khoá bài kế tiếp trong cùng `CodeFile`, một quy tắc duy nhất
+
+**Quyết định**: bài k trong một `CodeFile` mở khi k = 0 hoặc bài k-1 (cùng file) đã passed; bài đã
+passed luôn mở; bài nằm ở nhiều file mở nếu mở ở bất kỳ file nào chứa nó; không khoá xuyên
+file/topic. `ExerciseRow`, màn bài và nút "Bài tiếp theo" cùng dùng `isExerciseUnlocked`.
+
+**Vì sao**: bản đầu của run để ExerciseRow và ExerciseScreen khoá khác nhau (bài passed khi bài trước
+chưa pass) — sửa bằng task T-11, gom về một hàm.
+
+**Giới hạn**: `nextExerciseAfter` chỉ xét file ĐẦU TIÊN chứa bài, còn `isExerciseUnlocked` xét mọi file
+— bài dùng chung nhiều file có thể cho "Bài tiếp theo" khác phạm vi khoá (SEAM M-5, chưa sửa).
+
+**Nguồn**: mobile/lib/domain/progression.dart:1-44; mobile/lib/features/exercise/session_providers.dart:44-52;
+mobile/lib/features/exercise/exercise_screen.dart:38-40; planning/crew/2026-10-11-exercise-tabs-judge/DEVIATIONS.md (dòng INV-08).
+
+### Ô đã xem lời giải không tính điểm; không có nút "chép vào ô"
+
+**Quyết định**: mở lời giải một ô ghi nhãn vào `solutionViewed`; Stats không tính ô đó là "sạch" (cùng
+điều kiện không dùng gợi ý), Review kéo hạn ôn của thẻ đó về sớm. Học viên vẫn phải tự gõ ô đó.
+
+**Vì sao**: xem lời giải là cách học hợp lệ nhưng không được tính như tự làm được.
+
+**Chưa chốt (backlog T-07)**: thẻ ôn của ô đã xem lời giải bị kéo hạn về ngày mai vĩnh viễn → ôn mỗi
+ngày mãi; reviewer đề nghị hỏi user có muốn vậy không — chưa có câu trả lời.
+
+**Nguồn**: mobile/lib/features/exercise/solution_tab.dart:59-65; mobile/lib/features/stats/stats_screen.dart:28-41;
+mobile/lib/features/review/review_controller.dart:122-148.

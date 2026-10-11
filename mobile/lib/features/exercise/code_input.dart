@@ -15,8 +15,50 @@ const _placeholder = 'Nhập code';
 /// Phím ký hiệu, theo thứ tự hay dùng. Tab tách riêng vì chèn 4 space.
 const List<String> _symbols = ['(', ')', '[', ']', ':', '=', '.', ',', '"'];
 
+/// Cầu nối giữa nhiều [CodeInput] (`showBars: false`) và MỘT [CodeToolbar]:
+/// editor nào đang focus thì tự đăng ký làm "ô active", mất focus thì tự gỡ.
+/// Truyền cùng một controller cho các [CodeInput] và cho [CodeToolbar].
+/// Phải `dispose()` khi bỏ.
+class CodeToolbarController extends ChangeNotifier {
+  _CodeInputState? _active;
+  bool _disposed = false;
+
+  /// Có ô nào đang focus (thanh công cụ dùng được) hay không.
+  bool get hasActive => _active != null;
+
+  void _changed() => notifyListeners();
+
+  void _attach(_CodeInputState s) {
+    if (_active == s) return;
+    _active = s;
+    notifyListeners();
+  }
+
+  void _detach(_CodeInputState s, {bool deferred = false}) {
+    if (_active != s) return;
+    _active = null;
+    if (deferred) {
+      // Đang dispose trong lúc unmount cây → không notify đồng bộ.
+      Future.microtask(() {
+        if (!_disposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}
+
 /// Editor code cho điện thoại: editor ở trên, thanh gợi ý + hàng phím ký hiệu
 /// ngay dưới (tức là nằm sát trên bàn phím ảo).
+///
+/// Nhiều ô trên một màn: đặt `showBars: false`, `keyPrefix` riêng cho từng ô,
+/// cùng một [toolbar], rồi dựng một [CodeToolbar] ở đáy màn.
 class CodeInput extends StatefulWidget {
   const CodeInput({
     super.key,
@@ -26,6 +68,9 @@ class CodeInput extends StatefulWidget {
     required this.onChanged,
     this.onActivity,
     this.focusNode,
+    this.showBars = true,
+    this.keyPrefix = 'code-input',
+    this.toolbar,
   });
 
   final String initialCode;
@@ -34,6 +79,15 @@ class CodeInput extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback? onActivity;
   final FocusNode? focusNode;
+
+  /// `false` → không vẽ thanh gợi ý/phím ký hiệu riêng (dùng [CodeToolbar]).
+  final bool showBars;
+
+  /// Tiền tố key: `<prefix>-field`, `<prefix>-border`. Mặc định giữ key cũ.
+  final String keyPrefix;
+
+  /// Nơi ô này đăng ký khi được focus, để [CodeToolbar] chèn đúng ô.
+  final CodeToolbarController? toolbar;
 
   @override
   State<CodeInput> createState() => _CodeInputState();
@@ -54,11 +108,27 @@ class _CodeInputState extends State<CodeInput> {
     _controller.addListener(_onControllerChanged);
     // CodeField gắn focusNode trong initState của nó, nên chốt một lần ở đây.
     _focus = widget.focusNode ?? (_ownFocus = FocusNode());
+    _focus.addListener(_onFocusChanged);
+    if (_focus.hasFocus) widget.toolbar?._attach(this);
+  }
+
+  void _onFocusChanged() {
+    final t = widget.toolbar;
+    if (t == null) return;
+    if (_focus.hasFocus) {
+      t._attach(this);
+    } else {
+      t._detach(this);
+    }
   }
 
   @override
   void didUpdateWidget(CodeInput oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.toolbar != oldWidget.toolbar) {
+      oldWidget.toolbar?._detach(this, deferred: true);
+      if (_focus.hasFocus) widget.toolbar?._attach(this);
+    }
     // Parent tái dùng widget cho block khác mà không đổi key → nạp code mới.
     // Nếu parent chỉ trả lại đúng bản nháp đang gõ thì text trùng, không reset.
     if (widget.initialCode != oldWidget.initialCode &&
@@ -72,6 +142,8 @@ class _CodeInputState extends State<CodeInput> {
 
   @override
   void dispose() {
+    widget.toolbar?._detach(this, deferred: true);
+    _focus.removeListener(_onFocusChanged);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _ownFocus?.dispose();
@@ -88,6 +160,10 @@ class _CodeInputState extends State<CodeInput> {
     if (textChanged) widget.onChanged(v.text);
     widget.onActivity?.call();
     setState(() {});
+    // Text/con trỏ đổi → gợi ý của thanh dùng chung phải tính lại.
+    if (_focus.hasFocus && widget.toolbar?._active == this) {
+      widget.toolbar!._changed();
+    }
   }
 
   /// Vị trí con trỏ hợp lệ; editor chưa từng focus thì coi như ở cuối.
@@ -161,13 +237,16 @@ class _CodeInputState extends State<CodeInput> {
     _keepKeyboard();
   }
 
-  List<Suggestion> _currentSuggestions() {
+  List<Suggestion> _suggestionsFor(
+    List<String> knownIdentifiers,
+    List<String> vocab,
+  ) {
     final sel = _selection;
     if (!sel.isCollapsed) return const [];
     return suggest(
       textBeforeCursor: _controller.text.substring(0, sel.start),
-      knownIdentifiers: widget.knownIdentifiers,
-      vocab: widget.vocab,
+      knownIdentifiers: knownIdentifiers,
+      vocab: vocab,
     );
   }
 
@@ -180,7 +259,7 @@ class _CodeInputState extends State<CodeInput> {
       final codeField = CodeTheme(
         data: CodeThemeData(styles: _codeStyles(scheme)),
         child: CodeField(
-          key: const Key('code-input-field'),
+          key: Key('${widget.keyPrefix}-field'),
           controller: _controller,
           focusNode: _focus,
           expands: bounded,
@@ -225,7 +304,7 @@ class _CodeInputState extends State<CodeInput> {
         builder: (context, child) {
           final focused = _focus.hasFocus;
           return Container(
-            key: const Key('code-input-border'),
+            key: Key('${widget.keyPrefix}-border'),
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               border: Border.all(
@@ -239,65 +318,131 @@ class _CodeInputState extends State<CodeInput> {
         },
       );
 
-      return Column(
-        mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (bounded) Expanded(child: field) else field,
-          // Chạm vào 2 hàng này được tính là "bên trong" ô nhập → không mất
-          // focus, bàn phím không sụp.
-          TextFieldTapRegion(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainer,
-                border: Border(top: BorderSide(color: scheme.outline)),
+      if (!widget.showBars) return field;
+
+        return Column(
+          mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (bounded) Expanded(child: field) else field,
+            _BarsPanel(
+              suggestions: _suggestionsFor(
+                widget.knownIdentifiers,
+                widget.vocab,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Bar(children: [
-                    for (final (i, s) in _currentSuggestions().indexed)
-                      _Key(
-                        key: Key('suggestion-${s.label}'),
-                        label: s.insertText.endsWith('(')
-                            ? '${s.label}()'
-                            : s.label,
-                        color: switch (s.kind) {
-                          SuggestionKind.known => scheme.primary,
-                          SuggestionKind.vocab => scheme.onSurface,
-                          SuggestionKind.keyword => scheme.onSurfaceVariant,
-                        },
-                        borderColor: i == 0 ? scheme.primary : scheme.outline,
-                        onTap: () => _applySuggestion(s),
-                      ),
-                  ]),
-                  _Bar(children: [
-                    for (final c in _symbols)
-                      _Key(
-                        key: Key('symbol-$c'),
-                        label: c,
-                        color: scheme.onSurface,
-                        borderColor: scheme.outline,
-                        minWidth: 44,
-                        onTap: () => _insertSymbol(c),
-                      ),
-                    _Key(
-                      key: const Key('symbol-tab'),
-                      label: 'Tab',
-                      color: scheme.onSurfaceVariant,
-                      borderColor: scheme.outline,
-                      minWidth: 56,
-                      onTap: () => _insertSymbol(_tab),
-                    ),
-                  ]),
-                ],
-              ),
+              onSuggestion: _applySuggestion,
+              onSymbol: _insertSymbol,
             ),
-          ),
-        ],
-      );
+          ],
+        );
     });
+  }
+}
+
+/// Thanh gợi ý + hàng phím ký hiệu (+Tab) dùng chung cho nhiều [CodeInput]
+/// (`showBars: false`, cùng [controller]). Chèn vào đúng ô đang focus, không
+/// làm mất focus; không có ô nào focus thì các phím bị vô hiệu hoá.
+class CodeToolbar extends StatelessWidget {
+  const CodeToolbar({
+    super.key,
+    required this.controller,
+    required this.knownIdentifiers,
+    required this.vocab,
+  });
+
+  final CodeToolbarController controller;
+  final List<String> knownIdentifiers;
+  final List<String> vocab;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final active = controller._active;
+        return _BarsPanel(
+          suggestions:
+              active?._suggestionsFor(knownIdentifiers, vocab) ?? const [],
+          onSuggestion: active?._applySuggestion,
+          onSymbol: active?._insertSymbol,
+        );
+      },
+    );
+  }
+}
+
+/// Hai hàng gợi ý + phím ký hiệu. Callback null → phím bị vô hiệu hoá.
+class _BarsPanel extends StatelessWidget {
+  const _BarsPanel({
+    required this.suggestions,
+    required this.onSuggestion,
+    required this.onSymbol,
+  });
+
+  final List<Suggestion> suggestions;
+  final ValueChanged<Suggestion>? onSuggestion;
+  final ValueChanged<String>? onSymbol;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSuggestion = this.onSuggestion;
+    final onSymbol = this.onSymbol;
+    // Chạm vào 2 hàng này được tính là "bên trong" ô nhập → không mất
+    // focus, bàn phím không sụp.
+    return TextFieldTapRegion(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          border: Border(top: BorderSide(color: scheme.outline)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Bar(
+              children: [
+                for (final (i, s) in suggestions.indexed)
+                  _Key(
+                    key: Key('suggestion-${s.label}'),
+                    label: s.insertText.endsWith('(')
+                        ? '${s.label}()'
+                        : s.label,
+                    color: switch (s.kind) {
+                      SuggestionKind.known => scheme.primary,
+                      SuggestionKind.vocab => scheme.onSurface,
+                      SuggestionKind.keyword => scheme.onSurfaceVariant,
+                    },
+                    borderColor: i == 0 ? scheme.primary : scheme.outline,
+                    onTap: onSuggestion == null ? null : () => onSuggestion(s),
+                  ),
+              ],
+            ),
+            _Bar(
+              children: [
+                for (final c in _symbols)
+                  _Key(
+                    key: Key('symbol-$c'),
+                    label: c,
+                    color: scheme.onSurface,
+                    borderColor: scheme.outline,
+                    minWidth: 44,
+                    onTap: onSymbol == null ? null : () => onSymbol(c),
+                  ),
+                _Key(
+                  key: const Key('symbol-tab'),
+                  label: 'Tab',
+                  color: scheme.onSurfaceVariant,
+                  borderColor: scheme.outline,
+                  minWidth: 56,
+                  onTap: onSymbol == null ? null : () => onSymbol(_tab),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -355,7 +500,7 @@ class _Key extends StatelessWidget {
   final String label;
   final Color color;
   final Color borderColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double minWidth;
 
   @override
@@ -383,8 +528,11 @@ class _Key extends StatelessWidget {
                 widthFactor: 1,
                 child: Text(
                   label,
-                  style:
-                      TextStyle(fontFamily: _mono, fontSize: 16, color: color),
+                  style: TextStyle(
+                    fontFamily: _mono,
+                    fontSize: 16,
+                    color: onTap == null ? color.withValues(alpha: 0.4) : color,
+                  ),
                 ),
               ),
             ),

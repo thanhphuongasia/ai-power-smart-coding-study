@@ -1,70 +1,63 @@
-/// Test luồng end-to-end: Home → Block list → Cell, gõ bằng gợi ý +
-/// phím ký hiệu để Run đúng, rồi xác nhận block kế tiếp mở khoá.
+/// Test luồng end-to-end qua mối nối (INV-06/08): bắt đầu từ Home (không mở
+/// thẳng route) → vào split-chunks trong ≤2 chạm → tab Code → 3 ô → Run
+/// (judge giả trả passed) → split-chunks "Đã xong", overlap-chunks hết khoá.
 ///
-/// clockProvider bị override bằng một đồng hồ giả điều khiển tay — Flutter
-/// test chạy trong FakeAsync riêng của nó (Timer.periodic ăn theo thời gian
-/// `tester.pump` đẩy), nhưng `DateTime.now()` thật KHÔNG bị ảnh hưởng bởi
-/// FakeAsync đó, nên phải tự khớp đồng hồ giả với từng lần pump.
+/// clockProvider bị override bằng đồng hồ giả: Timer.periodic của phiên chạy
+/// trong FakeAsync của testWidgets, còn `DateTime.now()` thật thì không.
 library;
 
-// ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_coding_study/features/exercise/cell_screen.dart';
+import 'package:smart_coding_study/app/router.dart';
+import 'package:smart_coding_study/data/judge_client.dart';
+import 'package:smart_coding_study/data/seed.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/main.dart';
 
-class _FakeClock {
-  DateTime now = DateTime(2024, 1, 1, 9);
-}
+class _FakeJudge implements JudgeClient {
+  final List<String> calls = [];
 
-TextEditingController _ctrl(WidgetTester tester) =>
-    tester.widget<EditableText>(find.byType(EditableText)).controller;
-
-/// Gõ như IME thật: gửi value = cũ + 1 ký tự tại con trỏ (xem
-/// test/code_input_test.dart cho giải thích đầy đủ).
-Future<void> _type(WidgetTester tester, String chars) async {
-  for (final ch in chars.split('')) {
-    final v = _ctrl(tester).value;
-    final s = v.selection.isValid
-        ? v.selection
-        : TextSelection.collapsed(offset: v.text.length);
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: v.text.replaceRange(s.start, s.end, ch),
-      selection: TextSelection.collapsed(offset: s.start + ch.length),
-    ));
-    await tester.pump();
+  @override
+  Future<JudgeResult> run(String exerciseId, String code) async {
+    calls.add(code);
+    return const JudgeResult(
+      status: JudgeStatus.passed,
+      tests: [
+        JudgeTest(
+          call: "split_chunks('abcd', 2)",
+          expected: "['ab', 'cd']",
+          actual: "['ab', 'cd']",
+          passed: true,
+        ),
+      ],
+    );
   }
 }
 
-Future<void> _backspace(WidgetTester tester) async {
-  final v = _ctrl(tester).value;
-  final p = v.selection.start;
-  tester.testTextInput.updateEditingValue(TextEditingValue(
-    text: v.text.replaceRange(p - 1, p, ''),
-    selection: TextSelection.collapsed(offset: p - 1),
-  ));
-  await tester.pump();
-}
-
-Future<void> _tap(WidgetTester tester, String key) async {
-  await tester.tap(find.byKey(Key(key)));
-  await tester.pump();
-}
+/// Chữ trạng thái trong dòng exercise `id` (Đã xong / Đang dở / Mới / Khoá).
+Finder _status(String id, String text) => find.descendant(
+  of: find.byKey(Key('exercise-$id')),
+  matching: find.text(text),
+);
 
 void main() {
   testWidgets(
-    'Home → continue-card → Block list → Tiếp tục → Cell B3, '
-    'gõ bằng gợi ý ra đáp án đúng → Run "Đúng" → B4 mở khoá',
+    'Home → continue-card → tab Code → gõ 3 ô → Run passed → '
+    'split-chunks Đã xong, overlap-chunks mở khoá',
     (tester) async {
-      final fakeClock = _FakeClock();
+      final judge = _FakeJudge();
+      final clock = DateTime(2024, 1, 1, 9);
       await tester.binding.setSurfaceSize(const Size(420, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      appRouter.go('/');
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [clockProvider.overrideWithValue(() => fakeClock.now)],
+          overrides: [
+            clockProvider.overrideWithValue(() => clock),
+            judgeClientProvider.overrideWithValue(judge),
+          ],
           child: const SmartCodingStudyApp(),
         ),
       );
@@ -73,75 +66,43 @@ void main() {
       // Bắt đầu ở Home.
       expect(find.byKey(const Key('continue-card')), findsOneWidget);
 
-      // Chạm 1: continue-card → Block list.
+      // Chạm 1: continue-card → ExerciseScreen. Bài có draft nên mở thẳng
+      // tab Code.
       await tester.tap(find.byKey(const Key('continue-card')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('block-list-continue-button')),
-          findsOneWidget);
+      expect(find.byKey(const Key('exercise-title')), findsOneWidget);
+      expect(find.byKey(const Key('run-button')), findsOneWidget);
 
-      // Chạm 2: "Tiếp tục" → Cell (block active = index 2, hiển thị "Block
-      // 3/5" — split-chunks đã xong 2 block trong seed).
-      await tester.tap(find.byKey(const Key('block-list-continue-button')));
+      // Gõ cả 3 ô bằng đáp án đúng.
+      final exercise = exerciseById('split-chunks');
+      for (final b in exercise.blocks) {
+        await tester.enterText(
+          find.byKey(Key('cell-${b.label}-field')),
+          b.acceptedAnswers.first,
+        );
+        await tester.pump();
+      }
+
+      await tester.tap(find.byKey(const Key('run-button')));
       await tester.pumpAndSettle();
-      expect(find.byType(CellScreen), findsOneWidget);
-      expect(find.text('Block 3/5'), findsOneWidget);
+      expect(judge.calls, hasLength(1));
+      expect(find.byKey(const Key('next-exercise')), findsOneWidget);
 
-      final cellFinder = find.byType(CellScreen);
-      Finder inCell(Finder f) =>
-          find.descendant(of: cellFinder, matching: f);
-
-      await tester.showKeyboard(find.byKey(const Key('code-input-field')));
-      await tester.pump();
-
-      // TimerPill phải tăng sau khi màn Cell mở được 2 giây (BẮT BUỘC:
-      // session start() phải chạy thật, không bị autoDispose huỷ sớm).
-      fakeClock.now = fakeClock.now.add(const Duration(seconds: 2));
-      await tester.pump(const Duration(seconds: 2));
-      expect(inCell(find.text('00:02')), findsOneWidget);
-
-      // Test thêm: gõ "chu" thấy gợi ý suggestion-chunks (INV-02).
-      await _type(tester, 'chu');
-      expect(inCell(find.byKey(const Key('suggestion-chunks'))),
-          findsOneWidget);
-      await _backspace(tester);
-      await _backspace(tester);
-      await _backspace(tester);
-      expect(_ctrl(tester).text, isEmpty);
-
-      // Gõ đáp án đúng của block 3 bằng gợi ý + phím ký hiệu:
-      // "for i in range(0, len(text), size):"
-      await _type(tester, 'for i in ');
-      await _tap(tester, 'suggestion-range');
-      expect(_ctrl(tester).text, 'for i in range()');
-      await _type(tester, '0, len(');
-      await _tap(tester, 'suggestion-text');
-      await _type(tester, '), size):');
-      final code = _ctrl(tester).text;
-      expect(code, 'for i in range(0, len(text), size):');
-
-      // Run.
-      await _tap(tester, 'run-button');
-      expect(inCell(find.text('Đúng')), findsOneWidget);
-
-      // Quay lại Block list bằng nút back trên header (ScreenHeader không
-      // export key riêng cho icon back — dò theo Icons.arrow_back).
-      await tester.tap(find.byIcon(Icons.arrow_back).first);
+      // Về Home: bài đã xong nên không còn "đang dở".
+      await tester.tap(find.byKey(const Key('exercise-back')));
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('continue-card')), findsNothing);
 
-      expect(find.byType(CellScreen), findsNothing);
-      // Block 4 (index 3) không còn khoá: không còn nằm trong Opacity mờ
-      // của _BlockCard locked, và không còn hiện "Mở khoá sau Block 3".
-      final block4Card = find.byKey(const Key('block-card-3'));
-      expect(block4Card, findsOneWidget);
-      expect(
-        find.ancestor(of: block4Card, matching: find.byType(Opacity)),
-        findsNothing,
-        reason: 'block-card-3 (Block 4) phải hết khoá sau khi Run B3 đúng',
-      );
-      expect(find.text('Mở khoá sau Block 3'), findsNothing);
+      // Topic Chunking: split-chunks Đã xong, overlap-chunks không còn khoá.
+      await tester.tap(find.byKey(const Key('theme-rag')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('topic-rag-chunking')));
+      await tester.pumpAndSettle();
+      expect(_status('split-chunks', 'Đã xong'), findsOneWidget);
+      expect(_status('overlap-chunks', 'Khoá'), findsNothing);
+      expect(_status('overlap-chunks', 'Mới'), findsOneWidget);
 
-      // Dọn timer debounce 5s của flutter_code_editor (đã unmount cùng
-      // CellScreen, nhưng vẫn còn ở block trước đó trong lịch sử pump).
+      // Dọn timer debounce 5s của flutter_code_editor.
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 6));
     },

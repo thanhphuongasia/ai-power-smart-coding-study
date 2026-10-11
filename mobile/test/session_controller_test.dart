@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/data/seed.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
+import 'package:smart_coding_study/features/stats/activity.dart';
 
 /// Chạy [body] trong một [ProviderContainer] mà [clockProvider] đọc thời
 /// gian từ [FakeAsync] — cho phép test Timer.periodic bằng `async.elapse`
@@ -41,100 +42,166 @@ void _withFakeSession(
 
 void main() {
   group('ProgressController', () {
-    test('khởi tạo từ seedCompletedBlocks', () {
+    test('khởi tạo từ seedPassedExercises + seedDrafts', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       final progress = container.read(progressProvider);
 
-      expect(progress['split-chunks']!.completedBlocks, 2);
-      expect(progress['overlap-chunks']!.completedBlocks, 0);
-    });
-
-    test(
-      'markBlockPassed chỉ tăng khi blockIndex đúng bằng block đang active',
-      () {
-        final container = ProviderContainer();
-        addTearDown(container.dispose);
-        final notifier = container.read(progressProvider.notifier);
-
-        // split-chunks đang ở completedBlocks=2 → block active là index 2.
-        notifier.markBlockPassed('split-chunks', 0);
-        expect(
-          container.read(progressProvider)['split-chunks']!.completedBlocks,
-          2,
-          reason: 'index sai (không phải block active) thì không tăng',
-        );
-
-        notifier.markBlockPassed('split-chunks', 2);
-        expect(
-          container.read(progressProvider)['split-chunks']!.completedBlocks,
-          3,
-        );
-      },
-    );
-
-    test('blockStatusOf trả done/active/locked đúng theo completedBlocks', () {
-      const progress = ExerciseProgress(
-        completedBlocks: 2,
-        drafts: {},
-        hintsUsed: {},
+      expect(progress['clean-text']!.passed, isTrue);
+      expect(
+        progress['clean-text']!.completedBlocks,
+        exerciseById('clean-text').blocks.length,
       );
-
-      expect(blockStatusOf(progress, 0), BlockStatus.done);
-      expect(blockStatusOf(progress, 1), BlockStatus.done);
-      expect(blockStatusOf(progress, 2), BlockStatus.active);
-      expect(blockStatusOf(progress, 3), BlockStatus.locked);
-      expect(blockStatusOf(progress, 4), BlockStatus.locked);
+      expect(progress['split-chunks']!.passed, isFalse);
+      expect(progress['split-chunks']!.completedBlocks, 0);
+      expect(
+        progress['split-chunks']!.drafts['A'],
+        'for i in range(0, len(text), size):',
+      );
+      expect(progress['overlap-chunks'], isNull);
     });
 
-    test('useHint tối đa 3 mỗi block', () {
+    test('markPassed ⇒ passed và completedBlocks == số ô của bài', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(progressProvider.notifier).markPassed('split-chunks');
+
+      final p = container.read(progressProvider)['split-chunks']!;
+      expect(p.passed, isTrue);
+      expect(p.completedBlocks, exerciseById('split-chunks').blocks.length);
+      expect(p.drafts['A'], isNotNull, reason: 'draft không bị mất');
+    });
+
+    test('markPassed bài chưa có entry vẫn đúng', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(progressProvider.notifier).markPassed('overlap-chunks');
+
+      final p = container.read(progressProvider)['overlap-chunks']!;
+      expect(p.passed, isTrue);
+      expect(p.completedBlocks, exerciseById('overlap-chunks').blocks.length);
+    });
+
+    test('markPassed ghi activity đúng một lần (idempotent)', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final before = container.read(activityProvider);
+      final notifier = container.read(progressProvider.notifier);
+
+      notifier.markPassed('split-chunks');
+      final afterFirst = container.read(activityProvider);
+      notifier.markPassed('split-chunks');
+      final afterSecond = container.read(activityProvider);
+
+      expect(afterFirst, isNot(equals(before)));
+      expect(afterSecond, equals(afterFirst));
+    });
+
+    test('useHint tối đa 3 mỗi ô (key = nhãn)', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final notifier = container.read(progressProvider.notifier);
 
-      expect(notifier.useHint('split-chunks', 'split-chunks-b2'), 1);
-      expect(notifier.useHint('split-chunks', 'split-chunks-b2'), 2);
-      expect(notifier.useHint('split-chunks', 'split-chunks-b2'), 3);
+      expect(notifier.useHint('split-chunks', 'B'), 1);
+      expect(notifier.useHint('split-chunks', 'B'), 2);
+      expect(notifier.useHint('split-chunks', 'B'), 3);
       expect(
-        notifier.useHint('split-chunks', 'split-chunks-b2'),
+        notifier.useHint('split-chunks', 'B'),
         3,
         reason: 'gọi lần thứ 4 vẫn dừng ở 3',
       );
 
       final progress = container.read(progressProvider)['split-chunks']!;
-      expect(progress.hintsUsed['split-chunks-b2'], 3);
+      expect(progress.hintsUsed['B'], 3);
     });
 
-    test(
-      'draft và hint sống qua việc sessionProvider (autoDispose) bị huỷ',
-      () {
-        final container = ProviderContainer();
-        addTearDown(container.dispose);
+    test('viewSolution ghi nhận nhãn ô, gọi lại không đổi', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(progressProvider.notifier);
 
-        // Đọc sessionProvider để dựng SessionController (giống lúc mở màn
-        // làm bài).
-        container.read(sessionProvider('split-chunks'));
+      notifier.viewSolution('split-chunks', 'B');
+      notifier.viewSolution('split-chunks', 'B');
 
-        final progressNotifier = container.read(progressProvider.notifier);
-        progressNotifier.saveDraft(
-          'split-chunks',
-          'split-chunks-b2',
-          'for i in range(0, len(text), size)',
-        );
-        progressNotifier.useHint('split-chunks', 'split-chunks-b2');
+      expect(container.read(progressProvider)['split-chunks']!.solutionViewed, {
+        'B',
+      });
+    });
 
-        // Rời màn hình: sessionProvider (autoDispose) bị huỷ.
-        container.invalidate(sessionProvider('split-chunks'));
+    test('draft, hint, lời giải sống qua việc sessionProvider bị huỷ', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-        final progress = container.read(progressProvider)['split-chunks']!;
-        expect(
-          progress.drafts['split-chunks-b2'],
-          'for i in range(0, len(text), size)',
-        );
-        expect(progress.hintsUsed['split-chunks-b2'], 1);
-      },
-    );
+      container.read(sessionProvider('split-chunks'));
+
+      final progressNotifier = container.read(progressProvider.notifier);
+      progressNotifier.saveDraft('split-chunks', 'B', 'chunks.append(x)');
+      progressNotifier.useHint('split-chunks', 'B');
+      progressNotifier.viewSolution('split-chunks', 'C');
+
+      // Rời màn hình: sessionProvider (autoDispose) bị huỷ.
+      container.invalidate(sessionProvider('split-chunks'));
+
+      final progress = container.read(progressProvider)['split-chunks']!;
+      expect(progress.drafts['B'], 'chunks.append(x)');
+      expect(progress.hintsUsed['B'], 1);
+      expect(progress.solutionViewed, {'C'});
+    });
+  });
+
+  group('inProgressExerciseProvider / exerciseUnlockedProvider', () {
+    test('seed: split-chunks đang làm dở (INV-09)', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      expect(container.read(inProgressExerciseProvider)?.id, 'split-chunks');
+    });
+
+    test('hết dở khi passed, hoặc khi draft rỗng toàn bộ', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(progressProvider.notifier);
+
+      notifier.saveDraft('split-chunks', 'A', '   ');
+      expect(container.read(inProgressExerciseProvider), isNull);
+
+      notifier.saveDraft('split-chunks', 'A', 'x');
+      expect(container.read(inProgressExerciseProvider)?.id, 'split-chunks');
+
+      notifier.markPassed('split-chunks');
+      expect(container.read(inProgressExerciseProvider), isNull);
+    });
+
+    test('draft ở bài chưa mở vẫn không làm dở bài đã passed', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(progressProvider.notifier);
+
+      notifier.saveDraft('clean-text', 'A', 'x'); // clean-text đã passed
+      notifier.saveDraft('split-chunks', 'A', '');
+      expect(container.read(inProgressExerciseProvider), isNull);
+    });
+
+    test('overlap-chunks khoá tới khi split-chunks pass (INV-08)', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(exerciseUnlockedProvider('overlap-chunks')),
+        isFalse,
+      );
+      expect(container.read(exerciseUnlockedProvider('split-chunks')), isTrue);
+
+      container.read(progressProvider.notifier).markPassed('split-chunks');
+
+      expect(
+        container.read(exerciseUnlockedProvider('overlap-chunks')),
+        isTrue,
+      );
+    });
   });
 
   group('SessionController — timer/idle/timeout', () {
@@ -312,7 +379,10 @@ void main() {
           // Gọi start() lần thứ 2 — phải idempotent, elapsed vẫn ≥30s.
           controller.start();
           state = container.read(sessionProvider('split-chunks'));
-          expect(state.elapsed, greaterThanOrEqualTo(const Duration(seconds: 30)));
+          expect(
+            state.elapsed,
+            greaterThanOrEqualTo(const Duration(seconds: 30)),
+          );
           expect(state.phase, SessionPhase.active);
           // Vẫn chỉ 1 timer, không tạo cái mới.
           expect(async.pendingTimers.length, 1);
@@ -320,68 +390,26 @@ void main() {
       },
     );
 
-    test(
-      'start() sau timedOut → reset elapsed về 0, khởi động lại phiên',
-      () {
-        _withFakeSession((async, container, listen) {
-          listen('split-chunks');
-          final controller = container.read(
-            sessionProvider('split-chunks').notifier,
-          );
-          controller.start();
-
-          // Đếm quá maxSessionDuration để trigger timedOut.
-          async.elapse(maxSessionDuration);
-          var state = container.read(sessionProvider('split-chunks'));
-          expect(state.phase, SessionPhase.timedOut);
-
-          // Gọi start() lúc timedOut → reset, khởi động lại.
-          controller.start();
-          state = container.read(sessionProvider('split-chunks'));
-          expect(state.elapsed, const Duration(seconds: 0));
-          expect(state.phase, SessionPhase.active);
-          // Có timer chạy lại.
-          expect(async.pendingTimers.length, 1);
-        });
-      },
-    );
-  });
-
-  group('SessionController.run', () {
-    test('pass → markBlockPassed và trả RunResult của runBlock', () {
+    test('start() sau timedOut → reset elapsed về 0, khởi động lại phiên', () {
       _withFakeSession((async, container, listen) {
+        listen('split-chunks');
         final controller = container.read(
           sessionProvider('split-chunks').notifier,
         );
+        controller.start();
 
-        // split-chunks đang ở completedBlocks=2 → block active là b2:
-        // 'for i in range(0, len(text), size):'.
-        final result = controller.run(
-          2,
-          'for i in range(0, len(text), size):',
-        );
+        // Đếm quá maxSessionDuration để trigger timedOut.
+        async.elapse(maxSessionDuration);
+        var state = container.read(sessionProvider('split-chunks'));
+        expect(state.phase, SessionPhase.timedOut);
 
-        expect(result.passed, isTrue);
-        expect(
-          container.read(progressProvider)['split-chunks']!.completedBlocks,
-          3,
-        );
-      });
-    });
-
-    test('sai → không markBlockPassed', () {
-      _withFakeSession((async, container, listen) {
-        final controller = container.read(
-          sessionProvider('split-chunks').notifier,
-        );
-
-        final result = controller.run(2, 'code sai hoàn toàn');
-
-        expect(result.passed, isFalse);
-        expect(
-          container.read(progressProvider)['split-chunks']!.completedBlocks,
-          2,
-        );
+        // Gọi start() lúc timedOut → reset, khởi động lại.
+        controller.start();
+        state = container.read(sessionProvider('split-chunks'));
+        expect(state.elapsed, const Duration(seconds: 0));
+        expect(state.phase, SessionPhase.active);
+        // Có timer chạy lại.
+        expect(async.pendingTimers.length, 1);
       });
     });
   });
@@ -389,25 +417,18 @@ void main() {
   group('knownIdentifiersFor', () {
     final exercise = exerciseById('split-chunks');
 
-    test('block 0 chỉ có params', () {
+    test('luôn có tên hàm, tham số và biến gán trong template', () {
       expect(
         knownIdentifiersFor(exercise, 0),
-        containsAll(<String>['text', 'size']),
+        containsAll(<String>['split_chunks', 'text', 'size', 'chunks']),
       );
-      expect(knownIdentifiersFor(exercise, 0), isNot(contains('chunks')));
+      expect(knownIdentifiersFor(exercise, 0), isNot(contains('i')));
     });
 
-    test('block 2 có thêm chunks (gán ở block 1)', () {
-      final identifiers = knownIdentifiersFor(exercise, 2);
-      expect(identifiers, containsAll(<String>['text', 'size', 'chunks']));
-      expect(identifiers, isNot(contains('i')));
-    });
-
-    test('block 3 có thêm i (biến lặp ở block 2)', () {
-      final identifiers = knownIdentifiersFor(exercise, 3);
+    test('block 1 có thêm i (biến lặp ở ô A)', () {
       expect(
-        identifiers,
-        containsAll(<String>['text', 'size', 'chunks', 'i']),
+        knownIdentifiersFor(exercise, 1),
+        containsAll(<String>['split_chunks', 'text', 'size', 'chunks', 'i']),
       );
     });
   });

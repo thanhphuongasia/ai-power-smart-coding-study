@@ -22,10 +22,10 @@ class PracticeScreen extends ConsumerWidget {
     final fresh = <Exercise>[];
     final done = <Exercise>[];
     for (final exercise in uniqueExercises()) {
-      final completed = progress[exercise.id]?.completedBlocks ?? 0;
-      if (completed >= exercise.blocks.length) {
+      final p = progress[exercise.id];
+      if (p?.passed ?? false) {
         done.add(exercise);
-      } else if (completed > 0) {
+      } else if (p?.inProgress ?? false) {
         started.add(exercise);
       } else {
         fresh.add(exercise);

@@ -38,6 +38,7 @@ dependencies:
   go_router: ^18.0.1
   flutter_code_editor: ^0.3.5
   highlight: ^0.7.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
