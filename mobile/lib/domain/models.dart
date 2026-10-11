@@ -4,6 +4,45 @@
 /// và `material.dart`.
 library;
 
+// ---- Helper đọc JSON: mọi sai lệch đều thành FormatException có tên field.
+
+/// Đọc field bắt buộc kiểu [T] từ [json]; thiếu hoặc sai kiểu → FormatException.
+T jsonField<T>(Map<String, dynamic> json, String key, String where) {
+  final v = json[key];
+  if (v is T) return v;
+  throw FormatException(
+    '$where: field "$key" ${v == null ? 'bị thiếu' : 'sai kiểu (${v.runtimeType}, cần $T)'}',
+  );
+}
+
+/// Đọc field bắt buộc là mảng chuỗi.
+List<String> jsonStrings(Map<String, dynamic> json, String key, String where) {
+  final list = jsonField<List<dynamic>>(json, key, where);
+  return [
+    for (final e in list)
+      if (e is String)
+        e
+      else
+        throw FormatException('$where: "$key" chứa phần tử không phải chuỗi'),
+  ];
+}
+
+/// Đọc field bắt buộc là mảng object.
+List<Map<String, dynamic>> jsonObjects(
+  Map<String, dynamic> json,
+  String key,
+  String where,
+) {
+  final list = jsonField<List<dynamic>>(json, key, where);
+  return [
+    for (final e in list)
+      if (e is Map<String, dynamic>)
+        e
+      else
+        throw FormatException('$where: "$key" chứa phần tử không phải object'),
+  ];
+}
+
 class StudyTheme {
   const StudyTheme({
     required this.id,
@@ -18,6 +57,32 @@ class StudyTheme {
   final String description;
   final List<String> tags;
   final List<Topic> topics;
+
+  /// [exercises]: bài đã dựng sẵn theo id (để bài dùng chung là một instance).
+  factory StudyTheme.fromJson(
+    Map<String, dynamic> json,
+    Map<String, Exercise> exercises,
+  ) {
+    const w = 'theme';
+    return StudyTheme(
+      id: jsonField<String>(json, 'id', w),
+      name: jsonField<String>(json, 'name', w),
+      description: jsonField<String>(json, 'description', w),
+      tags: jsonStrings(json, 'tags', w),
+      topics: [
+        for (final t in jsonObjects(json, 'topics', w))
+          Topic.fromJson(t, exercises),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'tags': tags,
+    'topics': [for (final t in topics) t.toJson()],
+  };
 }
 
 class Topic {
@@ -32,6 +97,29 @@ class Topic {
   final String name;
   final String description;
   final List<CodeFile> files;
+
+  factory Topic.fromJson(
+    Map<String, dynamic> json,
+    Map<String, Exercise> exercises,
+  ) {
+    const w = 'topic';
+    return Topic(
+      id: jsonField<String>(json, 'id', w),
+      name: jsonField<String>(json, 'name', w),
+      description: jsonField<String>(json, 'description', w),
+      files: [
+        for (final f in jsonObjects(json, 'files', w))
+          CodeFile.fromJson(f, exercises),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'files': [for (final f in files) f.toJson()],
+  };
 }
 
 class CodeFile {
@@ -46,6 +134,32 @@ class CodeFile {
   /// Vd: 'chunker.py'.
   final String name;
   final List<Exercise> exercises;
+
+  /// `exercise_ids` → tra trong [exercises]; id lạ → FormatException.
+  factory CodeFile.fromJson(
+    Map<String, dynamic> json,
+    Map<String, Exercise> exercises,
+  ) {
+    const w = 'file';
+    final fileId = jsonField<String>(json, 'id', w);
+    return CodeFile(
+      id: fileId,
+      name: jsonField<String>(json, 'name', w),
+      exercises: [
+        for (final id in jsonStrings(json, 'exercise_ids', w))
+          exercises[id] ??
+              (throw FormatException(
+                'file "$fileId" trỏ tới exercise không tồn tại: "$id"',
+              )),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'exercise_ids': [for (final e in exercises) e.id],
+  };
 }
 
 /// Một ví dụ minh hoạ trong tab Challenge: code gọi hàm + kết quả thật.
@@ -65,6 +179,27 @@ class Example {
   /// Kết quả in ra khi chạy `input` (lấy bằng cách chạy python3 thật).
   final String output;
   final String? note;
+
+  factory Example.fromJson(Map<String, dynamic> json) {
+    const w = 'example';
+    final note = json['note'];
+    if (note != null && note is! String) {
+      throw const FormatException('example: field "note" sai kiểu');
+    }
+    return Example(
+      caption: jsonField<String>(json, 'caption', w),
+      input: jsonField<String>(json, 'input', w),
+      output: jsonField<String>(json, 'output', w),
+      note: note as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'caption': caption,
+    'input': input,
+    'output': output,
+    'note': note,
+  };
 }
 
 /// Nội dung tab Challenge của một bài.
@@ -87,6 +222,27 @@ class Challenge {
 
   /// Ví dụ trong bối cảnh dự án thật.
   final Example project;
+
+  factory Challenge.fromJson(Map<String, dynamic> json) {
+    const w = 'challenge';
+    return Challenge(
+      statement: jsonField<String>(json, 'statement', w),
+      motivation: jsonField<String>(json, 'motivation', w),
+      small: Example.fromJson(
+        jsonField<Map<String, dynamic>>(json, 'small', w),
+      ),
+      project: Example.fromJson(
+        jsonField<Map<String, dynamic>>(json, 'project', w),
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'statement': statement,
+    'motivation': motivation,
+    'small': small.toJson(),
+    'project': project.toJson(),
+  };
 }
 
 const Challenge emptyChallenge = Challenge(
@@ -122,6 +278,33 @@ class Exercise {
   /// Code khoá của hàm; mỗi ô TODO là một dòng `# TODO A` (thụt lề đúng chỗ).
   final String template;
   final Challenge challenge;
+
+  factory Exercise.fromJson(Map<String, dynamic> json) {
+    const w = 'exercise';
+    return Exercise(
+      id: jsonField<String>(json, 'id', w),
+      title: jsonField<String>(json, 'title', w),
+      functionName: jsonField<String>(json, 'function_name', w),
+      params: jsonStrings(json, 'params', w),
+      template: jsonField<String>(json, 'template', w),
+      challenge: Challenge.fromJson(
+        jsonField<Map<String, dynamic>>(json, 'challenge', w),
+      ),
+      blocks: [
+        for (final b in jsonObjects(json, 'blocks', w)) Block.fromJson(b),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'function_name': functionName,
+    'params': params,
+    'template': template,
+    'challenge': challenge.toJson(),
+    'blocks': [for (final b in blocks) b.toJson()],
+  };
 }
 
 class Block {
@@ -163,6 +346,35 @@ class Block {
 
   /// Từ gợi ý riêng cho block, vd ['range', 'len', 'append'].
   final List<String> vocab;
+
+  factory Block.fromJson(Map<String, dynamic> json) {
+    const w = 'block';
+    return Block(
+      id: jsonField<String>(json, 'id', w),
+      label: jsonField<String>(json, 'label', w),
+      title: jsonField<String>(json, 'title', w),
+      prompt: jsonField<String>(json, 'prompt', w),
+      indentLevel: jsonField<int>(json, 'indent_level', w),
+      acceptedAnswers: jsonStrings(json, 'accepted_answers', w),
+      expectedOutput: jsonField<String>(json, 'expected_output', w),
+      explanation: jsonField<String>(json, 'explanation', w),
+      hints: jsonStrings(json, 'hints', w),
+      vocab: jsonStrings(json, 'vocab', w),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'label': label,
+    'title': title,
+    'prompt': prompt,
+    'indent_level': indentLevel,
+    'accepted_answers': acceptedAnswers,
+    'expected_output': expectedOutput,
+    'explanation': explanation,
+    'hints': hints,
+    'vocab': vocab,
+  };
 }
 
 /// Loại nội dung do Claude (qua MCP) sinh ra, chờ admin duyệt.

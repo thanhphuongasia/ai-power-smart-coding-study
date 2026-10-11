@@ -1,0 +1,62 @@
+"""Fixture DB cho test: Postgres thật, DB riêng `smart_coding_study_test` (tự tạo nếu chưa có).
+
+Đặt `TEST_DATABASE_URL` để dùng server khác. Mỗi phiên test chạy lại migration từ đầu
+(downgrade base → upgrade head), nên schema test luôn đúng bản migration hiện tại.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.orm import Session, sessionmaker
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql+psycopg://localhost:5432/smart_coding_study_test"
+)
+
+
+def _ensure_database(url: str) -> None:
+    target = make_url(url)
+    admin = create_engine(target.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        exists = conn.execute(text("select 1 from pg_database where datname = :n"), {"n": target.database}).scalar()
+        if not exists:
+            conn.execute(text(f'create database "{target.database}"'))
+    admin.dispose()
+
+
+def alembic_config(url: str) -> Config:
+    config = Config(os.path.join(BACKEND_DIR, "alembic.ini"))
+    config.set_main_option("script_location", os.path.join(BACKEND_DIR, "migrations"))
+    config.set_main_option("sqlalchemy.url", url)
+    return config
+
+
+@pytest.fixture(scope="session")
+def db_engine() -> Iterator[Engine]:
+    _ensure_database(TEST_DATABASE_URL)
+    config = alembic_config(TEST_DATABASE_URL)
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+    engine = create_engine(TEST_DATABASE_URL)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def db_session(db_engine: Engine) -> Iterator[Session]:
+    """Session trong một transaction, rollback sau mỗi test (test không để lại dữ liệu)."""
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(bind=connection, join_transaction_mode="create_savepoint")()
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
