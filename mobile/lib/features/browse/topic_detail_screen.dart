@@ -163,9 +163,10 @@ class SegmentedProgress extends StatelessWidget {
   }
 }
 
-/// Lộ trình bài trong một file: nút lục giác xếp zíc zắc, nối bằng đường cong.
-/// Đoạn đường đi ra từ bài đã xong tô xanh.
-class _LessonPath extends StatelessWidget {
+/// Lộ trình bài trong một file kiểu Coddy/Duolingo: nút lục giác nổi khối xếp
+/// zíc zắc, đường nối dày phía sau (xanh khi đã đi qua). Chạm nút → thẻ nhỏ
+/// hiện tên bài + nút mở; bài khoá chỉ báo cần làm bài trước (INV-08).
+class _LessonPath extends StatefulWidget {
   const _LessonPath({
     required this.exercises,
     required this.passed,
@@ -180,50 +181,112 @@ class _LessonPath extends StatelessWidget {
   final bool Function(Exercise) inProgress;
   final Exercise? next;
 
-  static const _rowHeight = 150.0;
-  static const _nodeTop = 30.0; // chừa chỗ cho bong bóng START
-  static const _hexW = 76.0;
-  static const _hexH = 70.0;
+  static const rowHeight = 124.0;
+  static const nodeTop = 38.0; // chỗ cho bong bóng START
+  static const hexW = 84.0;
+  static const hexH = 82.0;
   static const _zigzag = [0.0, -1.0, 0.0, 1.0];
+  static const _popW = 260.0;
+  static const _popH = 220.0; // trần chiều cao thẻ (tiêu đề 2 dòng + nút)
+
+  @override
+  State<_LessonPath> createState() => _LessonPathState();
+}
+
+class _LessonPathState extends State<_LessonPath> {
+  String? _open; // id bài đang mở thẻ
+  final _popoverKey = GlobalKey();
+
+  void _toggle(String id) {
+    setState(() => _open = _open == id ? null : id);
+    if (_open == null) return;
+    // Thẻ mở ở nút gần đáy màn hình → cuộn cho thấy đủ thẻ và nút mở bài.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _popoverKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          duration: const Duration(milliseconds: 200),
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final w = widget;
     final p = context.palette;
+    final ex = w.exercises;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final swing = (width / 2 - 80).clamp(0.0, 90.0);
-        double cx(int i) => width / 2 + _zigzag[i % _zigzag.length] * swing;
-        final centers = [
-          for (var i = 0; i < exercises.length; i++)
-            Offset(cx(i), i * _rowHeight + _nodeTop + _hexH / 2),
-        ];
+        final swing = (width / 2 - 70).clamp(0.0, 80.0);
+        double cx(int i) =>
+            width / 2 +
+            _LessonPath._zigzag[i % _LessonPath._zigzag.length] * swing;
+        Offset center(int i) => Offset(
+          cx(i),
+          i * _LessonPath.rowHeight +
+              _LessonPath.nodeTop +
+              _LessonPath.hexH / 2,
+        );
+        final openIndex = ex.indexWhere((e) => e.id == _open);
+        final popTop = openIndex < 0
+            ? 0.0
+            : openIndex * _LessonPath.rowHeight +
+                  _LessonPath.nodeTop +
+                  _LessonPath.hexH +
+                  6;
+        // Chạm chỉ nhận trong khung của Stack: nới chiều cao cho thẻ nằm trọn
+        // bên trong, kể cả khi mở ở nút cuối file.
+        final extra = openIndex < 0
+            ? 0.0
+            : (popTop + _LessonPath._popH - ex.length * _LessonPath.rowHeight)
+                  .clamp(0.0, double.infinity);
         return SizedBox(
-          height: exercises.length * _rowHeight,
+          height: ex.length * _LessonPath.rowHeight + extra,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(
                 child: CustomPaint(
                   painter: _PathPainter(
-                    centers: centers,
-                    done: [for (final e in exercises) passed(e)],
+                    centers: [for (var i = 0; i < ex.length; i++) center(i)],
+                    done: [for (final e in ex) w.passed(e)],
                     doneColor: p.primary,
-                    todoColor: p.outline.withValues(alpha: 0.35),
+                    todoColor: Color.alphaBlend(
+                      p.ink.withValues(alpha: 0.08),
+                      p.surface,
+                    ),
                   ),
                 ),
               ),
-              for (var i = 0; i < exercises.length; i++)
+              for (var i = 0; i < ex.length; i++)
                 Positioned(
-                  left: centers[i].dx - 80,
-                  top: i * _rowHeight,
-                  width: 160,
+                  left: center(i).dx - _LessonPath.hexW / 2 - 30,
+                  top: i * _LessonPath.rowHeight,
+                  width: _LessonPath.hexW + 60,
                   child: _PathNode(
-                    exercise: exercises[i],
-                    isDone: passed(exercises[i]),
-                    isLocked: !unlocked(exercises[i]),
-                    isStarted: inProgress(exercises[i]),
-                    isNext: identical(exercises[i], next),
+                    exercise: ex[i],
+                    state: _stateOf(ex[i]),
+                    isNext: identical(ex[i], w.next),
+                    iconIndex: i,
+                    onTap: () => _toggle(ex[i].id),
+                  ),
+                ),
+              if (openIndex >= 0)
+                Positioned(
+                  left: (center(openIndex).dx - _LessonPath._popW / 2).clamp(
+                    0.0,
+                    (width - _LessonPath._popW).clamp(0.0, double.infinity),
+                  ),
+                  top: popTop,
+                  width: _LessonPath._popW,
+                  child: _LessonPopover(
+                    key: _popoverKey,
+                    exercise: ex[openIndex],
+                    state: _stateOf(ex[openIndex]),
                   ),
                 ),
             ],
@@ -232,6 +295,25 @@ class _LessonPath extends StatelessWidget {
       },
     );
   }
+
+  _NodeState _stateOf(Exercise e) => !widget.unlocked(e)
+      ? _NodeState.locked
+      : widget.passed(e)
+      ? _NodeState.done
+      : widget.inProgress(e)
+      ? _NodeState.started
+      : _NodeState.fresh;
+}
+
+enum _NodeState {
+  done('done', 'Đã xong'),
+  started('started', 'Đang dở'),
+  fresh('new', 'Mới'),
+  locked('locked', 'Khoá');
+
+  const _NodeState(this.key, this.label);
+  final String key;
+  final String label;
 }
 
 class _PathPainter extends CustomPainter {
@@ -261,7 +343,7 @@ class _PathPainter extends CustomPainter {
         Paint()
           ..color = done[i] ? doneColor : todoColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 10
+          ..strokeWidth = 18
           ..strokeCap = StrokeCap.round,
       );
     }
@@ -269,155 +351,296 @@ class _PathPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PathPainter old) =>
-      old.centers != centers ||
+      old.centers.toString() != centers.toString() ||
       old.done.toString() != done.toString() ||
       old.doneColor != doneColor ||
       old.todoColor != todoColor;
 }
 
-/// Một bài trên lộ trình: nút lục giác nổi (3D), tên method, chữ trạng thái.
-/// Chạm để mở bài; bài khoá không điều hướng (INV-08).
+/// Một bài trên lộ trình: chỉ có nút lục giác (+ START nếu là bài kế tiếp).
 class _PathNode extends StatelessWidget {
   const _PathNode({
     required this.exercise,
-    required this.isDone,
-    required this.isLocked,
-    required this.isStarted,
+    required this.state,
     required this.isNext,
+    required this.iconIndex,
+    required this.onTap,
   });
 
   final Exercise exercise;
-  final bool isDone;
-  final bool isLocked;
-  final bool isStarted;
+  final _NodeState state;
   final bool isNext;
+  final int iconIndex;
+  final VoidCallback onTap;
+
+  static const _lessonIcons = [
+    Icons.menu_book_outlined,
+    Icons.psychology_outlined,
+    Icons.lightbulb_outline,
+  ];
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final (String status, IconData icon, Color face) = isLocked
-        ? ('Khoá', Icons.lock_outline, p.outline.withValues(alpha: 0.45))
-        : isDone
-        ? ('Đã xong', Icons.check_rounded, p.primary)
-        : isStarted
-        ? ('Đang dở', Icons.timelapse, p.accent)
-        : ('Mới', Icons.code, p.accent);
-    final iconColor = isLocked
-        ? p.inkMuted
-        : isDone
-        ? p.onPrimary
-        : p.onAccent;
+    final grey = Color.alphaBlend(p.ink.withValues(alpha: 0.10), p.surface);
+    final (Color face, Color iconColor) = switch (state) {
+      _NodeState.done => (p.primary, Colors.white),
+      // Bài kế tiếp / đang làm: xám đậm, icon trắng (giống Coddy).
+      _ when isNext || state == _NodeState.started => (
+        Color.alphaBlend(p.ink.withValues(alpha: 0.42), p.surface),
+        Colors.white,
+      ),
+      _ => (grey, Color.alphaBlend(p.ink.withValues(alpha: 0.28), p.surface)),
+    };
+    final icon = state == _NodeState.done
+        ? Icons.check_rounded
+        : _lessonIcons[iconIndex % _lessonIcons.length];
 
-    final node = GestureDetector(
-      key: Key('exercise-${exercise.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: isLocked ? null : () => context.push('/exercise/${exercise.id}'),
-      child: Column(
-        children: [
-          SizedBox(
-            height: _LessonPath._nodeTop,
-            child: isNext
-                ? _StartBubble(key: Key('start-${exercise.id}'))
-                : null,
-          ),
-          SizedBox(
-            width: _LessonPath._hexW,
-            height: _LessonPath._hexH,
-            child: CustomPaint(
-              painter: _HexPainter(face: face),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Icon(icon, size: 30, color: iconColor),
+    return Semantics(
+      button: true,
+      label: '${exercise.qualifiedName}() · ${state.label}',
+      child: GestureDetector(
+        key: Key('exercise-${exercise.id}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          children: [
+            SizedBox(
+              height: _LessonPath.nodeTop,
+              child: isNext
+                  ? _StartBubble(key: Key('start-${exercise.id}'))
+                  : null,
+            ),
+            SizedBox(
+              width: _LessonPath.hexW,
+              height: _LessonPath.hexH,
+              child: CustomPaint(
+                painter: _HexPainter(face: face),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: _HexPainter.depth),
+                  child: Icon(
+                    icon,
+                    size: state == _NodeState.done ? 38 : 30,
+                    color: iconColor,
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpace.s1),
-          Text(
-            '${exercise.qualifiedName}()',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: AppText.code.copyWith(
-              fontSize: 12,
-              color: isLocked ? p.inkMuted : p.ink,
-            ),
-          ),
-          Text(
-            status,
-            style: AppText.caption.copyWith(
-              color: isDone ? p.primary : p.inkMuted,
-            ),
-          ),
-        ],
+            // Trạng thái cho test/trợ năng — không vẽ gì.
+            SizedBox.shrink(key: Key('state-${state.key}')),
+          ],
+        ),
       ),
     );
-    if (!isLocked) return node;
-    return Tooltip(message: 'Hoàn thành bài trước để mở', child: node);
   }
 }
 
+/// Thẻ hiện khi chạm một nút: tên bài, method, số ô và nút mở bài.
+class _LessonPopover extends StatelessWidget {
+  const _LessonPopover({
+    super.key,
+    required this.exercise,
+    required this.state,
+  });
+
+  final Exercise exercise;
+  final _NodeState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final locked = state == _NodeState.locked;
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.s4),
+      decoration: BoxDecoration(
+        color: locked ? p.surfaceRaised : p.primary,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: locked ? p.outline.withValues(alpha: 0.5) : p.primary,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: p.ink.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            exercise.title,
+            style: AppText.title.copyWith(color: locked ? p.ink : p.onPrimary),
+          ),
+          const SizedBox(height: AppSpace.s1),
+          Text(
+            '${exercise.qualifiedName}() · ${exercise.blocks.length} ô',
+            style: AppText.code.copyWith(
+              fontSize: 12,
+              color: locked ? p.inkMuted : p.onPrimary.withValues(alpha: 0.85),
+            ),
+          ),
+          const SizedBox(height: AppSpace.s2),
+          if (locked)
+            Text(
+              'Hoàn thành bài trước để mở',
+              style: AppText.label.copyWith(color: p.inkMuted),
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                key: Key('lesson-go-${exercise.id}'),
+                onPressed: () => context.push('/exercise/${exercise.id}'),
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: p.surfaceRaised,
+                  foregroundColor: p.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+                child: Text(switch (state) {
+                  _NodeState.done => 'Ôn lại',
+                  _NodeState.started => 'Tiếp tục',
+                  _ => 'Bắt đầu',
+                }, style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bong bóng START có đuôi nhọn chỉ xuống nút.
 class _StartBubble extends StatelessWidget {
   const _StartBubble({super.key});
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        decoration: BoxDecoration(
-          color: p.surfaceRaised,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: p.outline.withValues(alpha: 0.5), width: 2),
-        ),
-        child: Text(
-          'START',
-          style: AppText.label.copyWith(
-            color: p.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1,
+    final border = p.outline.withValues(alpha: 0.4);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: p.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: border, width: 2),
+          ),
+          child: Text(
+            'START',
+            style: AppText.label.copyWith(
+              color: p.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
           ),
         ),
-      ),
+        CustomPaint(
+          size: const Size(14, 7),
+          painter: _TailPainter(fill: p.surfaceRaised, stroke: border),
+        ),
+      ],
     );
   }
 }
 
-/// Lục giác đỉnh nhọn hai lớp: lớp dưới tối hơn, lệch xuống → cảm giác nổi khối.
+class _TailPainter extends CustomPainter {
+  _TailPainter({required this.fill, required this.stroke});
+
+  final Color fill;
+  final Color stroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, -2)
+      ..lineTo(size.width / 2, size.height)
+      ..lineTo(size.width, -2);
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = stroke
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TailPainter old) =>
+      old.fill != fill || old.stroke != stroke;
+}
+
+/// Lục giác đỉnh nhọn bo góc, nổi khối: thành dưới tối, mặt trên, rồi một mặt
+/// trong nhỏ hơn có viền dưới tối — giống nút bài học của Coddy.
 class _HexPainter extends CustomPainter {
   _HexPainter({required this.face});
 
   final Color face;
 
-  static const _depth = 8.0;
+  static const depth = 10.0;
 
-  Path _hex(Size s, double dy) {
-    final w = s.width;
-    final h = s.height - _depth;
-    return Path()
-      ..moveTo(w / 2, dy)
-      ..lineTo(w, dy + h * 0.25)
-      ..lineTo(w, dy + h * 0.75)
-      ..lineTo(w / 2, dy + h)
-      ..lineTo(0, dy + h * 0.75)
-      ..lineTo(0, dy + h * 0.25)
-      ..close();
+  static Path hex(Rect r, double radius) {
+    final pts = [
+      Offset(r.center.dx, r.top),
+      Offset(r.right, r.top + r.height * 0.25),
+      Offset(r.right, r.top + r.height * 0.75),
+      Offset(r.center.dx, r.bottom),
+      Offset(r.left, r.top + r.height * 0.75),
+      Offset(r.left, r.top + r.height * 0.25),
+    ];
+    final path = Path();
+    for (var i = 0; i < pts.length; i++) {
+      final prev = pts[(i + pts.length - 1) % pts.length];
+      final cur = pts[i];
+      final next = pts[(i + 1) % pts.length];
+      final a = cur + (prev - cur) / (prev - cur).distance * radius;
+      final b = cur + (next - cur) / (next - cur).distance * radius;
+      if (i == 0) {
+        path.moveTo(a.dx, a.dy);
+      } else {
+        path.lineTo(a.dx, a.dy);
+      }
+      path.quadraticBezierTo(cur.dx, cur.dy, b.dx, b.dy);
+    }
+    return path..close();
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final side = Color.lerp(face, Colors.black, 0.28)!;
-    canvas.drawPath(_hex(size, _depth), Paint()..color = side);
-    canvas.drawPath(_hex(size, 0), Paint()..color = face);
+    final side = Color.lerp(face, Colors.black, 0.22)!;
+    final top = Rect.fromLTWH(0, 0, size.width, size.height - depth);
+    canvas.drawPath(
+      hex(top.shift(const Offset(0, depth)), 10),
+      Paint()..color = side,
+    );
+    canvas.drawPath(hex(top, 10), Paint()..color = face);
+    // Mặt trong: nhỏ hơn, có gờ dưới tối → cảm giác nút bấm.
+    final inner = top.deflate(9);
+    canvas.drawPath(
+      hex(inner.shift(const Offset(0, 4)), 8),
+      Paint()..color = side,
+    );
+    canvas.drawPath(
+      hex(inner, 8),
+      Paint()..color = Color.lerp(face, Colors.white, 0.08)!,
+    );
   }
 
   @override
   bool shouldRepaint(_HexPainter old) => old.face != face;
 }
 
-/// Tên file; nếu file còn được dùng ở theme khác thì hiện nhãn "Dùng ở N
-/// theme" và chạm để mở màn File cross-cut.
+/// Dải phân cách chặng: tên file ở giữa hai đường kẻ (kiểu Coddy). File còn
+/// được dùng ở theme khác thì có nhãn "Dùng ở N theme" → màn File cross-cut.
 class _FileHeader extends StatelessWidget {
   const _FileHeader({required this.file, required this.content});
 
@@ -432,19 +655,36 @@ class _FileHeader extends StatelessWidget {
         .map((u) => u.theme.id)
         .toSet()
         .length;
-    final name = Text(file.name, style: AppText.code.copyWith(color: p.ink));
-    if (themeCount < 2) return name;
-
-    return InkWell(
-      key: Key('file-${file.id}'),
-      onTap: () => context.push('/file/${Uri.encodeComponent(file.name)}'),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.s1),
-        child: Row(
+    final line = Expanded(
+      child: Divider(color: p.outline.withValues(alpha: 0.4), thickness: 1.5),
+    );
+    return Column(
+      children: [
+        Row(
           children: [
-            Expanded(child: name),
-            Container(
+            line,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2),
+              child: Text(
+                file.name,
+                style: AppText.code.copyWith(
+                  fontSize: 16,
+                  color: p.inkMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            line,
+          ],
+        ),
+        if (themeCount >= 2)
+          InkWell(
+            key: Key('file-${file.id}'),
+            onTap: () =>
+                context.push('/file/${Uri.encodeComponent(file.name)}'),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: Container(
+              margin: const EdgeInsets.only(top: AppSpace.s1),
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpace.s2,
                 vertical: 2,
@@ -458,11 +698,8 @@ class _FileHeader extends StatelessWidget {
                 style: AppText.caption.copyWith(color: p.primary),
               ),
             ),
-            const SizedBox(width: AppSpace.s1),
-            Icon(Icons.chevron_right, size: 18, color: p.inkMuted),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }
@@ -518,10 +755,12 @@ class _ClassHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'class $className',
-      key: Key('class-$fileId-$className'),
-      style: AppText.label.copyWith(color: context.palette.inkMuted),
+    return Center(
+      child: Text(
+        'class $className',
+        key: Key('class-$fileId-$className'),
+        style: AppText.caption.copyWith(color: context.palette.inkMuted),
+      ),
     );
   }
 }

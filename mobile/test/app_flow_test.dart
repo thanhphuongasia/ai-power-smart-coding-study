@@ -35,10 +35,14 @@ class _FakeJudge implements JudgeClient {
   }
 }
 
-/// Chữ trạng thái trong dòng exercise `id` (Đã xong / Đang dở / Mới / Khoá).
+/// Trạng thái nút `id` trên lộ trình module (Đã xong / Đang dở / Mới / Khoá).
 Finder _status(String id, String text) => find.descendant(
   of: find.byKey(Key('exercise-$id')),
-  matching: find.text(text),
+  matching: find.byKey(
+    Key(
+      'state-${const {'Đã xong': 'done', 'Đang dở': 'started', 'Mới': 'new', 'Khoá': 'locked'}[text]}',
+    ),
+  ),
 );
 
 void main() {

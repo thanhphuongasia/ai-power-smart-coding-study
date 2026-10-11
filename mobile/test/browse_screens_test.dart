@@ -100,20 +100,29 @@ void main() {
 
       final splitChunksRow = find.byKey(const Key('exercise-split-chunks'));
       expect(
-        find.descendant(of: splitChunksRow, matching: find.text('Đang dở')),
+        find.descendant(
+          of: splitChunksRow,
+          matching: find.byKey(const Key('state-started')),
+        ),
         findsOneWidget,
       );
 
       final cleanTextRow = find.byKey(const Key('exercise-clean-text'));
       expect(
-        find.descendant(of: cleanTextRow, matching: find.text('Đã xong')),
+        find.descendant(
+          of: cleanTextRow,
+          matching: find.byKey(const Key('state-done')),
+        ),
         findsOneWidget,
       );
 
       // overlap-chunks đứng sau split-chunks (chưa pass) trong chunker.py.
       final overlapChunksRow = find.byKey(const Key('exercise-overlap-chunks'));
       expect(
-        find.descendant(of: overlapChunksRow, matching: find.text('Khoá')),
+        find.descendant(
+          of: overlapChunksRow,
+          matching: find.byKey(const Key('state-locked')),
+        ),
         findsOneWidget,
       );
     },
@@ -197,9 +206,10 @@ void main() {
     final locked = find.byKey(const Key('exercise-overlap-chunks'));
     await tester.tap(locked);
     await tester.pumpAndSettle();
+    // Bài khoá: thẻ chỉ báo cần làm bài trước, không có nút mở.
     expect(find.byKey(const Key('exercise-page-overlap-chunks')), findsNothing);
-    expect(locked, findsOneWidget);
-    expect(find.byTooltip('Hoàn thành bài trước để mở'), findsOneWidget);
+    expect(find.text('Hoàn thành bài trước để mở'), findsOneWidget);
+    expect(find.byKey(const Key('lesson-go-overlap-chunks')), findsNothing);
 
     container.read(progressProvider.notifier).markPassed('split-chunks');
     await tester.pumpAndSettle();
@@ -207,15 +217,21 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const Key('exercise-split-chunks')),
-        matching: find.text('Đã xong'),
+        matching: find.byKey(const Key('state-done')),
       ),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: locked, matching: find.text('Mới')),
+      find.descendant(of: locked, matching: find.byKey(const Key('state-new'))),
       findsOneWidget,
     );
-    await tester.tap(locked);
+    // Đã mở: thẻ có nút "Bắt đầu" → vào bài.
+    expect(find.byKey(const Key('lesson-go-overlap-chunks')), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('lesson-go-overlap-chunks')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('lesson-go-overlap-chunks')));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const Key('exercise-page-overlap-chunks')),
@@ -402,7 +418,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('class FlightService'), findsOneWidget);
-      expect(find.text('FlightService.search()'), findsNWidgets(2));
+      // Hai bài là hai nút trên lộ trình; chạm nút → thẻ hiện tên đầy đủ.
+      expect(find.byKey(const Key('exercise-e1')), findsOneWidget);
+      expect(find.byKey(const Key('exercise-e2')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('exercise-e1')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('FlightService.search() · '), findsOneWidget);
     });
   });
 }
