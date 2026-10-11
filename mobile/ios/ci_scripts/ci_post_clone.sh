@@ -17,3 +17,4 @@ cd "$CI_PRIMARY_REPOSITORY_PATH/mobile"
 flutter config --no-analytics
 flutter precache --ios
 flutter pub get
+flutter build ios --config-only --release --no-codesign
