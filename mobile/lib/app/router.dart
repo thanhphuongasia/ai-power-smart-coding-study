@@ -7,7 +7,9 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/account/change_password_screen.dart';
+import '../features/admin/admin_module_screen.dart';
 import '../features/admin/admin_screen.dart';
+import '../features/admin/admin_theme_screen.dart';
 import '../features/admin/exercise_editor.dart';
 import '../features/browse/file_crosscut_screen.dart';
 import '../features/browse/home_screen.dart';
@@ -86,6 +88,18 @@ final GoRouter appRouter = GoRouter(
       parentNavigatorKey: _rootKey,
       path: '/admin',
       builder: (context, state) => const AdminScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/theme/:themeId',
+      builder: (context, state) =>
+          AdminThemeScreen(themeId: state.pathParameters['themeId']!),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/module/:moduleId',
+      builder: (context, state) =>
+          AdminModuleScreen(moduleId: state.pathParameters['moduleId']!),
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,

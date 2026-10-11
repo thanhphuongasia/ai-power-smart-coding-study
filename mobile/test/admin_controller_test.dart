@@ -467,6 +467,62 @@ void main() {
     );
   });
 
+  test('addTheme: diagram/topics rỗng, dirty, id không đụng id cũ', () async {
+    final c = await boot(Server());
+    final ctl = c.read(adminProvider.notifier);
+    final id = ctl.addTheme('Theme 1');
+    expect(id, 'theme-1');
+    // Tên trùng slug của theme/topic đã có → thêm hậu tố, không đè id cũ.
+    expect(ctl.addTheme('T1'), 't1-2');
+    final s = c.read(adminProvider);
+    expect(s.dirty, isTrue);
+    expect(s.themes.length, 3);
+    final t = s.themes[1];
+    expect(t['id'], id);
+    expect(t['name'], 'Theme 1');
+    expect(t['topics'], isEmpty);
+    expect(t['diagram'], {'classes': <dynamic>[], 'relations': <dynamic>[]});
+    expect(ctl.addTheme('   '), isNull);
+  });
+
+  test('addExercise: functionName/className tuỳ chọn', () async {
+    final c = await boot(Server());
+    final ctl = c.read(adminProvider.notifier);
+    final id = ctl.addExercise(
+      'f1',
+      'Seats',
+      functionName: ' seats_left ',
+      className: 'Flight',
+    );
+    final ex = c.read(adminProvider).exercises[id] as Map;
+    expect(
+      ex['template'],
+      'class Flight:\n    def seats_left(self):\n        # TODO A',
+    );
+    expect(ex['function_name'], 'seats_left');
+    expect(ex['class_name'], 'Flight');
+    expect((ex['blocks'] as List).single['indent_level'], 2);
+
+    final id2 = ctl.addExercise(
+      'f1',
+      'Top',
+      functionName: 'seats_left',
+      className: null,
+    );
+    final ex2 = c.read(adminProvider).exercises[id2] as Map;
+    expect(ex2['template'], 'def seats_left():\n    # TODO A');
+    expect(ex2['class_name'], isNull);
+    expect((ex2['blocks'] as List).single['indent_level'], 1);
+
+    final id3 = ctl.addExercise('f1', 'Empty', functionName: '  ');
+    final ex3 = c.read(adminProvider).exercises[id3] as Map;
+    expect(ex3['function_name'], 'run');
+    expect(
+      ex3['template'],
+      'class Draft:\n    def run(self):\n        # TODO A',
+    );
+  });
+
   test('422 không có errors → lỗi dự phòng', () async {
     final c = await boot(Server(putStatus: 422, putBody: {'detail': 'x'}));
     final ctl = c.read(adminProvider.notifier);

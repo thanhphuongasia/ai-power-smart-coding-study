@@ -174,35 +174,48 @@ String _uniqueId(Json doc, String base) {
 }
 
 /// Bài tập nháp tối thiểu: validate() sẽ báo thiếu judge/case để admin bổ sung.
-Json exerciseScaffold(String id, String title) => {
-  'id': id,
-  'title': title,
-  'class_name': 'Draft',
-  'function_name': 'run',
-  'params': <String>[],
-  'template': 'class Draft:\n    def run(self):\n        # TODO A',
-  'challenge': {
-    'statement': '',
-    'motivation': '',
-    'small': {'caption': '', 'input': '', 'output': '', 'note': null},
-    'project': {'caption': '', 'input': '', 'output': '', 'note': null},
-  },
-  'blocks': [
-    {
-      'id': '$id-a',
-      'label': 'A',
-      'title': '',
-      'prompt': '',
-      'indent_level': 2,
-      'accepted_answers': <String>[],
-      'expected_output': '',
-      'explanation': '',
-      'hints': <String>[],
-      'vocab': <String>[],
+/// [className] null/rỗng → hàm top-level (không có class).
+Json exerciseScaffold(
+  String id,
+  String title, {
+  String functionName = 'run',
+  String? className = 'Draft',
+}) {
+  final fn = functionName.trim().isEmpty ? 'run' : functionName.trim();
+  final cls = className?.trim().isEmpty ?? true ? null : className!.trim();
+  final template = cls == null
+      ? 'def $fn():\n    # TODO A'
+      : 'class $cls:\n    def $fn(self):\n        # TODO A';
+  return {
+    'id': id,
+    'title': title,
+    'class_name': cls,
+    'function_name': fn,
+    'params': <String>[],
+    'template': template,
+    'challenge': {
+      'statement': '',
+      'motivation': '',
+      'small': {'caption': '', 'input': '', 'output': '', 'note': null},
+      'project': {'caption': '', 'input': '', 'output': '', 'note': null},
     },
-  ],
-  'judge': {'solution': '', 'cases': <Json>[]},
-};
+    'blocks': [
+      {
+        'id': '$id-a',
+        'label': 'A',
+        'title': '',
+        'prompt': '',
+        'indent_level': cls == null ? 1 : 2,
+        'accepted_answers': <String>[],
+        'expected_output': '',
+        'explanation': '',
+        'hints': <String>[],
+        'vocab': <String>[],
+      },
+    ],
+    'judge': {'solution': '', 'cases': <Json>[]},
+  };
+}
 
 class AdminController extends Notifier<AdminState> {
   @override
@@ -320,8 +333,34 @@ class AdminController extends Notifier<AdminState> {
     return newId;
   }
 
+  /// Thêm theme mới vào cuối `themes`. Trả id mới, null nếu [name] rỗng.
+  String? addTheme(String name, {String description = ''}) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    String? newId;
+    _mutate((doc) {
+      newId = _uniqueId(doc, _slug(trimmed));
+      (doc.putIfAbsent('themes', () => <Json>[]) as List).add({
+        'id': newId,
+        'name': trimmed,
+        'description': description,
+        'tags': <String>[],
+        'diagram': {'classes': <Json>[], 'relations': <Json>[]},
+        'topics': <Json>[],
+      });
+      return true;
+    });
+    return newId;
+  }
+
   /// Thêm bài nháp vào file. Trả id mới, null nếu file không tồn tại.
-  String? addExercise(String fileId, String title) {
+  /// [className] null/rỗng → hàm top-level, không có class.
+  String? addExercise(
+    String fileId,
+    String title, {
+    String functionName = 'run',
+    String? className = 'Draft',
+  }) {
     String? newId;
     _mutate((doc) {
       final file = _findNode(doc, fileId);
@@ -342,6 +381,8 @@ class AdminController extends Notifier<AdminState> {
           as Json)[newId!] = exerciseScaffold(
         newId!,
         title,
+        functionName: functionName,
+        className: className,
       );
       return true;
     });
