@@ -8,13 +8,13 @@ Baseline: backend 94 passed / 2 skipped; mobile 294 passed (base feat/cell-gatin
 
 | Task | Trạng thái |
 |---|---|
-| T-01 DB + loader | in progress (orchestrator) |
-| T-02 /content tree + Judge.class_name | todo (orchestrator) |
-| T-03 harness | todo |
-| T-04 mobile domain | dispatching |
-| T-05 cell location label | todo |
-| T-06 browse screens | todo |
-| T-07 remaining tree walkers | todo |
-| T-08 airline seed | todo |
+| T-01 DB + loader | done (gate 0, commit d40533e) — review đang chạy (+ external) |
+| T-02 /content tree + Judge.class_name | done (gate 0, d40533e) — review đang chạy (+ external) |
+| T-03 harness | dispatched |
+| T-04 mobile domain | done (gate 0, d40533e) — review đang chạy |
+| T-05 cell location label | dispatched |
+| T-06 browse screens | dispatched |
+| T-07 remaining tree walkers | todo (sau T-06) |
+| T-08 airline seed | todo (sau T-03) |
 
-Next action: Wave 1 — T-01/T-02 tự làm, T-04 dispatch crew-impl-standard.
+Next action: chờ review wave 1 + impl wave 2; gate từng task; rồi T-07, T-08.

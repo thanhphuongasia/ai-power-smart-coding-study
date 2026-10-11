@@ -31,11 +31,9 @@ final inProgressExerciseProvider = Provider<Exercise?>((ref) {
   final progress = ref.watch(progressProvider);
   final content = ref.watch(contentIndexProvider);
   for (final theme in content.themes) {
-    for (final topic in theme.topics) {
-      for (final file in topic.files) {
-        for (final exercise in file.exercises) {
-          if (progress[exercise.id]?.inProgress ?? false) return exercise;
-        }
+    for (final file in theme.allFiles) {
+      for (final exercise in file.exercises) {
+        if (progress[exercise.id]?.inProgress ?? false) return exercise;
       }
     }
   }

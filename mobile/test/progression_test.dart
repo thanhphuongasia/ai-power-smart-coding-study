@@ -237,5 +237,14 @@ void nestedProgressionTests() {
       expect(nextExerciseAfter(nested, 'a')?.id, 'b');
       expect(nextExerciseAfter(nested, 'c'), isNull);
     });
+
+    test('inProgressExerciseProvider thấy bài trong sub-module', () {
+      final container = ProviderContainer(
+        overrides: [contentIndexProvider.overrideWithValue(nested)],
+      );
+      addTearDown(container.dispose);
+      container.read(progressProvider.notifier).saveDraft('b', 'A', 'x = 1');
+      expect(container.read(inProgressExerciseProvider)?.id, 'b');
+    });
   });
 }

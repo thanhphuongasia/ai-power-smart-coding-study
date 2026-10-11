@@ -29,6 +29,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Bỏ 2 cột. Dữ liệu cha–con và class mất theo — chấp nhận được vì bảng nội dung chỉ là bản dẫn
+    xuất của `content.json`: chạy lại `python -m app.load_content` sau khi upgrade là có lại đủ."""
     op.drop_column("exercises", "class_name")
     op.drop_index("ix_topics_parent_id", table_name="topics")
     op.drop_constraint("topics_parent_id_fkey", "topics", type_="foreignkey")
