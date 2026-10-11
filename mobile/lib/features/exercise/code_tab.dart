@@ -506,7 +506,9 @@ class _CodeTabState extends ConsumerState<CodeTab>
                     key: Key('cell-$label-frame'),
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppRadius.md + 2),
+                      borderRadius: BorderRadius.circular(
+                        6,
+                      ), // ôm ô code góc 4px
                       border: Border.all(
                         color: bad ? p.danger : Colors.transparent,
                         width: 2,

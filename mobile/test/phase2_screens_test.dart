@@ -108,20 +108,14 @@ void main() {
 
     // Pass split-chunks → thẻ A, B, C đến hạn hôm nay.
     await _pass(tester, 'split-chunks');
-    expect(
-      find.byKey(const Key('review-card-split-chunks-a')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('review-card-split-chunks-a')), findsOneWidget);
     await tester.tap(find.byKey(const Key('review-reveal')));
     await tester.pumpAndSettle();
     expect(find.text('for i in range(0, len(text), size):'), findsOneWidget);
     await tester.tap(find.byKey(const Key('rate-easy')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('review-card-split-chunks-b')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('review-card-split-chunks-b')), findsOneWidget);
 
     // Chế độ Gõ lại: gõ đúng → "Đúng".
     await tester.tap(find.text('Gõ lại'));
@@ -137,10 +131,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Thẻ C cuối cùng.
-    expect(
-      find.byKey(const Key('review-card-split-chunks-c')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('review-card-split-chunks-c')), findsOneWidget);
     await tester.tap(find.text('Thẻ'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('review-reveal')));

@@ -23,25 +23,32 @@ Future<void> _type(WidgetTester tester, String chars) async {
     final s = v.selection.isValid
         ? v.selection
         : TextSelection.collapsed(offset: v.text.length);
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: v.text.replaceRange(s.start, s.end, ch),
-      selection: TextSelection.collapsed(offset: s.start + ch.length),
-    ));
+    tester.testTextInput.updateEditingValue(
+      TextEditingValue(
+        text: v.text.replaceRange(s.start, s.end, ch),
+        selection: TextSelection.collapsed(offset: s.start + ch.length),
+      ),
+    );
     await tester.pump();
   }
 }
 
 /// Bàn phím điện thoại commit NHIỀU ký tự một lần (autocorrect, gợi ý từ,
 /// composing): value = cũ + [chunk] tại con trỏ, trong một update duy nhất.
-Future<void> _commit(WidgetTester tester, String chunk,
-    {TextRange composing = TextRange.empty}) async {
+Future<void> _commit(
+  WidgetTester tester,
+  String chunk, {
+  TextRange composing = TextRange.empty,
+}) async {
   final v = _ctrl(tester).value;
   final p = v.selection.start;
-  tester.testTextInput.updateEditingValue(TextEditingValue(
-    text: v.text.replaceRange(p, p, chunk),
-    selection: TextSelection.collapsed(offset: p + chunk.length),
-    composing: composing,
-  ));
+  tester.testTextInput.updateEditingValue(
+    TextEditingValue(
+      text: v.text.replaceRange(p, p, chunk),
+      selection: TextSelection.collapsed(offset: p + chunk.length),
+      composing: composing,
+    ),
+  );
   await tester.pump();
 }
 
@@ -57,10 +64,12 @@ final _splitChunks = testContent.exerciseById('split-chunks').blocks;
 Future<void> _backspace(WidgetTester tester) async {
   final v = _ctrl(tester).value;
   final p = v.selection.start;
-  tester.testTextInput.updateEditingValue(TextEditingValue(
-    text: v.text.replaceRange(p - 1, p, ''),
-    selection: TextSelection.collapsed(offset: p - 1),
-  ));
+  tester.testTextInput.updateEditingValue(
+    TextEditingValue(
+      text: v.text.replaceRange(p - 1, p, ''),
+      selection: TextSelection.collapsed(offset: p - 1),
+    ),
+  );
   await tester.pump();
 }
 
@@ -77,19 +86,21 @@ Future<_Harness> _pump(
   List<String> vocab = const ['range', 'len', 'append'],
 }) async {
   final h = _Harness();
-  await tester.pumpWidget(MaterialApp(
-    theme: ThemeData.dark(),
-    home: Scaffold(
-      body: CodeInput(
-        initialCode: initialCode,
-        knownIdentifiers: known,
-        vocab: vocab,
-        onChanged: h.changes.add,
-        onActivity: () => h.activity++,
-        focusNode: h.focus,
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData.dark(),
+      home: Scaffold(
+        body: CodeInput(
+          initialCode: initialCode,
+          knownIdentifiers: known,
+          vocab: vocab,
+          onChanged: h.changes.add,
+          onActivity: () => h.activity++,
+          focusNode: h.focus,
+        ),
       ),
     ),
-  ));
+  );
   await tester.showKeyboard(find.byKey(_field));
   await tester.pump();
   return h;
@@ -104,19 +115,22 @@ Future<void> _teardown(WidgetTester tester, [_Harness? h]) async {
 }
 
 void main() {
-  testWidgets('baseline: stock CodeController DOES show overlay popup',
-      (tester) async {
+  testWidgets('baseline: stock CodeController DOES show overlay popup', (
+    tester,
+  ) async {
     // Chứng minh cách dò `_popup()` bắt được popup thật → test "không popup"
     // bên dưới không xanh oan.
     final c = CodeController(text: 'chunks = 1\n', language: python);
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: CodeTheme(
-          data: CodeThemeData(styles: const {}),
-          child: CodeField(key: _field, controller: c),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CodeTheme(
+            data: CodeThemeData(styles: const {}),
+            child: CodeField(key: _field, controller: c),
+          ),
         ),
       ),
-    ));
+    );
     await tester.showKeyboard(find.byKey(_field));
     await tester.pump();
     await _type(tester, 'chu');
@@ -134,8 +148,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('tap suggestion replaces typed word, caret at end',
-      (tester) async {
+  testWidgets('tap suggestion replaces typed word, caret at end', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'chu');
     await tester.tap(find.byKey(const Key('suggestion-chunks')));
@@ -147,8 +162,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('callable suggestion inserts range() with caret inside',
-      (tester) async {
+  testWidgets('callable suggestion inserts range() with caret inside', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'for i in ');
     await tester.tap(find.byKey(const Key('suggestion-range')));
@@ -166,8 +182,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('prefix-typed callable: "ran" → range() caret between',
-      (tester) async {
+  testWidgets('prefix-typed callable: "ran" → range() caret between', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'ran');
     await tester.tap(find.byKey(const Key('suggestion-range')));
@@ -177,16 +194,19 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('typing full line by hand with auto-close yields single pairs',
-      (tester) async {
+  testWidgets('typing full line by hand with auto-close yields single pairs', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'range(0, len(text), size)');
     expect(_ctrl(tester).text, 'range(0, len(text), size)');
     expect(_ctrl(tester).selection.baseOffset, 25);
 
     await _type(tester, '\nchunks.append(text[i:i + size])');
-    expect(_ctrl(tester).text,
-        'range(0, len(text), size)\nchunks.append(text[i:i + size])');
+    expect(
+      _ctrl(tester).text,
+      'range(0, len(text), size)\nchunks.append(text[i:i + size])',
+    );
     await _teardown(tester, h);
   });
 
@@ -206,8 +226,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('Enter after ":" indents 4; plain Enter keeps indent',
-      (tester) async {
+  testWidgets('Enter after ":" indents 4; plain Enter keeps indent', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'for i in x:\n');
     expect(_ctrl(tester).text, 'for i in x:\n    ');
@@ -216,8 +237,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('symbol keys insert at caret, keep focus, run auto-close',
-      (tester) async {
+  testWidgets('symbol keys insert at caret, keep focus, run auto-close', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     await _type(tester, 'len');
     await tester.tap(find.byKey(const Key('symbol-(')));
@@ -245,8 +267,7 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('all symbol keys exist and are at least 40 tall',
-      (tester) async {
+  testWidgets('all symbol keys exist and are at least 40 tall', (tester) async {
     final h = await _pump(tester);
     for (final c in ['(', ')', '[', ']', ':', '=', '.', ',', '"', 'tab']) {
       final f = find.byKey(Key('symbol-$c'));
@@ -264,8 +285,9 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('onChanged per text change, onActivity per interaction',
-      (tester) async {
+  testWidgets('onChanged per text change, onActivity per interaction', (
+    tester,
+  ) async {
     final h = await _pump(tester);
     final before = h.activity;
     await _type(tester, 'ab');
@@ -274,20 +296,21 @@ void main() {
     await _teardown(tester, h);
   });
 
-  testWidgets('initialCode change on same widget reloads editor text',
-      (tester) async {
+  testWidgets('initialCode change on same widget reloads editor text', (
+    tester,
+  ) async {
     final h = _Harness();
     Widget build(String code) => MaterialApp(
-          theme: ThemeData.dark(),
-          home: Scaffold(
-            body: CodeInput(
-              initialCode: code,
-              knownIdentifiers: const [],
-              vocab: const [],
-              onChanged: h.changes.add,
-            ),
-          ),
-        );
+      theme: ThemeData.dark(),
+      home: Scaffold(
+        body: CodeInput(
+          initialCode: code,
+          knownIdentifiers: const [],
+          vocab: const [],
+          onChanged: h.changes.add,
+        ),
+      ),
+    );
     await tester.pumpWidget(build('a = 1'));
     await tester.pumpWidget(build('b = 2'));
     expect(_ctrl(tester).text, 'b = 2');
@@ -306,8 +329,9 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('range( + "0, len(text), size)" → one outer pair',
-        (tester) async {
+    testWidgets('range( + "0, len(text), size)" → one outer pair', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'for i in range(');
       expect(_ctrl(tester).text, 'for i in range()');
@@ -329,8 +353,9 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('"x)" kept at end of text (nothing to overtype)',
-        (tester) async {
+    testWidgets('"x)" kept at end of text (nothing to overtype)', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'a');
       await _commit(tester, 'x)');
@@ -347,8 +372,9 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('quote: odd count closes existing string, even is kept',
-        (tester) async {
+    testWidgets('quote: odd count closes existing string, even is kept', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'print("');
       expect(_ctrl(tester).text, 'print("")');
@@ -364,20 +390,21 @@ void main() {
       await _teardown(tester, h2);
     });
 
-    testWidgets('composing region shrinks with the dropped closer',
-        (tester) async {
+    testWidgets('composing region shrinks with the dropped closer', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'len(');
       await _commit(tester, '0)', composing: const TextRange(start: 4, end: 6));
       expect(_ctrl(tester).text, 'len(0)');
-      expect(_ctrl(tester).value.composing,
-          const TextRange(start: 4, end: 5));
+      expect(_ctrl(tester).value.composing, const TextRange(start: 4, end: 5));
       expect(_ctrl(tester).selection, const TextSelection.collapsed(offset: 6));
       await _teardown(tester, h);
     });
 
-    testWidgets('f(x[ + "0])" closes both nested auto-closed pairs',
-        (tester) async {
+    testWidgets('f(x[ + "0])" closes both nested auto-closed pairs', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'f(x[');
       expect(_ctrl(tester).text, 'f(x[])');
@@ -387,8 +414,9 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('chunks.append(text[ + "i:i + size])" passes runBlock',
-        (tester) async {
+    testWidgets('chunks.append(text[ + "i:i + size])" passes runBlock', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'chunks.append(text[');
       expect(_ctrl(tester).text, 'chunks.append(text[])');
@@ -400,8 +428,9 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('f(x[ + "0]" closes only one level, caret before ")"',
-        (tester) async {
+    testWidgets('f(x[ + "0]" closes only one level, caret before ")"', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'f(x[');
       await _commit(tester, '0]');
@@ -429,24 +458,28 @@ void main() {
       await _teardown(tester, h);
     });
 
-    testWidgets('composing shrinks by k and stays within text',
-        (tester) async {
+    testWidgets('composing shrinks by k and stays within text', (tester) async {
       final h = await _pump(tester);
       await _type(tester, 'f(x[');
-      await _commit(tester, '0])', composing: const TextRange(start: 4, end: 7));
+      await _commit(
+        tester,
+        '0])',
+        composing: const TextRange(start: 4, end: 7),
+      );
       expect(_ctrl(tester).text, 'f(x[0])');
-      expect(_ctrl(tester).value.composing,
-          const TextRange(start: 4, end: 5));
+      expect(_ctrl(tester).value.composing, const TextRange(start: 4, end: 5));
       await _teardown(tester, h);
     });
   });
 
-  testWidgets(
-      'end-to-end line 2: chunks.append(text[i:i + size]) via '
+  testWidgets('end-to-end line 2: chunks.append(text[i:i + size]) via '
       'suggestions + symbol keys + typing passes runBlock', (tester) async {
     final block = _splitChunks[1];
-    final h = await _pump(tester,
-        known: const ['text', 'size', 'chunks', 'i'], vocab: block.vocab);
+    final h = await _pump(
+      tester,
+      known: const ['text', 'size', 'chunks', 'i'],
+      vocab: block.vocab,
+    );
     await _type(tester, 'chu');
     await _tap(tester, 'suggestion-chunks');
     await _type(tester, '.');
@@ -469,45 +502,47 @@ void main() {
     await _teardown(tester, h);
   });
 
-  group('placeholder "Nhập code"', () {
+  group('placeholder "# viết code ở đây"', () {
     testWidgets('shows on empty, hides once a char is typed', (tester) async {
       final h = await _pump(tester);
-      expect(find.text('Nhập code'), findsOneWidget);
+      expect(find.text('# viết code ở đây'), findsOneWidget);
       await _type(tester, 'a');
-      expect(find.text('Nhập code'), findsNothing);
+      expect(find.text('# viết code ở đây'), findsNothing);
       await _teardown(tester, h);
     });
 
     testWidgets('reappears after deleting all text', (tester) async {
       final h = await _pump(tester, initialCode: 'x');
-      expect(find.text('Nhập code'), findsNothing);
+      expect(find.text('# viết code ở đây'), findsNothing);
       await _backspace(tester);
       expect(_ctrl(tester).text, isEmpty);
-      expect(find.text('Nhập code'), findsOneWidget);
+      expect(find.text('# viết code ở đây'), findsOneWidget);
       await _teardown(tester, h);
     });
 
-    testWidgets('never reaches the controller text or onChanged',
-        (tester) async {
+    testWidgets('never reaches the controller text or onChanged', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       await _type(tester, 'ab');
       await _backspace(tester);
       await _backspace(tester);
-      expect(find.text('Nhập code'), findsOneWidget);
-      expect(_ctrl(tester).text, isNot(contains('Nhập code')));
-      expect(h.changes.any((c) => c.contains('Nhập code')), isFalse);
+      expect(find.text('# viết code ở đây'), findsOneWidget);
+      expect(_ctrl(tester).text, isNot(contains('# viết code ở đây')));
+      expect(h.changes.any((c) => c.contains('# viết code ở đây')), isFalse);
       await _teardown(tester, h);
     });
 
-    testWidgets('tapping the placeholder area still focuses the editor',
-        (tester) async {
+    testWidgets('tapping the placeholder area still focuses the editor', (
+      tester,
+    ) async {
       final h = await _pump(tester);
       h.focus.unfocus();
       await tester.pump();
       expect(h.focus.hasFocus, isFalse);
       // IgnorePointer chủ ý làm placeholder "trong suốt" với hit-test — tap
       // rơi xuyên qua, chạm đúng editor bên dưới thay vì chính chữ này.
-      await tester.tap(find.text('Nhập code'), warnIfMissed: false);
+      await tester.tap(find.text('# viết code ở đây'), warnIfMissed: false);
       await tester.pump();
       expect(h.focus.hasFocus, isTrue);
       await _teardown(tester, h);
@@ -515,15 +550,17 @@ void main() {
   });
 
   group('editor border reacts to focus', () {
-    BoxDecoration border(WidgetTester tester) => tester
-        .widget<Container>(find.byKey(const Key('code-input-border')))
-        .decoration as BoxDecoration;
+    BoxDecoration border(WidgetTester tester) =>
+        tester
+                .widget<Container>(find.byKey(const Key('code-input-border')))
+                .decoration
+            as BoxDecoration;
 
-    testWidgets('2px primary when focused, 1px outline when blurred',
-        (tester) async {
+    testWidgets('2px primary when focused, 1px outline when blurred', (
+      tester,
+    ) async {
       final h = await _pump(tester);
-      final scheme =
-          Theme.of(tester.element(find.byKey(_field))).colorScheme;
+      final scheme = Theme.of(tester.element(find.byKey(_field))).colorScheme;
 
       // _pump() gọi showKeyboard() → editor đã focus sẵn.
       expect(h.focus.hasFocus, isTrue);
@@ -541,19 +578,23 @@ void main() {
   });
 
   testWidgets('works inside unbounded-height parent', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      theme: ThemeData.dark(),
-      home: Scaffold(
-        body: ListView(children: [
-          CodeInput(
-            initialCode: 'x',
-            knownIdentifiers: const [],
-            vocab: const [],
-            onChanged: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: Scaffold(
+          body: ListView(
+            children: [
+              CodeInput(
+                initialCode: 'x',
+                knownIdentifiers: const [],
+                vocab: const [],
+                onChanged: (_) {},
+              ),
+            ],
           ),
-        ]),
+        ),
       ),
-    ));
+    );
     expect(tester.takeException(), isNull);
     expect(find.byKey(_field), findsOneWidget);
     await _teardown(tester);
