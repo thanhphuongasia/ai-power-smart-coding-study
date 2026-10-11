@@ -2,12 +2,12 @@ Worktree: (không dùng — thẳng trên main)
 Branch:   main
 Issue:    (không tạo)
 
-# Status: open
+# Status: done
 
 | Task | Trạng thái |
 |---|---|
 | T-01 soạn theme + 7 bài (crew-impl-standard) | done — review PASS sau sửa 1 Major (reviews/T-01.md); seam PASS với Minor (reviews/SEAM.md), verify-seam exit 0 |
-| T-02 nạp VPS (orchestrator) | chưa chạy |
+| T-02 nạp VPS (orchestrator) | done — export DB VPS == content.json cũ (kiểm 2 lần, lần 2 ngay trước nạp); deploy.sh; `load_content --force` sha256:032f8c5c…; /content: 5 theme, 29 bài, 22 id cũ còn đủ |
 
 Kiểm: pytest 353 passed, 2 skipped · flutter test 452 passed · validation_errors = [].
 
@@ -17,4 +17,6 @@ Kiểm: pytest 353 passed, 2 skipped · flutter test 452 passed · validation_er
 - mobile/lib/domain/class_scope.dart:41 lấy `def balance(` đầu tiên (getter) cho bài setter — hiện không sai hiển thị.
 - harness.py: thành viên non-callable trùng tên giờ báo lỗi runtime "not callable" thay vì "Không tìm thấy method".
 
-Next action: T-02 — export DB VPS, so với HEAD content.json cũ → deploy.sh → load_content --force → kiểm /content 5 theme, 29 bài.
+E2E prod (POST /run qua Judge0): bank-properties lời giải → passed 5/5 (harness nhận property); bank-display-info bản gõ cứng "2.0%" → failed ở case 7.
+
+Next action: không còn — distill đã dispatch.
