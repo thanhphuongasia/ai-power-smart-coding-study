@@ -28,14 +28,14 @@ void main() {
     });
 
     test('mọi exercise_ids của file tồn tại trong exercises', () {
-      for (final t in contentJson['themes'] as List) {
-        for (final tp in (t as Map)['topics'] as List) {
-          for (final f in (tp as Map)['files'] as List) {
-            for (final id in (f as Map)['exercise_ids'] as List) {
+      for (final theme in testContent.themes) {
+        for (final topic in theme.allTopics) {
+          for (final f in topic.files) {
+            for (final e in f.exercises) {
               expect(
-                rawExercises.containsKey(id),
+                rawExercises.containsKey(e.id),
                 isTrue,
-                reason: 'file ${f['id']} trỏ tới bài không có: $id',
+                reason: 'file ${f.id} trỏ tới bài không có: ${e.id}',
               );
             }
           }
@@ -46,7 +46,7 @@ void main() {
     test('mọi theme có topic, mọi topic có ít nhất 1 exercise', () {
       for (final theme in testContent.themes) {
         expect(theme.topics, isNotEmpty, reason: 'theme ${theme.id}');
-        for (final topic in theme.topics) {
+        for (final topic in theme.allTopics) {
           final count = topic.files.fold<int>(
             0,
             (sum, f) => sum + f.exercises.length,
@@ -63,11 +63,42 @@ void main() {
         'clean-text',
         'save-document',
         'like-post',
+        'flight-seats-left',
+        'flight-is-full',
+        'flight-service-add',
+        'flight-service-search',
+        'schedule-flights-on',
+        'booking-book',
+        'booking-cancel',
+        'seat-map-assign',
       ]) {
         expect(rawExercises.containsKey(id), isTrue, reason: id);
       }
       expect(testContent.exerciseById('split-chunks').blocks.length, 3);
       expect(testContent.locateFilesNamed('chunker.py').length, 2);
+    });
+
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 8 bài method', () {
+      final airline = testContent.themes.first;
+      expect(airline.id, 'airline');
+      expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
+      expect(airline.allTopics.length, greaterThanOrEqualTo(4));
+      final methods = allExercises.where((e) => e.className != null).toList();
+      expect(methods.length, 8);
+      for (final e in methods) {
+        final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
+        expect(
+          judge['solution'],
+          contains('class ${e.className}'),
+          reason: '${e.id}: solution thiếu class ${e.className}',
+        );
+        expect((judge['cases'] as List).length, inInclusiveRange(4, 7));
+        expect(e.template, contains('class ${e.className}'));
+        // Mọi case của method là dạng kịch bản (steps/call/expect).
+        for (final c in judge['cases'] as List) {
+          expect((c as Map).containsKey('call'), isTrue, reason: e.id);
+        }
+      }
     });
   });
 
@@ -149,7 +180,7 @@ void main() {
       final ids = <String>[];
       for (final theme in testContent.themes) {
         ids.add(theme.id);
-        for (final topic in theme.topics) {
+        for (final topic in theme.allTopics) {
           ids.add(topic.id);
           for (final file in topic.files) {
             ids.add(file.id);

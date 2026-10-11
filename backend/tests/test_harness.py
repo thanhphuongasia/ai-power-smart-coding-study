@@ -9,7 +9,8 @@ APP = Path(__file__).resolve().parent.parent / "app"
 HARNESS = APP / "harness.py"
 # Phần chấm của từng bài, lấy từ nguồn soạn content.json (cùng shape exercises.json cũ).
 EXERCISES = {
-    key: {"function": e["function_name"], "solution": e["judge"]["solution"], "cases": e["judge"]["cases"]}
+    key: {"function": e["function_name"], "class_name": e["class_name"],
+          "solution": e["judge"]["solution"], "cases": e["judge"]["cases"]}
     for key, e in json.loads(
         (APP.parent / "content" / "content.json").read_text(encoding="utf-8")
     )["exercises"].items()
@@ -32,7 +33,7 @@ def run_harness(code, function, cases, class_name=None):
 
 def run_exercise(ex_id, code):
     ex = EXERCISES[ex_id]
-    return run_harness(code, ex["function"], ex["cases"])
+    return run_harness(code, ex["function"], ex["cases"], ex["class_name"])
 
 
 @pytest.mark.parametrize("ex_id", sorted(EXERCISES))
@@ -42,6 +43,29 @@ def test_reference_solution_passes(ex_id):
     assert result["error"] is None
     assert len(result["tests"]) >= 3
     assert all(t["passed"] for t in result["tests"])
+
+
+CLASS_EXERCISES = sorted(k for k, e in EXERCISES.items() if e["class_name"])
+
+
+def test_airline_class_exercises_present():
+    assert len(CLASS_EXERCISES) >= 6
+    for ex_id in CLASS_EXERCISES:
+        ex = EXERCISES[ex_id]
+        assert "class %s" % ex["class_name"] in ex["solution"], ex_id
+        assert 4 <= len(ex["cases"]) <= 7, ex_id
+
+
+@pytest.mark.parametrize("ex_id", CLASS_EXERCISES)
+def test_class_exercise_wrong_solution_fails(ex_id):
+    """Thay thân method bằng `pass` thì ít nhất một case phải đỏ (case không vô nghĩa)."""
+    ex = EXERCISES[ex_id]
+    lines = ex["solution"].split("\n")
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("    def %s(" % ex["function"]))
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("    def ")), len(lines))
+    broken = lines[: start + 1] + ["        pass"] + lines[end:]
+    result, _ = run_harness("\n".join(broken), ex["function"], ex["cases"], ex["class_name"])
+    assert result["status"] != "passed", result
 
 
 def test_split_chunks_required_cases():

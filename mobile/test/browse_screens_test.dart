@@ -220,6 +220,12 @@ void main() {
     container.read(progressProvider.notifier).markPassed('split-chunks');
     await tester.pumpAndSettle();
     expect(find.textContaining('Đang dở · '), findsNothing);
+    // Mục "Đã xong" nằm cuối danh sách lazy (sau mọi bài mới) → cuộn tới.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('practice-split-chunks')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.descendant(
         of: find.byKey(const Key('practice-split-chunks')),

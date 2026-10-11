@@ -2,6 +2,90 @@
   "version": "source",
   "themes": [
     {
+      "id": "airline",
+      "name": "Airline Reservation System",
+      "description": "Xây hệ thống đặt vé máy bay bằng OOP: quản lý chuyến bay, lịch bay, đặt/huỷ chỗ và chọn ghế.",
+      "tags": [
+        "python",
+        "oop",
+        "booking"
+      ],
+      "topics": [
+        {
+          "id": "airline-flight",
+          "name": "Flight — quản lý chuyến bay",
+          "description": "Mô hình chuyến bay, kho chuyến và tìm kiếm theo tuyến.",
+          "files": [
+            {
+              "id": "airline-flight-py",
+              "name": "models/flight.py",
+              "exercise_ids": [
+                "flight-seats-left",
+                "flight-is-full"
+              ]
+            },
+            {
+              "id": "airline-flight-service-py",
+              "name": "services/flight_service.py",
+              "exercise_ids": [
+                "flight-service-add",
+                "flight-service-search"
+              ]
+            }
+          ],
+          "modules": [
+            {
+              "id": "airline-flight-schedule",
+              "name": "Schedule — lịch bay",
+              "description": "Tra cứu các chuyến bay khai thác theo ngày.",
+              "files": [
+                {
+                  "id": "airline-schedule-py",
+                  "name": "services/schedule.py",
+                  "exercise_ids": [
+                    "schedule-flights-on"
+                  ]
+                }
+              ],
+              "modules": []
+            }
+          ]
+        },
+        {
+          "id": "airline-reservation",
+          "name": "Reservation — đặt chỗ",
+          "description": "Đặt chỗ và huỷ chỗ sao cho không bán dư vé.",
+          "files": [
+            {
+              "id": "airline-booking-service-py",
+              "name": "services/booking_service.py",
+              "exercise_ids": [
+                "booking-book",
+                "booking-cancel"
+              ]
+            }
+          ],
+          "modules": [
+            {
+              "id": "airline-seating",
+              "name": "Seating — chọn ghế",
+              "description": "Sơ đồ ghế và gán ghế cho hành khách.",
+              "files": [
+                {
+                  "id": "airline-seat-map-py",
+                  "name": "seating/seat_map.py",
+                  "exercise_ids": [
+                    "seat-map-assign"
+                  ]
+                }
+              ],
+              "modules": []
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "rag",
       "name": "Semantic RAG system",
       "description": "Xây hệ thống truy xuất tăng cường (RAG) từ những bước nhỏ nhất: chia nhỏ văn bản, tiền xử lý dữ liệu trước khi đưa vào embedding.",
@@ -105,6 +189,1220 @@
     }
   ],
   "exercises": {
+    "flight-seats-left": {
+      "id": "flight-seats-left",
+      "title": "Còn bao nhiêu ghế trống",
+      "class_name": "Flight",
+      "function_name": "seats_left",
+      "params": [],
+      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        # TODO A\n        # TODO B",
+      "challenge": {
+        "statement": "Viết method seats_left(self) của class Flight, trả về số ghế còn trống = capacity - booked. Không bao giờ trả số âm (nếu booked vượt capacity thì trả 0).",
+        "motivation": "Màn hình tìm chuyến bay cần hiển thị \"Còn N ghế\". Số này tính một chỗ duy nhất trong Flight để mọi màn hình (tìm kiếm, đặt chỗ, check-in) hiển thị giống nhau.",
+        "small": {
+          "caption": "Chuyến bay 2 chỗ, chưa ai đặt",
+          "input": "f = Flight('VN123', 'HAN', 'SGN', 2)\nprint(f.seats_left())",
+          "output": "2",
+          "note": null
+        },
+        "project": {
+          "caption": "Chuyến HAN-SGN 180 chỗ đã bán 175 vé",
+          "input": "f = Flight('VN213', 'HAN', 'SGN', 180)\nf.booked = 175\nprint(f.seats_left())",
+          "output": "5",
+          "note": "Ngay cả khi dữ liệu bị overbook (booked > capacity) kết quả vẫn không âm."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-seats-left-a",
+          "label": "A",
+          "title": "Tính số ghế còn lại",
+          "prompt": "Lấy capacity trừ booked, lưu vào biến left.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "left = self.capacity - self.booked"
+          ],
+          "expected_output": "Đã tính left.",
+          "explanation": "self.capacity và self.booked là thuộc tính của chuyến bay; hiệu của chúng là số ghế chưa bán.",
+          "hints": [
+            "Dùng hai thuộc tính self.capacity và self.booked.",
+            "left = capacity - booked.",
+            "left = self.capacity - self.booked"
+          ],
+          "vocab": [
+            "self",
+            "capacity",
+            "booked"
+          ]
+        },
+        {
+          "id": "flight-seats-left-b",
+          "label": "B",
+          "title": "Không trả số âm",
+          "prompt": "Trả về left, nhưng tối thiểu là 0.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return max(left, 0)"
+          ],
+          "expected_output": "Đã trả số ghế trống.",
+          "explanation": "max(left, 0) chặn kết quả âm khi dữ liệu bị overbook.",
+          "hints": [
+            "Dùng hàm max để chặn dưới bằng 0.",
+            "max(left, 0)",
+            "return max(left, 0)"
+          ],
+          "vocab": [
+            "return",
+            "max"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        left = self.capacity - self.booked\n        return max(left, 0)",
+        "cases": [
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 2)"
+            ],
+            "call": "f.seats_left()",
+            "expect": {
+              "return": 2
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 2)",
+              "f.booked = 1"
+            ],
+            "call": "f.seats_left()",
+            "expect": {
+              "return": 1
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 2)",
+              "f.booked = 2"
+            ],
+            "call": "f.seats_left()",
+            "expect": {
+              "return": 0
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN123', 'HAN', 'SGN', 2)",
+              "f.booked = 5"
+            ],
+            "call": "f.seats_left()",
+            "expect": {
+              "return": 0
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN9', 'HAN', 'SGN', 0)"
+            ],
+            "call": "f.seats_left()",
+            "expect": {
+              "return": 0
+            }
+          }
+        ]
+      }
+    },
+    "flight-is-full": {
+      "id": "flight-is-full",
+      "title": "Chuyến bay đã đầy chưa",
+      "class_name": "Flight",
+      "function_name": "is_full",
+      "params": [],
+      "template": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        # TODO A\n        # TODO B",
+      "challenge": {
+        "statement": "Viết method is_full(self) của class Flight: trả True nếu chuyến bay không còn ghế trống, ngược lại trả False. Dùng lại method seats_left() có sẵn.",
+        "motivation": "Nút \"Đặt vé\" phải bị khoá khi chuyến bay hết chỗ. Gọi lại seats_left() thay vì tự trừ lần nữa để quy tắc \"còn bao nhiêu ghế\" chỉ nằm ở một nơi.",
+        "small": {
+          "caption": "Chuyến 1 chỗ, đã bán 1",
+          "input": "f = Flight('VN1', 'HAN', 'DAD', 1)\nf.booked = 1\nprint(f.is_full())",
+          "output": "True",
+          "note": null
+        },
+        "project": {
+          "caption": "Kiểm tra trước khi hiện nút đặt vé",
+          "input": "f = Flight('VN213', 'HAN', 'SGN', 180)\nf.booked = 179\nprint(f.is_full())",
+          "output": "False",
+          "note": "Còn đúng 1 ghế nên vẫn đặt được."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-is-full-a",
+          "label": "A",
+          "title": "Lấy số ghế còn lại",
+          "prompt": "Gọi seats_left() và lưu vào biến left.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "left = self.seats_left()"
+          ],
+          "expected_output": "Đã lấy left.",
+          "explanation": "Dùng lại seats_left() để không lặp công thức capacity - booked.",
+          "hints": [
+            "Method của chính object gọi qua self.",
+            "self.seats_left()",
+            "left = self.seats_left()"
+          ],
+          "vocab": [
+            "self",
+            "method"
+          ]
+        },
+        {
+          "id": "flight-is-full-b",
+          "label": "B",
+          "title": "So sánh với 0",
+          "prompt": "Trả True khi không còn ghế.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return left == 0"
+          ],
+          "expected_output": "Đã trả kết quả.",
+          "explanation": "seats_left() không bao giờ âm, nên hết ghế nghĩa là bằng 0. Biểu thức so sánh tự cho ra True/False.",
+          "hints": [
+            "Hết ghế nghĩa là left bằng 0.",
+            "Trả thẳng kết quả so sánh.",
+            "return left == 0"
+          ],
+          "vocab": [
+            "return",
+            "=="
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Flight:\n    def __init__(self, code, origin, dest, capacity):\n        self.code = code\n        self.origin = origin\n        self.dest = dest\n        self.capacity = capacity\n        self.booked = 0\n\n    def seats_left(self):\n        return max(self.capacity - self.booked, 0)\n\n    def is_full(self):\n        left = self.seats_left()\n        return left == 0",
+        "cases": [
+          {
+            "steps": [
+              "f = Flight('VN1', 'HAN', 'DAD', 1)"
+            ],
+            "call": "f.is_full()",
+            "expect": {
+              "return": false
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN1', 'HAN', 'DAD', 1)",
+              "f.booked = 1"
+            ],
+            "call": "f.is_full()",
+            "expect": {
+              "return": true
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN1', 'HAN', 'DAD', 3)",
+              "f.booked = 2"
+            ],
+            "call": "f.is_full()",
+            "expect": {
+              "return": false
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN1', 'HAN', 'DAD', 3)",
+              "f.booked = 4"
+            ],
+            "call": "f.is_full()",
+            "expect": {
+              "return": true
+            }
+          },
+          {
+            "steps": [
+              "f = Flight('VN1', 'HAN', 'DAD', 0)"
+            ],
+            "call": "f.is_full()",
+            "expect": {
+              "return": true
+            }
+          }
+        ]
+      }
+    },
+    "flight-service-add": {
+      "id": "flight-service-add",
+      "title": "Thêm chuyến bay mới",
+      "class_name": "FlightService",
+      "function_name": "add_flight",
+      "params": [
+        "flight"
+      ],
+      "template": "class FlightService:\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        # TODO A\n            # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết method add_flight(self, flight) của FlightService: lưu chuyến bay vào self.flights theo mã chuyến (flight.code). Nếu mã đã tồn tại thì raise ValueError và không ghi đè.",
+        "motivation": "Mỗi mã chuyến (VN123) phải là duy nhất trong hệ thống. Nếu nhập trùng mà vẫn ghi đè, các vé đã bán cho chuyến cũ sẽ trỏ nhầm sang chuyến mới.",
+        "small": {
+          "caption": "Thêm chuyến vào dịch vụ rỗng",
+          "input": "svc = FlightService()\nsvc.add_flight(Flight('VN123', 'HAN', 'SGN', 180))\nprint(list(svc.flights))",
+          "output": "['VN123']",
+          "note": null
+        },
+        "project": {
+          "caption": "Nhân viên nhập trùng mã chuyến",
+          "input": "svc.add_flight(Flight('VN123', 'HAN', 'SGN', 180))\nsvc.add_flight(Flight('VN123', 'HAN', 'DAD', 90))",
+          "output": "ValueError",
+          "note": "Lần thứ hai bị từ chối, chuyến HAN-SGN ban đầu vẫn nguyên."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-service-add-a",
+          "label": "A",
+          "title": "Kiểm tra mã đã tồn tại",
+          "prompt": "Nếu flight.code đã có trong self.flights...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if flight.code in self.flights:"
+          ],
+          "expected_output": "Đã kiểm tra trùng.",
+          "explanation": "Toán tử in trên dict kiểm tra theo key, nhanh và không cần duyệt cả danh sách.",
+          "hints": [
+            "Key của dict là mã chuyến.",
+            "Dùng toán tử in.",
+            "if flight.code in self.flights:"
+          ],
+          "vocab": [
+            "in",
+            "dict"
+          ]
+        },
+        {
+          "id": "flight-service-add-b",
+          "label": "B",
+          "title": "Từ chối mã trùng",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Mã chuyến bay đã tồn tại\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "ValueError báo cho nơi gọi biết dữ liệu đầu vào sai; chuyến cũ không bị đụng tới.",
+          "hints": [
+            "Dùng raise với kiểu lỗi ValueError.",
+            "raise ValueError(thông_báo)",
+            "raise ValueError(\"Mã chuyến bay đã tồn tại\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "flight-service-add-c",
+          "label": "C",
+          "title": "Lưu chuyến bay",
+          "prompt": "Lưu flight vào self.flights với key là flight.code.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.flights[flight.code] = flight"
+          ],
+          "expected_output": "Đã lưu chuyến bay.",
+          "explanation": "Gán theo key flight.code để lần sau tra cứu theo mã là O(1).",
+          "hints": [
+            "Gán vào dict theo key.",
+            "self.flights[key] = value",
+            "self.flights[flight.code] = flight"
+          ],
+          "vocab": [
+            "dict",
+            "key"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class FlightService:\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight",
+        "cases": [
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')"
+            ],
+            "call": "(svc.add_flight(a), list(svc.flights))[1]",
+            "expect": {
+              "return": [
+                "VN123"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "svc.add_flight(a)",
+              "svc.add_flight(b)"
+            ],
+            "call": "list(svc.flights)",
+            "expect": {
+              "return": [
+                "VN123",
+                "VN456"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "svc.add_flight(a)"
+            ],
+            "call": "svc.add_flight(a)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "svc.add_flight(a)",
+              "d = SimpleNamespace(code='VN123', origin='X', dest='Y')",
+              "try:\n    svc.add_flight(d)\nexcept ValueError:\n    pass"
+            ],
+            "call": "svc.flights['VN123'].origin",
+            "expect": {
+              "return": "HAN"
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')"
+            ],
+            "call": "len(svc.flights)",
+            "expect": {
+              "return": 0
+            }
+          }
+        ]
+      }
+    },
+    "flight-service-search": {
+      "id": "flight-service-search",
+      "title": "Tìm chuyến theo điểm đi và đến",
+      "class_name": "FlightService",
+      "function_name": "search",
+      "params": [
+        "origin",
+        "dest"
+      ],
+      "template": "class FlightService:\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def search(self, origin, dest):\n        result = []\n        # TODO A\n            # TODO B\n                # TODO C\n        return result",
+      "challenge": {
+        "statement": "Viết method search(self, origin, dest) của FlightService: trả về danh sách các chuyến bay có đúng sân bay đi origin và sân bay đến dest, theo thứ tự đã thêm. Không có chuyến nào thì trả danh sách rỗng.",
+        "motivation": "Khách gõ \"Hà Nội -> TP.HCM\" trên app và cần thấy mọi chuyến phù hợp. Đây là truy vấn được gọi nhiều nhất của hệ thống đặt vé.",
+        "small": {
+          "caption": "Tìm chuyến HAN đến SGN",
+          "input": "# kho có VN123 (HAN-SGN) và VN456 (HAN-DAD)\nresult = svc.search('HAN', 'SGN')\nprint([f.code for f in result])",
+          "output": "['VN123']",
+          "note": null
+        },
+        "project": {
+          "caption": "Màn tìm chuyến cho khách",
+          "input": "result = svc.search('HAN', 'SGN')\nprint([f.code for f in result])",
+          "output": "['VN123', 'VN789']",
+          "note": "Hai chuyến cùng tuyến, giữ thứ tự thêm vào kho."
+        }
+      },
+      "blocks": [
+        {
+          "id": "flight-service-search-a",
+          "label": "A",
+          "title": "Duyệt các chuyến",
+          "prompt": "Duyệt từng chuyến f trong self.flights.values().",
+          "indent_level": 2,
+          "accepted_answers": [
+            "for f in self.flights.values():"
+          ],
+          "expected_output": "Đã tạo vòng lặp.",
+          "explanation": "flights là dict mã -> chuyến, nên values() cho ra các object Flight.",
+          "hints": [
+            "Cần giá trị của dict, không phải key.",
+            "self.flights.values()",
+            "for f in self.flights.values():"
+          ],
+          "vocab": [
+            "for",
+            "values"
+          ]
+        },
+        {
+          "id": "flight-service-search-b",
+          "label": "B",
+          "title": "Lọc theo tuyến",
+          "prompt": "Chỉ giữ chuyến đúng cả điểm đi và điểm đến.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "if f.origin == origin and f.dest == dest:"
+          ],
+          "expected_output": "Đã lọc.",
+          "explanation": "Cần cả hai điều kiện cùng đúng nên dùng and.",
+          "hints": [
+            "Hai điều kiện nối bằng and.",
+            "f.origin == origin ...",
+            "if f.origin == origin and f.dest == dest:"
+          ],
+          "vocab": [
+            "if",
+            "and"
+          ]
+        },
+        {
+          "id": "flight-service-search-c",
+          "label": "C",
+          "title": "Thêm vào kết quả",
+          "prompt": "Thêm f vào result.",
+          "indent_level": 4,
+          "accepted_answers": [
+            "result.append(f)"
+          ],
+          "expected_output": "Đã thêm chuyến.",
+          "explanation": "append thêm vào cuối list nên thứ tự kết quả giữ nguyên thứ tự thêm chuyến.",
+          "hints": [
+            "result là một list.",
+            "Thêm vào cuối list bằng append.",
+            "result.append(f)"
+          ],
+          "vocab": [
+            "append"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class FlightService:\n    def __init__(self):\n        self.flights = {}\n\n    def add_flight(self, flight):\n        if flight.code in self.flights:\n            raise ValueError(\"Mã chuyến bay đã tồn tại\")\n        self.flights[flight.code] = flight\n\n    def search(self, origin, dest):\n        result = []\n        for f in self.flights.values():\n            if f.origin == origin and f.dest == dest:\n                result.append(f)\n        return result",
+        "cases": [
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "for x in (a, b, c):\n    svc.add_flight(x)"
+            ],
+            "call": "[f.code for f in svc.search('HAN', 'SGN')]",
+            "expect": {
+              "return": [
+                "VN123",
+                "VN789"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "for x in (a, b, c):\n    svc.add_flight(x)"
+            ],
+            "call": "[f.code for f in svc.search('HAN', 'DAD')]",
+            "expect": {
+              "return": [
+                "VN456"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "for x in (a, b, c):\n    svc.add_flight(x)"
+            ],
+            "call": "svc.search('SGN', 'HAN')",
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')"
+            ],
+            "call": "svc.search('HAN', 'SGN')",
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "steps": [
+              "from types import SimpleNamespace",
+              "svc = FlightService()",
+              "a = SimpleNamespace(code='VN123', origin='HAN', dest='SGN')",
+              "b = SimpleNamespace(code='VN456', origin='HAN', dest='DAD')",
+              "c = SimpleNamespace(code='VN789', origin='HAN', dest='SGN')",
+              "for x in (c, a):\n    svc.add_flight(x)"
+            ],
+            "call": "[f.code for f in svc.search('HAN', 'SGN')]",
+            "expect": {
+              "return": [
+                "VN789",
+                "VN123"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "schedule-flights-on": {
+      "id": "schedule-flights-on",
+      "title": "Các chuyến bay trong một ngày",
+      "class_name": "Schedule",
+      "function_name": "flights_on",
+      "params": [
+        "date"
+      ],
+      "template": "class Schedule:\n    def __init__(self):\n        self.by_date = {}\n\n    def add(self, date, code):\n        self.by_date.setdefault(date, []).append(code)\n\n    def flights_on(self, date):\n        # TODO A\n        # TODO B",
+      "challenge": {
+        "statement": "Viết method flights_on(self, date) của Schedule: trả về danh sách mã chuyến bay khai thác trong ngày date, sắp xếp tăng dần. Ngày không có chuyến thì trả []. Không để người gọi sửa được dữ liệu bên trong Schedule.",
+        "motivation": "Bảng giờ bay ở sân bay hiển thị theo ngày. Trả bản sao đã sắp xếp giúp bảng hiển thị ổn định và không vô tình làm hỏng lịch bay gốc.",
+        "small": {
+          "caption": "Lịch ngày 01/12 có hai chuyến",
+          "input": "s = Schedule()\ns.add('2026-12-01', 'VN2')\ns.add('2026-12-01', 'VN1')\nprint(s.flights_on('2026-12-01'))",
+          "output": "['VN1', 'VN2']",
+          "note": null
+        },
+        "project": {
+          "caption": "Ngày chưa có lịch bay",
+          "input": "s = Schedule()\ns.add('2026-12-01', 'VN1')\nprint(s.flights_on('2026-12-25'))",
+          "output": "[]",
+          "note": "Không có lỗi KeyError, chỉ trả danh sách rỗng."
+        }
+      },
+      "blocks": [
+        {
+          "id": "schedule-flights-on-a",
+          "label": "A",
+          "title": "Lấy mã chuyến của ngày",
+          "prompt": "Lấy list mã chuyến của date từ self.by_date, mặc định là [].",
+          "indent_level": 2,
+          "accepted_answers": [
+            "codes = self.by_date.get(date, [])"
+          ],
+          "expected_output": "Đã lấy codes.",
+          "explanation": "get(date, []) trả [] thay vì ném KeyError khi ngày chưa có lịch.",
+          "hints": [
+            "Dict có method get với giá trị mặc định.",
+            "self.by_date.get(date, [])",
+            "codes = self.by_date.get(date, [])"
+          ],
+          "vocab": [
+            "get",
+            "dict"
+          ]
+        },
+        {
+          "id": "schedule-flights-on-b",
+          "label": "B",
+          "title": "Trả bản sắp xếp",
+          "prompt": "Trả về danh sách codes đã sắp xếp.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return sorted(codes)"
+          ],
+          "expected_output": "Đã trả danh sách.",
+          "explanation": "sorted tạo list mới nên người gọi không sửa được list gốc trong Schedule.",
+          "hints": [
+            "sorted() trả về list mới.",
+            "sorted(codes)",
+            "return sorted(codes)"
+          ],
+          "vocab": [
+            "sorted",
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class Schedule:\n    def __init__(self):\n        self.by_date = {}\n\n    def add(self, date, code):\n        self.by_date.setdefault(date, []).append(code)\n\n    def flights_on(self, date):\n        codes = self.by_date.get(date, [])\n        return sorted(codes)",
+        "cases": [
+          {
+            "steps": [
+              "s = Schedule()",
+              "s.add('2026-12-01', 'VN2')",
+              "s.add('2026-12-01', 'VN1')",
+              "s.add('2026-12-02', 'VN3')"
+            ],
+            "call": "s.flights_on('2026-12-01')",
+            "expect": {
+              "return": [
+                "VN1",
+                "VN2"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "s = Schedule()",
+              "s.add('2026-12-01', 'VN2')",
+              "s.add('2026-12-01', 'VN1')",
+              "s.add('2026-12-02', 'VN3')"
+            ],
+            "call": "s.flights_on('2026-12-02')",
+            "expect": {
+              "return": [
+                "VN3"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "s = Schedule()",
+              "s.add('2026-12-01', 'VN2')",
+              "s.add('2026-12-01', 'VN1')",
+              "s.add('2026-12-02', 'VN3')"
+            ],
+            "call": "s.flights_on('2027-01-01')",
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "steps": [
+              "s = Schedule()"
+            ],
+            "call": "s.flights_on('2026-12-01')",
+            "expect": {
+              "return": []
+            }
+          },
+          {
+            "steps": [
+              "s = Schedule()",
+              "s.add('2026-12-01', 'VN2')",
+              "s.add('2026-12-01', 'VN1')",
+              "s.add('2026-12-02', 'VN3')"
+            ],
+            "call": "(s.flights_on('2026-12-01').append('X'), s.flights_on('2026-12-01'))[1]",
+            "expect": {
+              "return": [
+                "VN1",
+                "VN2"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "booking-book": {
+      "id": "booking-book",
+      "title": "Đặt chỗ trên chuyến bay",
+      "class_name": "BookingService",
+      "function_name": "book",
+      "params": [
+        "flight_code",
+        "passenger",
+        "seats"
+      ],
+      "template": "class BookingService:\n    def __init__(self, free_seats):\n        self.free = dict(free_seats)\n        self.reservations = {}\n        self.counter = 0\n\n    def book(self, flight_code, passenger, seats):\n        # TODO A\n            # TODO B\n        # TODO C\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = (flight_code, passenger, seats)\n        return rid",
+      "challenge": {
+        "statement": "Viết phần kiểm tra và trừ ghế của book(self, flight_code, passenger, seats). Nếu seats <= 0, chuyến không tồn tại hoặc không đủ ghế thì raise ValueError (không trừ gì cả). Ngược lại trừ seats khỏi self.free[flight_code]. Phần sinh mã đặt chỗ (R1, R2, ...) đã có sẵn.",
+        "motivation": "Đặt chỗ là nghiệp vụ lõi: sai một điều kiện là bán dư vé (overbooking) hoặc trừ ghế của chuyến không tồn tại. Kiểm tra trước, ghi sau để lỗi không để lại dữ liệu nửa vời.",
+        "small": {
+          "caption": "Đặt 2 ghế trên chuyến còn 3 chỗ",
+          "input": "svc = BookingService({'VN1': 3})\nrid = svc.book('VN1', 'An', 2)\nprint(rid, svc.free['VN1'])",
+          "output": "R1 1",
+          "note": null
+        },
+        "project": {
+          "caption": "Khách thứ hai đặt quá số ghế còn lại",
+          "input": "svc = BookingService({'VN1': 3})\nsvc.book('VN1', 'An', 2)\nsvc.book('VN1', 'Binh', 2)",
+          "output": "ValueError",
+          "note": "Chỉ còn 1 ghế nên lần đặt thứ hai bị từ chối và số ghế vẫn là 1."
+        }
+      },
+      "blocks": [
+        {
+          "id": "booking-book-a",
+          "label": "A",
+          "title": "Kiểm tra điều kiện đặt",
+          "prompt": "Nếu seats <= 0 hoặc số ghế còn của flight_code (mặc định 0) nhỏ hơn seats...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if seats <= 0 or self.free.get(flight_code, 0) < seats:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "get(flight_code, 0) coi chuyến không tồn tại như hết chỗ nên gom hai lỗi vào một điều kiện.",
+          "hints": [
+            "Hai trường hợp lỗi nối bằng or.",
+            "self.free.get(flight_code, 0) < seats",
+            "if seats <= 0 or self.free.get(flight_code, 0) < seats:"
+          ],
+          "vocab": [
+            "or",
+            "get"
+          ]
+        },
+        {
+          "id": "booking-book-b",
+          "label": "B",
+          "title": "Từ chối đặt chỗ",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "raise dừng hàm ngay nên các dòng trừ ghế phía dưới không chạy.",
+          "hints": [
+            "Dùng raise ValueError(...).",
+            "Thông báo nêu lý do.",
+            "raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "booking-book-c",
+          "label": "C",
+          "title": "Trừ ghế",
+          "prompt": "Trừ seats khỏi số ghế còn của flight_code.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.free[flight_code] -= seats"
+          ],
+          "expected_output": "Đã trừ ghế.",
+          "explanation": "-= trừ trực tiếp vào giá trị trong dict.",
+          "hints": [
+            "Dùng toán tử -= trên dict.",
+            "self.free[key] -= seats",
+            "self.free[flight_code] -= seats"
+          ],
+          "vocab": [
+            "-=",
+            "dict"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BookingService:\n    def __init__(self, free_seats):\n        self.free = dict(free_seats)\n        self.reservations = {}\n        self.counter = 0\n\n    def book(self, flight_code, passenger, seats):\n        if seats <= 0 or self.free.get(flight_code, 0) < seats:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        self.free[flight_code] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = (flight_code, passenger, seats)\n        return rid",
+        "cases": [
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "svc.book('VN1', 'An', 2)",
+            "expect": {
+              "return": "R1"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "[svc.book('VN1', 'An', 2), svc.free['VN1']]",
+            "expect": {
+              "return": [
+                "R1",
+                1
+              ]
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "svc.book('VN1', 'An', 1)"
+            ],
+            "call": "svc.book('VN2', 'Binh', 1)",
+            "expect": {
+              "return": "R2"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "svc.book('VN1', 'An', 4)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "svc.book('VN9', 'An', 1)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "svc.book('VN1', 'An', 0)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "try:\n    svc.book('VN1', 'An', 9)\nexcept ValueError:\n    pass"
+            ],
+            "call": "[svc.free['VN1'], len(svc.reservations)]",
+            "expect": {
+              "return": [
+                3,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "booking-cancel": {
+      "id": "booking-cancel",
+      "title": "Huỷ đặt chỗ và trả ghế",
+      "class_name": "BookingService",
+      "function_name": "cancel",
+      "params": [
+        "reservation_id"
+      ],
+      "template": "class BookingService:\n    def __init__(self, free_seats):\n        self.free = dict(free_seats)\n        self.reservations = {}\n        self.counter = 0\n\n    def book(self, flight_code, passenger, seats):\n        if seats <= 0 or self.free.get(flight_code, 0) < seats:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        self.free[flight_code] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = (flight_code, passenger, seats)\n        return rid\n\n    def cancel(self, reservation_id):\n        # TODO A\n            # TODO B\n        # TODO C\n        self.free[flight_code] += seats\n        return seats",
+      "challenge": {
+        "statement": "Viết phần đầu của cancel(self, reservation_id): nếu reservation_id không có trong self.reservations thì raise ValueError; ngược lại lấy (và xoá) đặt chỗ đó ra khỏi self.reservations để lấy flight_code và seats. Phần trả ghế và return số ghế đã có sẵn.",
+        "motivation": "Khách huỷ vé thì ghế phải quay lại kho để người khác đặt được. Huỷ hai lần cùng một mã không được trả ghế hai lần, nếu không số ghế trống sẽ lớn hơn sức chứa thật.",
+        "small": {
+          "caption": "Huỷ đặt chỗ vừa tạo",
+          "input": "svc = BookingService({'VN1': 3})\nrid = svc.book('VN1', 'An', 2)\nprint(svc.cancel(rid), svc.free['VN1'])",
+          "output": "2 3",
+          "note": null
+        },
+        "project": {
+          "caption": "Khách bấm huỷ hai lần",
+          "input": "rid = svc.book('VN1', 'An', 2)\nsvc.cancel(rid)\nsvc.cancel(rid)",
+          "output": "ValueError",
+          "note": "Lần huỷ thứ hai bị từ chối vì đặt chỗ đã bị xoá khỏi sổ."
+        }
+      },
+      "blocks": [
+        {
+          "id": "booking-cancel-a",
+          "label": "A",
+          "title": "Kiểm tra mã đặt chỗ",
+          "prompt": "Nếu reservation_id không có trong self.reservations...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if reservation_id not in self.reservations:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "not in kiểm tra key không tồn tại; cũng chặn luôn trường hợp huỷ hai lần.",
+          "hints": [
+            "Dùng not in trên dict.",
+            "if key not in dict:",
+            "if reservation_id not in self.reservations:"
+          ],
+          "vocab": [
+            "not in",
+            "dict"
+          ]
+        },
+        {
+          "id": "booking-cancel-b",
+          "label": "B",
+          "title": "Từ chối mã lạ",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Không tìm thấy đặt chỗ\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "Mã lạ nghĩa là dữ liệu đầu vào sai nên dùng ValueError.",
+          "hints": [
+            "raise ValueError(...)",
+            "Thông báo ngắn gọn.",
+            "raise ValueError(\"Không tìm thấy đặt chỗ\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "booking-cancel-c",
+          "label": "C",
+          "title": "Lấy và xoá đặt chỗ",
+          "prompt": "Dùng pop để lấy bộ ba (flight_code, passenger, seats) và xoá khỏi sổ; bỏ qua passenger bằng _.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "flight_code, _, seats = self.reservations.pop(reservation_id)"
+          ],
+          "expected_output": "Đã lấy đặt chỗ.",
+          "explanation": "pop vừa trả giá trị vừa xoá key, nên lần huỷ sau sẽ không còn tìm thấy.",
+          "hints": [
+            "pop lấy giá trị và xoá key.",
+            "Giải nén tuple thành ba biến.",
+            "flight_code, _, seats = self.reservations.pop(reservation_id)"
+          ],
+          "vocab": [
+            "pop",
+            "unpacking"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class BookingService:\n    def __init__(self, free_seats):\n        self.free = dict(free_seats)\n        self.reservations = {}\n        self.counter = 0\n\n    def book(self, flight_code, passenger, seats):\n        if seats <= 0 or self.free.get(flight_code, 0) < seats:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        self.free[flight_code] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = (flight_code, passenger, seats)\n        return rid\n\n    def cancel(self, reservation_id):\n        if reservation_id not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        flight_code, _, seats = self.reservations.pop(reservation_id)\n        self.free[flight_code] += seats\n        return seats",
+        "cases": [
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "rid = svc.book('VN1', 'An', 2)"
+            ],
+            "call": "svc.cancel(rid)",
+            "expect": {
+              "return": 2
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "rid = svc.book('VN1', 'An', 2)"
+            ],
+            "call": "[svc.cancel(rid), svc.free['VN1']]",
+            "expect": {
+              "return": [
+                2,
+                3
+              ]
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "rid = svc.book('VN1', 'An', 2)",
+              "svc.cancel(rid)"
+            ],
+            "call": "svc.cancel(rid)",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})"
+            ],
+            "call": "svc.cancel('R99')",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = BookingService({'VN1': 3, 'VN2': 1})",
+              "r1 = svc.book('VN1', 'An', 1)",
+              "r2 = svc.book('VN1', 'Binh', 2)",
+              "svc.cancel(r1)"
+            ],
+            "call": "[sorted(svc.reservations), svc.free['VN1']]",
+            "expect": {
+              "return": [
+                [
+                  "R2"
+                ],
+                1
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "seat-map-assign": {
+      "id": "seat-map-assign",
+      "title": "Chọn ghế cho hành khách",
+      "class_name": "SeatMap",
+      "function_name": "assign_seat",
+      "params": [
+        "seat",
+        "passenger"
+      ],
+      "template": "class SeatMap:\n    def __init__(self, rows, letters):\n        self.valid = {str(r) + c for r in range(1, rows + 1) for c in letters}\n        self.taken = {}\n\n    def assign_seat(self, seat, passenger):\n        # TODO A\n            # TODO B\n        # TODO C",
+      "challenge": {
+        "statement": "Viết method assign_seat(self, seat, passenger) của SeatMap: gán ghế seat (ví dụ \"1A\") cho passenger bằng cách lưu vào self.taken. Nếu ghế không tồn tại (không nằm trong self.valid) hoặc đã có người ngồi thì raise ValueError.",
+        "motivation": "Khi check-in online, hai khách có thể bấm cùng một ghế gần như đồng thời. Sơ đồ ghế phải từ chối ghế đã có người và ghế không có thật (như \"9Z\" trên máy bay 2 hàng).",
+        "small": {
+          "caption": "Chọn ghế 1A còn trống",
+          "input": "sm = SeatMap(2, 'AB')\nsm.assign_seat('1A', 'An')\nprint(sm.taken)",
+          "output": "{'1A': 'An'}",
+          "note": null
+        },
+        "project": {
+          "caption": "Khách thứ hai chọn trúng ghế đã có người",
+          "input": "sm.assign_seat('1A', 'An')\nsm.assign_seat('1A', 'Binh')",
+          "output": "ValueError",
+          "note": "Ghế 1A vẫn thuộc về An."
+        }
+      },
+      "blocks": [
+        {
+          "id": "seat-map-assign-a",
+          "label": "A",
+          "title": "Kiểm tra ghế",
+          "prompt": "Nếu seat không hợp lệ hoặc đã có người...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if seat not in self.valid or seat in self.taken:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Hai lỗi cùng dẫn tới một kết quả (từ chối) nên gom bằng or.",
+          "hints": [
+            "Hai điều kiện nối bằng or.",
+            "not in self.valid / in self.taken",
+            "if seat not in self.valid or seat in self.taken:"
+          ],
+          "vocab": [
+            "or",
+            "in"
+          ]
+        },
+        {
+          "id": "seat-map-assign-b",
+          "label": "B",
+          "title": "Từ chối ghế",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Ghế không hợp lệ hoặc đã có người\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "Từ chối trước khi ghi nên ghế cũ không bị đổi chủ.",
+          "hints": [
+            "raise ValueError(...)",
+            "Thông báo nêu lý do.",
+            "raise ValueError(\"Ghế không hợp lệ hoặc đã có người\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "seat-map-assign-c",
+          "label": "C",
+          "title": "Gán ghế",
+          "prompt": "Lưu passenger vào self.taken theo key seat.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "self.taken[seat] = passenger"
+          ],
+          "expected_output": "Đã gán ghế.",
+          "explanation": "taken là dict ghế -> hành khách; mỗi ghế chỉ có một chủ.",
+          "hints": [
+            "taken là một dict.",
+            "self.taken[key] = value",
+            "self.taken[seat] = passenger"
+          ],
+          "vocab": [
+            "dict",
+            "key"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class SeatMap:\n    def __init__(self, rows, letters):\n        self.valid = {str(r) + c for r in range(1, rows + 1) for c in letters}\n        self.taken = {}\n\n    def assign_seat(self, seat, passenger):\n        if seat not in self.valid or seat in self.taken:\n            raise ValueError(\"Ghế không hợp lệ hoặc đã có người\")\n        self.taken[seat] = passenger",
+        "cases": [
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')"
+            ],
+            "call": "(sm.assign_seat('1A', 'An'), sm.taken)[1]",
+            "expect": {
+              "return": {
+                "1A": "An"
+              }
+            }
+          },
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')",
+              "sm.assign_seat('1A', 'An')"
+            ],
+            "call": "sm.assign_seat('1A', 'Binh')",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')"
+            ],
+            "call": "sm.assign_seat('9Z', 'An')",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')"
+            ],
+            "call": "sm.assign_seat('3A', 'An')",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')",
+              "sm.assign_seat('1A', 'An')",
+              "sm.assign_seat('1B', 'Binh')"
+            ],
+            "call": "sm.taken",
+            "expect": {
+              "return": {
+                "1A": "An",
+                "1B": "Binh"
+              }
+            }
+          },
+          {
+            "steps": [
+              "sm = SeatMap(2, 'AB')",
+              "sm.assign_seat('1A', 'An')",
+              "try:\n    sm.assign_seat('1A', 'Binh')\nexcept ValueError:\n    pass"
+            ],
+            "call": "sm.taken['1A']",
+            "expect": {
+              "return": "An"
+            }
+          }
+        ]
+      }
+    },
     "split-chunks": {
       "id": "split-chunks",
       "title": "Cắt văn bản thành các đoạn cố định",

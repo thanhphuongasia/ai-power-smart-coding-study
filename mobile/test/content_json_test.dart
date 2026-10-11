@@ -59,7 +59,7 @@ void main() {
         final loc = testContent.locateExercise(e.id);
         expect(loc.file.exercises.any((x) => identical(x, e)), isTrue);
         expect(loc.topic.files, contains(loc.file));
-        expect(loc.theme.topics, contains(loc.topic));
+        expect(loc.theme.allTopics, contains(loc.topic));
       }
       expect(() => testContent.locateExercise('nope'), throwsStateError);
     });
