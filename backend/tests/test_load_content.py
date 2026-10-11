@@ -109,6 +109,7 @@ def nested() -> dict:
     ]
     d["themes"][0]["topics"].append({"id": "tp2", "name": "N2", "description": "d", "files": [], "modules": []})
     d["exercises"]["e2"]["class_name"] = "Svc"
+    d["exercises"]["e2"]["judge"]["cases"] = [{"call": "1", "expect": {"return": 1}}]  # bài method: case kịch bản
     return d
 
 
@@ -151,6 +152,13 @@ def test_scenario_case_checked_at_load(db_session, case, msg):
     d = small()
     d["exercises"]["e1"]["judge"]["cases"] = [case]
     with pytest.raises(ValueError, match=msg):
+        load_content(db_session, d)
+
+
+def test_method_exercise_requires_scenario_cases(db_session):
+    d = small()
+    d["exercises"]["e1"]["class_name"] = "Svc"  # case `args` cũ → harness không chấm được
+    with pytest.raises(ValueError, match="bài method cần case dạng `call`"):
         load_content(db_session, d)
 
 

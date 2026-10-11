@@ -108,6 +108,13 @@ def validate(data: dict) -> None:
             errors.append(f"bài {key}: judge.cases cần ít nhất 1 case")
         else:
             errors.extend(f"bài {key}: case {i}: {msg}" for i, msg in _scenario_errors(judge["cases"]))
+            if ex.get("class_name"):
+                # Bài method chỉ chấm được bằng case kịch bản (harness không gọi method theo `args`).
+                errors.extend(
+                    f"bài {key}: case {i}: bài method cần case dạng `call`"
+                    for i, case in enumerate(judge["cases"])
+                    if not isinstance(case, dict) or "call" not in case
+                )
 
     dup_blocks = _duplicates([b.get("id") for ex in exercises.values() for b in ex.get("blocks", [])])
     if dup_blocks:

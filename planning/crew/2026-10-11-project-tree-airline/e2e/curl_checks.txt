@@ -1,0 +1,12 @@
+first theme: airline | Airline Reservation System
+  airline-flight ['models/flight.py', 'services/flight_service.py']
+    airline-flight-schedule ['services/schedule.py']
+  airline-reservation ['services/booking_service.py']
+    airline-seating ['seating/seat_map.py']
+judge leaked: False
+class exercises: 8
+/run flight-service-search reference → ('passed', 5, 5, None)
+/run booking-book reference → ('passed', 7, 7, None)
+/run seat-map-assign reference → ('passed', 6, 6, None)
+/run flight-service-search renamed method → ('error', 0, 0, 'Không tìm thấy method FlightService.search() trong code')
+/run split-chunks reference → ('passed', 6, 6, None)

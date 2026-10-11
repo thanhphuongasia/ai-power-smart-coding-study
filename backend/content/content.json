@@ -242,7 +242,9 @@
           "prompt": "Trả về left, nhưng tối thiểu là 0.",
           "indent_level": 2,
           "accepted_answers": [
-            "return max(left, 0)"
+            "return max(left, 0)",
+            "return left if left > 0 else 0",
+            "return max(0, left)"
           ],
           "expected_output": "Đã trả số ghế trống.",
           "explanation": "max(left, 0) chặn kết quả âm khi dữ liệu bị overbook.",
@@ -363,7 +365,10 @@
           "prompt": "Trả True khi không còn ghế.",
           "indent_level": 2,
           "accepted_answers": [
-            "return left == 0"
+            "return left == 0",
+            "return left <= 0",
+            "return not left",
+            "return 0 == left"
           ],
           "expected_output": "Đã trả kết quả.",
           "explanation": "seats_left() không bao giờ âm, nên hết ghế nghĩa là bằng 0. Biểu thức so sánh tự cho ra True/False.",
