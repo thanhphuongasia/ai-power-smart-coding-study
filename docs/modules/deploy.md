@@ -71,8 +71,9 @@ có rollback khi `nginx -t` lỗi).
   504 khi tải cao; chưa đo.
 - Cổng 8090/8100 lặp ở ba file, chỉ smoke test bắt lệch (deploy/deploy.sh:13, deploy/README.md:9).
 - Thư mục tạm không dọn nếu script chết giữa chừng (deploy/deploy.sh:22).
-- Chưa có second opinion từ model họ khác (Codex timeout 2 lần); chưa so từng byte code backend đã rsync
-  trên VPS với repo (SEAM.md, "Không kiểm được").
+- Chưa có second opinion từ model họ khác (Codex timeout 2 lần). Code backend trên VPS đã được so với repo
+  bằng `rsync -anc` (cùng tham số exclude của deploy/deploy.sh): 0 khác biệt
+  (planning/crew/2026-10-11-deploy-vps-web/STATUS.md).
 
 ## Nguồn
 
