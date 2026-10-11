@@ -50,6 +50,7 @@ class StudyTheme {
     required this.description,
     required this.tags,
     required this.topics,
+    this.diagram = const ClassDiagram(classes: [], relations: []),
   });
 
   final String id;
@@ -57,6 +58,9 @@ class StudyTheme {
   final String description;
   final List<String> tags;
   final List<Topic> topics;
+
+  /// Sơ đồ lớp viết tay của dự án; rỗng nếu theme chưa có.
+  final ClassDiagram diagram;
 
   /// Mọi topic/module (kể cả lồng nhau), preorder: cha trước con.
   Iterable<Topic> get allTopics sync* {
@@ -88,6 +92,9 @@ class StudyTheme {
         for (final t in jsonObjects(json, 'topics', w))
           Topic.fromJson(t, exercises),
       ],
+      diagram: ClassDiagram.fromJson(
+        jsonField<Map<String, dynamic>>(json, 'diagram', w),
+      ),
     );
   }
 
@@ -97,6 +104,161 @@ class StudyTheme {
     'description': description,
     'tags': tags,
     'topics': [for (final t in topics) t.toJson()],
+    'diagram': diagram.toJson(),
+  };
+}
+
+class DiagramAttribute {
+  const DiagramAttribute({
+    required this.name,
+    required this.type,
+    required this.group,
+  });
+
+  final String name;
+  final String type;
+
+  /// 'core' hoặc 'support'.
+  final String group;
+
+  factory DiagramAttribute.fromJson(Map<String, dynamic> json) {
+    const w = 'diagram attribute';
+    final group = jsonField<String>(json, 'group', w);
+    if (group != 'core' && group != 'support') {
+      throw FormatException('$w: "group" không hợp lệ: "$group"');
+    }
+    return DiagramAttribute(
+      name: jsonField<String>(json, 'name', w),
+      type: jsonField<String>(json, 'type', w),
+      group: group,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'name': name, 'type': type, 'group': group};
+}
+
+class DiagramClass {
+  const DiagramClass({
+    required this.name,
+    required this.file,
+    required this.attributes,
+    required this.methods,
+  });
+
+  final String name;
+  final String file;
+  final List<DiagramAttribute> attributes;
+  final List<String> methods;
+
+  factory DiagramClass.fromJson(Map<String, dynamic> json) {
+    const w = 'diagram class';
+    return DiagramClass(
+      name: jsonField<String>(json, 'name', w),
+      file: jsonField<String>(json, 'file', w),
+      attributes: [
+        for (final a in jsonObjects(json, 'attributes', w))
+          DiagramAttribute.fromJson(a),
+      ],
+      methods: jsonStrings(json, 'methods', w),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'file': file,
+    'attributes': [for (final a in attributes) a.toJson()],
+    'methods': methods,
+  };
+}
+
+const _relationKinds = {
+  'association',
+  'aggregation',
+  'composition',
+  'dependency',
+};
+
+class DiagramRelation {
+  const DiagramRelation({
+    required this.from,
+    required this.to,
+    required this.kind,
+    required this.label,
+    required this.via,
+  });
+
+  final String from;
+  final String to;
+
+  /// association | aggregation | composition | dependency.
+  final String kind;
+  final String label;
+
+  /// Method của [from] tác động lên [to].
+  final List<String> via;
+
+  factory DiagramRelation.fromJson(Map<String, dynamic> json) {
+    const w = 'diagram relation';
+    final kind = jsonField<String>(json, 'kind', w);
+    if (!_relationKinds.contains(kind)) {
+      throw FormatException('$w: "kind" không hợp lệ: "$kind"');
+    }
+    return DiagramRelation(
+      from: jsonField<String>(json, 'from', w),
+      to: jsonField<String>(json, 'to', w),
+      kind: kind,
+      label: jsonField<String>(json, 'label', w),
+      via: jsonStrings(json, 'via', w),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'from': from,
+    'to': to,
+    'kind': kind,
+    'label': label,
+    'via': via,
+  };
+}
+
+class ClassDiagram {
+  const ClassDiagram({required this.classes, required this.relations});
+
+  final List<DiagramClass> classes;
+  final List<DiagramRelation> relations;
+
+  bool get isEmpty => classes.isEmpty && relations.isEmpty;
+
+  DiagramClass? classNamed(String name) {
+    for (final c in classes) {
+      if (c.name == name) return c;
+    }
+    return null;
+  }
+
+  /// Quan hệ có [className] ở đầu hoặc cuối, giữ thứ tự nguồn.
+  List<DiagramRelation> relationsOf(String className) => [
+    for (final r in relations)
+      if (r.from == className || r.to == className) r,
+  ];
+
+  factory ClassDiagram.fromJson(Map<String, dynamic> json) {
+    const w = 'diagram';
+    return ClassDiagram(
+      classes: [
+        for (final c in jsonObjects(json, 'classes', w))
+          DiagramClass.fromJson(c),
+      ],
+      relations: [
+        for (final r in jsonObjects(json, 'relations', w))
+          DiagramRelation.fromJson(r),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'classes': [for (final c in classes) c.toJson()],
+    'relations': [for (final r in relations) r.toJson()],
   };
 }
 

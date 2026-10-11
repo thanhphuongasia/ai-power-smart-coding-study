@@ -354,6 +354,7 @@ void main() {
           'name': 'Airline',
           'description': '',
           'tags': <String>[],
+          'diagram': {'classes': <Object>[], 'relations': <Object>[]},
           'topics': [
             {
               'id': 'booking',

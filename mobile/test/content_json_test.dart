@@ -317,6 +317,7 @@ Map<String, dynamic> nestedJson() => {
           'modules': <Map<String, dynamic>>[],
         },
       ],
+      'diagram': {'classes': [], 'relations': []},
     },
   ],
   'exercises': {
@@ -424,6 +425,106 @@ void nestedTests() {
           ),
         ),
       );
+    });
+  });
+
+  group('diagram', () {
+    Map<String, dynamic> diagramJson() => {
+      'classes': [
+        {
+          'name': 'Flight',
+          'file': 'models/flight.py',
+          'attributes': [
+            {'name': 'code', 'type': 'str', 'group': 'core'},
+            {'name': 'booked', 'type': 'int', 'group': 'support'},
+          ],
+          'methods': ['__init__', 'seats_left', 'is_full'],
+        },
+      ],
+      'relations': [
+        {
+          'from': 'FlightService',
+          'to': 'Flight',
+          'kind': 'aggregation',
+          'label': 'flights: mã → Flight',
+          'via': ['add_flight', 'remove_flight', 'search'],
+        },
+        {
+          'from': 'Flight',
+          'to': 'Seat',
+          'kind': 'composition',
+          'label': 'seats',
+          'via': <String>[],
+        },
+      ],
+    };
+
+    Matcher badFormat(String field) => throwsA(
+      isA<FormatException>().having(
+        (e) => e.message,
+        'message',
+        contains(field),
+      ),
+    );
+
+    test('parse + round-trip', () {
+      final d = ClassDiagram.fromJson(diagramJson());
+      expect(d.isEmpty, isFalse);
+      expect(d.classes.single.attributes.last.group, 'support');
+      expect(d.relations.first.via, ['add_flight', 'remove_flight', 'search']);
+      expect(jsonDecode(jsonEncode(d.toJson())), diagramJson());
+    });
+
+    test('classNamed / relationsOf', () {
+      final d = ClassDiagram.fromJson(diagramJson());
+      expect(d.classNamed('Flight')?.file, 'models/flight.py');
+      expect(d.classNamed('Nope'), isNull);
+      expect(d.relationsOf('Flight').map((r) => r.kind), [
+        'aggregation',
+        'composition',
+      ]);
+      expect(d.relationsOf('FlightService').length, 1);
+      expect(d.relationsOf('Nope'), isEmpty);
+    });
+
+    test('diagram rỗng', () {
+      final d = ClassDiagram.fromJson({'classes': [], 'relations': []});
+      expect(d.isEmpty, isTrue);
+    });
+
+    test('group sai → FormatException', () {
+      final j = diagramJson();
+      (((j['classes'] as List).first as Map)['attributes'] as List)
+              .first['group'] =
+          'weird';
+      expect(() => ClassDiagram.fromJson(j), badFormat('group'));
+    });
+
+    test('kind sai → FormatException', () {
+      final j = diagramJson();
+      ((j['relations'] as List).first as Map)['kind'] = 'inherit';
+      expect(() => ClassDiagram.fromJson(j), badFormat('kind'));
+    });
+
+    test('thiếu via → FormatException', () {
+      final j = diagramJson();
+      ((j['relations'] as List).first as Map).remove('via');
+      expect(() => ClassDiagram.fromJson(j), badFormat('via'));
+    });
+
+    test('theme thiếu diagram → FormatException; có thì round-trip', () {
+      final themeJson = {
+        'id': 't',
+        'name': 'T',
+        'description': 'd',
+        'tags': <String>[],
+        'topics': <Map<String, dynamic>>[],
+      };
+      expect(() => StudyTheme.fromJson(themeJson, {}), badFormat('diagram'));
+      themeJson['diagram'] = diagramJson();
+      final t = StudyTheme.fromJson(themeJson, {});
+      expect(t.diagram.classes.length, 1);
+      expect(jsonDecode(jsonEncode(t.toJson()))['diagram'], diagramJson());
     });
   });
 }
