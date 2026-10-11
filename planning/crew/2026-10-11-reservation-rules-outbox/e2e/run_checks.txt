@@ -1,0 +1,13 @@
+/run reservation-cancel ('passed', 7, 7)
+/run reservation-change-seats ('passed', 7, 7)
+/run reservation-change-flight ('passed', 7, 7)
+/run notifier-notify ('passed', 6, 6)
+/run outbox-save ('passed', 5, 5)
+/run outbox-relay ('passed', 5, 5)
+/run booking-book ('passed', 7, 7)
+/run like-post ('passed', 4, 4)
+/run reservation-cancel WRONG (cho huỷ sát giờ): ('failed', 6, 7) | mutation applied: True
+airline outbox file: True | diagram classes: 11
+rag outbox file: False | diagram classes: 0
+doc-system outbox file: False | diagram classes: 0
+twitter-feed outbox file: True | diagram classes: 3
