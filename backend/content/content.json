@@ -129,6 +129,35 @@
             ]
           },
           {
+            "name": "ReservationService",
+            "file": "services/reservation_service.py",
+            "attributes": [
+              {
+                "name": "flights",
+                "type": "dict[str, dict]",
+                "group": "core"
+              },
+              {
+                "name": "reservations",
+                "type": "dict[str, dict]",
+                "group": "core"
+              },
+              {
+                "name": "counter",
+                "type": "int",
+                "group": "support"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "book",
+              "hours_left",
+              "cancel",
+              "change_seats",
+              "change_flight"
+            ]
+          },
+          {
             "name": "SeatMap",
             "file": "seating/seat_map.py",
             "attributes": [
@@ -198,6 +227,18 @@
             "via": [
               "book",
               "cancel"
+            ]
+          },
+          {
+            "from": "ReservationService",
+            "to": "Flight",
+            "kind": "association",
+            "label": "giữ ghế trống + giá theo mã chuyến (bản rút gọn dùng dict, không dùng class Flight)",
+            "via": [
+              "book",
+              "cancel",
+              "change_seats",
+              "change_flight"
             ]
           },
           {
@@ -278,6 +319,15 @@
               "exercise_ids": [
                 "booking-book",
                 "booking-cancel"
+              ]
+            },
+            {
+              "id": "airline-reservation-service-py",
+              "name": "services/reservation_service.py",
+              "exercise_ids": [
+                "reservation-cancel",
+                "reservation-change-seats",
+                "reservation-change-flight"
               ]
             }
           ],
@@ -1969,6 +2019,559 @@
                 ],
                 1
               ]
+            }
+          }
+        ]
+      }
+    },
+    "reservation-cancel": {
+      "id": "reservation-cancel",
+      "title": "Huỷ đặt chỗ trước giờ bay 24 tiếng và hoàn tiền",
+      "class_name": "ReservationService",
+      "function_name": "cancel",
+      "params": [
+        "rid",
+        "now"
+      ],
+      "template": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def cancel(self, rid, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        res = self.reservations[rid]\n        # TODO A\n            # TODO B\n        # TODO C\n        self.flights[res[\"flight\"]][\"free\"] += res[\"seats\"]\n        del self.reservations[rid]\n        return refund",
+      "challenge": {
+        "statement": "Viết phần giữa của cancel(self, rid, now): nếu còn dưới 24 tiếng tới giờ bay (self.hours_left(rid, now) < 24, kể cả số âm khi chuyến đã bay) thì raise ValueError; ngược lại tính refund = số ghế * giá đã lưu trong đặt chỗ. Việc kiểm mã lạ, trả ghế, xoá đặt chỗ và return đã có sẵn. Đúng 24 tiếng vẫn được huỷ.",
+        "motivation": "Hãng bay chỉ cho huỷ khi còn đủ thời gian bán lại ghế cho người khác; sát giờ bay thì ghế gần như không bán lại được nên không cho huỷ. Giờ hiện tại `now` được truyền vào (không gọi datetime.now()) để test chạy lặp lại cho kết quả giống nhau.",
+        "small": {
+          "caption": "Huỷ trước giờ bay 2 ngày",
+          "input": "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}})\nrid = svc.book('VN1', 2)\nprint(svc.cancel(rid, datetime(2026, 10, 30, 8, 0)), svc.flights['VN1']['free'])",
+          "output": "3000000 5",
+          "note": null
+        },
+        "project": {
+          "caption": "Khách huỷ khi chỉ còn 23 tiếng 59 phút",
+          "input": "rid = svc.book('VN1', 2)\nsvc.cancel(rid, datetime(2026, 10, 31, 8, 1))",
+          "output": "ValueError",
+          "note": "Đúng 24 tiếng (31/10 lúc 8:00) vẫn huỷ được; trễ 1 phút là bị từ chối."
+        }
+      },
+      "blocks": [
+        {
+          "id": "reservation-cancel-a",
+          "label": "A",
+          "title": "Kiểm tra mốc 24 tiếng",
+          "prompt": "Nếu số giờ còn lại tới giờ bay (self.hours_left(rid, now)) nhỏ hơn 24...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if self.hours_left(rid, now) < 24:",
+            "if self.hours_left(rid, now) < 24:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Dùng < 24 (không phải <= 24) vì đúng 24 tiếng vẫn được huỷ; số âm (đã bay) cũng nhỏ hơn 24 nên bị chặn luôn.",
+          "hints": [
+            "Gọi self.hours_left(rid, now) rồi so với 24.",
+            "Đúng 24 tiếng vẫn được huỷ nên dùng < chứ không dùng <=.",
+            "if self.hours_left(rid, now) < 24:"
+          ],
+          "vocab": [
+            "hours_left",
+            "so sánh"
+          ]
+        },
+        {
+          "id": "reservation-cancel-b",
+          "label": "B",
+          "title": "Từ chối huỷ sát giờ",
+          "prompt": "...thì raise ValueError.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "raise ValueError(\"Chỉ được huỷ trước giờ bay 24 tiếng\")"
+          ],
+          "expected_output": "Đã ném lỗi.",
+          "explanation": "Huỷ sát giờ là vi phạm chính sách của đầu vào nên dùng ValueError, và dừng ngay trước khi đổi bất cứ dữ liệu nào.",
+          "hints": [
+            "raise ValueError(...)",
+            "Thông báo nêu rõ mốc 24 tiếng.",
+            "raise ValueError(\"Chỉ được huỷ trước giờ bay 24 tiếng\")"
+          ],
+          "vocab": [
+            "raise",
+            "ValueError"
+          ]
+        },
+        {
+          "id": "reservation-cancel-c",
+          "label": "C",
+          "title": "Tính tiền hoàn",
+          "prompt": "Tiền hoàn = số ghế * giá đã lưu trong đặt chỗ res.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "refund = res[\"seats\"] * res[\"price\"]",
+            "refund = res[\"price\"] * res[\"seats\"]"
+          ],
+          "expected_output": "Đã tính tiền hoàn.",
+          "explanation": "Dùng giá đã lưu lúc đặt (res[\"price\"]) chứ không đọc giá hiện tại của chuyến, vì khách được hoàn đúng số tiền đã trả.",
+          "hints": [
+            "Nhân hai giá trị trong res.",
+            "res[\"seats\"] và res[\"price\"].",
+            "refund = res[\"seats\"] * res[\"price\"]"
+          ],
+          "vocab": [
+            "dict",
+            "phép nhân"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def cancel(self, rid, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        res = self.reservations[rid]\n        if self.hours_left(rid, now) < 24:\n            raise ValueError(\"Chỉ được huỷ trước giờ bay 24 tiếng\")\n        refund = res[\"seats\"] * res[\"price\"]\n        self.flights[res[\"flight\"]][\"free\"] += res[\"seats\"]\n        del self.reservations[rid]\n        return refund",
+        "cases": [
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.cancel(rid, datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "return": 3000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.cancel(rid, datetime(2026, 10, 31, 8, 0))",
+            "expect": {
+              "return": 3000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.cancel(rid, datetime(2026, 10, 31, 8, 1))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.cancel(rid, datetime(2026, 11, 1, 9, 0))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})"
+            ],
+            "call": "svc.cancel('R99', datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)",
+              "svc.cancel(rid, datetime(2026, 10, 30, 8, 0))"
+            ],
+            "call": "svc.cancel(rid, datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "[svc.cancel(rid, datetime(2026, 10, 30, 8, 0)), svc.flights['VN1']['free'], len(svc.reservations)]",
+            "expect": {
+              "return": [
+                3000000,
+                5,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "reservation-change-seats": {
+      "id": "reservation-change-seats",
+      "title": "Đổi số ghế và tính tiền chênh lệch",
+      "class_name": "ReservationService",
+      "function_name": "change_seats",
+      "params": [
+        "rid",
+        "new_seats",
+        "now"
+      ],
+      "template": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def change_seats(self, rid, new_seats, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        if new_seats < 1:\n            raise ValueError(\"Số ghế phải từ 1 trở lên\")\n        res = self.reservations[rid]\n        flight = self.flights[res[\"flight\"]]\n        hours = self.hours_left(rid, now)\n        if hours <= 0:\n            raise ValueError(\"Chuyến bay đã khởi hành\")\n        diff = new_seats - res[\"seats\"]\n        if diff > flight[\"free\"]:\n            raise ValueError(\"Không đủ ghế trống\")\n        # TODO A\n            raise ValueError(\"Chỉ được giảm ghế trước giờ bay 24 tiếng\")\n        # TODO B\n        res[\"seats\"] = new_seats\n        # TODO C",
+      "challenge": {
+        "statement": "Viết ba chỗ then chốt của change_seats(self, rid, new_seats, now): (A) giảm ghế (diff < 0) mà còn dưới 24 tiếng tới giờ bay thì phải bị từ chối; (B) cập nhật số ghế trống của chuyến theo diff (tăng ghế thì ghế trống giảm, giảm ghế thì ghế trống tăng); (C) trả tiền chênh lệch = diff * giá đã lưu: dương là khách trả thêm, âm là hoàn tiền, 0 là không đổi. Các kiểm tra còn lại (mã lạ, ghế < 1, đã bay, không đủ ghế trống) đã có sẵn và chạy trước khi đổi dữ liệu.",
+        "motivation": "Thêm người đi cùng thì cần còn ghế và khách trả thêm; bớt ghế sát giờ bay thì hãng không bán lại kịp nên không cho giảm (và không hoàn). Kiểm tra mọi điều kiện trước, đổi dữ liệu sau, để lỗi không để lại trạng thái dở dang. `now` được truyền vào nên test lặp lại được.",
+        "small": {
+          "caption": "Tăng từ 2 lên 3 ghế, còn 2 ngày",
+          "input": "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}})\nrid = svc.book('VN1', 2)\nprint(svc.change_seats(rid, 3, datetime(2026, 10, 30, 8, 0)), svc.flights['VN1']['free'])",
+          "output": "1500000 2",
+          "note": "Đặt 2 ghế thì free còn 3; thêm 1 ghế nên free còn 2 và khách trả thêm 1 ghế."
+        },
+        "project": {
+          "caption": "Giảm ghế khi chỉ còn 23 tiếng 59 phút",
+          "input": "rid = svc.book('VN1', 3)\nsvc.change_seats(rid, 1, datetime(2026, 10, 31, 8, 1))",
+          "output": "ValueError",
+          "note": "Tăng ghế sát giờ vẫn được nếu còn ghế trống; chỉ giảm ghế mới bị chặn."
+        }
+      },
+      "blocks": [
+        {
+          "id": "reservation-change-seats-a",
+          "label": "A",
+          "title": "Chặn giảm ghế sát giờ",
+          "prompt": "Giảm ghế (diff < 0) mà số giờ còn lại (hours) nhỏ hơn 24 thì...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if diff < 0 and hours < 24:",
+            "if hours < 24 and diff < 0:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "Chỉ giảm ghế mới bị chặn sát giờ; tăng ghế sát giờ vẫn được nếu còn chỗ. Hai điều kiện nối bằng and.",
+          "hints": [
+            "Cần cả hai điều kiện: diff < 0 và hours < 24.",
+            "Nối bằng and.",
+            "if diff < 0 and hours < 24:"
+          ],
+          "vocab": [
+            "and",
+            "điều kiện kép"
+          ]
+        },
+        {
+          "id": "reservation-change-seats-b",
+          "label": "B",
+          "title": "Cập nhật ghế trống",
+          "prompt": "Ghế trống của chuyến thay đổi ngược chiều với diff.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "flight[\"free\"] -= diff",
+            "flight[\"free\"] = flight[\"free\"] - diff"
+          ],
+          "expected_output": "Đã cập nhật ghế trống.",
+          "explanation": "diff dương (thêm ghế) lấy bớt ghế trống, diff âm (bớt ghế) trừ số âm nên ghế trống tăng lại. Một công thức cho cả hai chiều.",
+          "hints": [
+            "Dùng -= với diff.",
+            "flight[\"free\"] -= ...",
+            "flight[\"free\"] -= diff"
+          ],
+          "vocab": [
+            "-=",
+            "dict"
+          ]
+        },
+        {
+          "id": "reservation-change-seats-c",
+          "label": "C",
+          "title": "Trả tiền chênh lệch",
+          "prompt": "Trả diff * giá đã lưu trong res.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "return diff * res[\"price\"]",
+            "return res[\"price\"] * diff"
+          ],
+          "expected_output": "Đã trả chênh lệch.",
+          "explanation": "Dấu của diff quyết định chiều tiền: dương khách trả thêm, âm hoàn tiền, 0 không đổi.",
+          "hints": [
+            "Nhân diff với giá đã lưu.",
+            "return diff * res[...]",
+            "return diff * res[\"price\"]"
+          ],
+          "vocab": [
+            "return",
+            "phép nhân"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def change_seats(self, rid, new_seats, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        if new_seats < 1:\n            raise ValueError(\"Số ghế phải từ 1 trở lên\")\n        res = self.reservations[rid]\n        flight = self.flights[res[\"flight\"]]\n        hours = self.hours_left(rid, now)\n        if hours <= 0:\n            raise ValueError(\"Chuyến bay đã khởi hành\")\n        diff = new_seats - res[\"seats\"]\n        if diff > flight[\"free\"]:\n            raise ValueError(\"Không đủ ghế trống\")\n        if diff < 0 and hours < 24:\n            raise ValueError(\"Chỉ được giảm ghế trước giờ bay 24 tiếng\")\n        flight[\"free\"] -= diff\n        res[\"seats\"] = new_seats\n        return diff * res[\"price\"]",
+        "cases": [
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.change_seats(rid, 4, datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "return": 3000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 3)"
+            ],
+            "call": "svc.change_seats(rid, 1, datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "return": -3000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "[svc.change_seats(rid, 5, datetime(2026, 10, 30, 8, 0)), svc.flights['VN1']['free'], svc.reservations[rid]['seats']]",
+            "expect": {
+              "return": [
+                4500000,
+                0,
+                5
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)",
+              "try:\n    svc.change_seats(rid, 6, datetime(2026, 10, 30, 8, 0))\nexcept ValueError:\n    pass"
+            ],
+            "call": "[svc.flights['VN1']['free'], svc.reservations[rid]['seats']]",
+            "expect": {
+              "return": [
+                3,
+                2
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 3)"
+            ],
+            "call": "svc.change_seats(rid, 1, datetime(2026, 10, 31, 8, 1))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 3)"
+            ],
+            "call": "svc.change_seats(rid, 1, datetime(2026, 10, 31, 8, 0))",
+            "expect": {
+              "return": -3000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.change_seats(rid, 3, datetime(2026, 11, 1, 9, 0))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          }
+        ]
+      }
+    },
+    "reservation-change-flight": {
+      "id": "reservation-change-flight",
+      "title": "Đổi sang chuyến khác và tính chênh lệch giá",
+      "class_name": "ReservationService",
+      "function_name": "change_flight",
+      "params": [
+        "rid",
+        "new_code",
+        "now"
+      ],
+      "template": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def change_flight(self, rid, new_code, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        res = self.reservations[rid]\n        # TODO A\n            raise ValueError(\"Chỉ được đổi chuyến trước giờ bay 24 tiếng\")\n        new = self.flights.get(new_code)\n        if new is None or new[\"free\"] < res[\"seats\"]:\n            raise ValueError(\"Chuyến mới không tồn tại hoặc không đủ ghế\")\n        old = self.flights[res[\"flight\"]]\n        # TODO B\n        # TODO C\n        res[\"flight\"] = new_code\n        res[\"price\"] = new[\"price\"]\n        return delta",
+      "challenge": {
+        "statement": "Viết ba chỗ then chốt của change_flight(self, rid, new_code, now): (A) chỉ cho đổi khi còn ít nhất 24 tiếng tới giờ bay của chuyến GỐC; (B) tính delta = số ghế * (giá chuyến mới - giá đã lưu) trước khi cập nhật giá; (C) chuyển ghế: trả lại ghế cho chuyến cũ (old) và lấy ghế ở chuyến mới (new). Kiểm mã lạ, chuyến mới không tồn tại hoặc không đủ ghế đã có sẵn và chạy trước khi đổi dữ liệu.",
+        "motivation": "Khách đổi chuyến thì ghế cũ phải được trả lại để bán tiếp, và giá hai chuyến có thể khác nhau: chuyến rẻ hơn thì hoàn phần chênh (số âm), đắt hơn thì thu thêm (số dương). Hãng tính mốc 24 tiếng theo chuyến gốc vì đó là ghế sắp bị bỏ trống. `now` được truyền vào nên test lặp lại được.",
+        "small": {
+          "caption": "Đổi từ VN1 (1.500.000) sang VN3 (2.000.000), 2 ghế",
+          "input": "rid = svc.book('VN1', 2)\nprint(svc.change_flight(rid, 'VN3', datetime(2026, 10, 30, 8, 0)))",
+          "output": "1000000",
+          "note": "2 ghế * (2.000.000 - 1.500.000) = 1.000.000 khách trả thêm."
+        },
+        "project": {
+          "caption": "Đổi sang chuyến VN2 chỉ còn 1 ghế trong khi đã đặt 2 ghế",
+          "input": "rid = svc.book('VN1', 2)\nsvc.change_flight(rid, 'VN2', datetime(2026, 10, 30, 8, 0))",
+          "output": "ValueError",
+          "note": "Đổi thất bại thì VN1 vẫn giữ nguyên số ghế đã đặt, VN2 không bị trừ."
+        }
+      },
+      "blocks": [
+        {
+          "id": "reservation-change-flight-a",
+          "label": "A",
+          "title": "Kiểm tra mốc 24 tiếng",
+          "prompt": "Nếu số giờ còn lại tới giờ bay chuyến gốc nhỏ hơn 24...",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if self.hours_left(rid, now) < 24:"
+          ],
+          "expected_output": "Đã kiểm tra.",
+          "explanation": "hours_left tính theo chuyến gốc của đặt chỗ. Chuyến đã bay cho số âm nên cũng bị chặn.",
+          "hints": [
+            "Gọi self.hours_left(rid, now).",
+            "So sánh nhỏ hơn 24.",
+            "if self.hours_left(rid, now) < 24:"
+          ],
+          "vocab": [
+            "hours_left",
+            "so sánh"
+          ]
+        },
+        {
+          "id": "reservation-change-flight-b",
+          "label": "B",
+          "title": "Tính chênh lệch giá",
+          "prompt": "delta = số ghế * (giá chuyến mới - giá đã lưu trong res).",
+          "indent_level": 2,
+          "accepted_answers": [
+            "delta = res[\"seats\"] * (new[\"price\"] - res[\"price\"])",
+            "delta = (new[\"price\"] - res[\"price\"]) * res[\"seats\"]"
+          ],
+          "expected_output": "Đã tính chênh lệch.",
+          "explanation": "Phải tính TRƯỚC khi ghi giá mới vào res, nếu không giá cũ đã bị ghi đè và delta luôn bằng 0.",
+          "hints": [
+            "Hiệu hai giá rồi nhân số ghế.",
+            "Dùng new[\"price\"] và res[\"price\"].",
+            "delta = res[\"seats\"] * (new[\"price\"] - res[\"price\"])"
+          ],
+          "vocab": [
+            "dict",
+            "chênh lệch"
+          ]
+        },
+        {
+          "id": "reservation-change-flight-c",
+          "label": "C",
+          "title": "Chuyển ghế giữa hai chuyến",
+          "prompt": "Trả ghế về chuyến cũ (old), lấy ghế ở chuyến mới (new).",
+          "indent_level": 2,
+          "accepted_answers": [
+            "old[\"free\"] += res[\"seats\"]\nnew[\"free\"] -= res[\"seats\"]",
+            "new[\"free\"] -= res[\"seats\"]\nold[\"free\"] += res[\"seats\"]"
+          ],
+          "expected_output": "Đã chuyển ghế.",
+          "explanation": "Ghế trống của chuyến cũ tăng, của chuyến mới giảm, cùng một số ghế. Việc kiểm đủ ghế đã làm ở trên nên bước này không thể làm ghế trống âm.",
+          "hints": [
+            "Hai dòng: một dòng += cho old, một dòng -= cho new.",
+            "Cùng số ghế res[\"seats\"].",
+            "old[\"free\"] += res[\"seats\"]\nnew[\"free\"] -= res[\"seats\"]"
+          ],
+          "vocab": [
+            "-=",
+            "+="
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "from datetime import datetime  # giờ luôn được truyền vào, không gọi datetime.now()\n\n\nclass ReservationService:\n    def __init__(self, flights):\n        # flights: {mã: {\"departure\": datetime, \"free\": int, \"price\": int}}\n        self.flights = {c: dict(f) for c, f in flights.items()}\n        self.reservations = {}  # rid -> {\"flight\": mã, \"seats\": int, \"price\": int}\n        self.counter = 0\n\n    def book(self, code, seats):\n        if code not in self.flights or seats < 1 or seats > self.flights[code][\"free\"]:\n            raise ValueError(\"Không đủ ghế hoặc chuyến bay không tồn tại\")\n        flight = self.flights[code]\n        flight[\"free\"] -= seats\n        self.counter += 1\n        rid = \"R%d\" % self.counter\n        self.reservations[rid] = {\"flight\": code, \"seats\": seats, \"price\": flight[\"price\"]}\n        return rid\n\n    def hours_left(self, rid, now):\n        flight = self.flights[self.reservations[rid][\"flight\"]]\n        return (flight[\"departure\"] - now).total_seconds() / 3600\n\n    def change_flight(self, rid, new_code, now):\n        if rid not in self.reservations:\n            raise ValueError(\"Không tìm thấy đặt chỗ\")\n        res = self.reservations[rid]\n        if self.hours_left(rid, now) < 24:\n            raise ValueError(\"Chỉ được đổi chuyến trước giờ bay 24 tiếng\")\n        new = self.flights.get(new_code)\n        if new is None or new[\"free\"] < res[\"seats\"]:\n            raise ValueError(\"Chuyến mới không tồn tại hoặc không đủ ghế\")\n        old = self.flights[res[\"flight\"]]\n        delta = res[\"seats\"] * (new[\"price\"] - res[\"price\"])\n        old[\"free\"] += res[\"seats\"]\n        new[\"free\"] -= res[\"seats\"]\n        res[\"flight\"] = new_code\n        res[\"price\"] = new[\"price\"]\n        return delta",
+        "cases": [
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.change_flight(rid, 'VN3', datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "return": 1000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN3', 2)"
+            ],
+            "call": "svc.change_flight(rid, 'VN1', datetime(2026, 11, 3, 8, 0))",
+            "expect": {
+              "return": -1000000
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)",
+              "svc.change_flight(rid, 'VN3', datetime(2026, 10, 30, 8, 0))"
+            ],
+            "call": "[svc.flights['VN1']['free'], svc.flights['VN3']['free'], svc.reservations[rid]['flight'], svc.reservations[rid]['price']]",
+            "expect": {
+              "return": [
+                5,
+                4,
+                "VN3",
+                2000000
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.change_flight(rid, 'VN3', datetime(2026, 10, 31, 8, 1))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)",
+              "try:\n    svc.change_flight(rid, 'VN2', datetime(2026, 10, 30, 8, 0))\nexcept ValueError:\n    pass"
+            ],
+            "call": "[svc.flights['VN1']['free'], svc.flights['VN2']['free'], svc.reservations[rid]['flight']]",
+            "expect": {
+              "return": [
+                3,
+                1,
+                "VN1"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})",
+              "rid = svc.book('VN1', 2)"
+            ],
+            "call": "svc.change_flight(rid, 'XX9', datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "from datetime import datetime",
+              "svc = ReservationService({'VN1': {'departure': datetime(2026, 11, 1, 8, 0), 'free': 5, 'price': 1500000}, 'VN2': {'departure': datetime(2026, 11, 3, 8, 0), 'free': 1, 'price': 1000000}, 'VN3': {'departure': datetime(2026, 11, 5, 8, 0), 'free': 6, 'price': 2000000}})"
+            ],
+            "call": "svc.change_flight('R99', 'VN3', datetime(2026, 10, 30, 8, 0))",
+            "expect": {
+              "raises": "ValueError"
             }
           }
         ]

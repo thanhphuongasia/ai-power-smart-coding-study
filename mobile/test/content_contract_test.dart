@@ -90,6 +90,9 @@ void main() {
         'flight-controller-delete',
         'booking-book',
         'booking-cancel',
+        'reservation-cancel',
+        'reservation-change-seats',
+        'reservation-change-flight',
         'seat-map-assign',
       ]) {
         expect(rawExercises.containsKey(id), isTrue, reason: id);
@@ -98,13 +101,13 @@ void main() {
       expect(testContent.locateFilesNamed('chunker.py').length, 2);
     });
 
-    test('theme airline đứng đầu, cây ≥ 2 cấp module, 11 bài method', () {
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 14 bài method', () {
       final airline = testContent.themes.first;
       expect(airline.id, 'airline');
       expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
       expect(airline.allTopics.length, greaterThanOrEqualTo(4));
       final methods = allExercises.where((e) => e.className != null).toList();
-      expect(methods.length, 11);
+      expect(methods.length, 14);
       for (final e in methods) {
         final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
         expect(

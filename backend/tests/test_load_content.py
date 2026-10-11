@@ -62,7 +62,7 @@ def test_load_real_file(db_session, real_data):
     version = load_content(db_session, real_data)
     assert version.startswith("sha256:")
     assert count(db_session, Theme) == 4
-    assert count(db_session, Exercise) == 16
+    assert count(db_session, Exercise) == 19
     assert db_session.scalar(select(func.count()).select_from(FileExercise).where(FileExercise.exercise_id == "split-chunks")) == 2
     assert db_session.get(ContentMeta, "version").value == version
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
@@ -266,7 +266,7 @@ def test_removed_exercise_disappears(db_session, real_data):
                 f["exercise_ids"] = [i for i in f["exercise_ids"] if i != "like-post"]
     load_content(db_session, data)
     assert db_session.get(Exercise, "like-post") is None
-    assert count(db_session, Exercise) == 15
+    assert count(db_session, Exercise) == 18
     assert db_session.scalar(select(func.count()).select_from(Block).where(Block.exercise_id == "like-post")) == 0
 
 
@@ -315,7 +315,7 @@ def test_invalid_data_raises_and_keeps_db(db_session, real_data, make, msg):
     with pytest.raises(ValueError, match=msg):
         load_content(db_session, make())
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 16
+    assert count(db_session, Exercise) == 19
     assert count(db_session, Theme) == 4
 
 
@@ -383,7 +383,7 @@ def test_wrong_shape_raises_with_path_and_keeps_db(db_session, real_data, mutate
         load_content(db_session, bad)
     assert path in str(err.value)
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 16
+    assert count(db_session, Exercise) == 19
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
 
 
