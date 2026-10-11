@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../domain/merge.dart';
 import '../../domain/models.dart';
 import 'challenge_tab.dart' show LabelTag;
 import 'code_input.dart';
@@ -14,11 +15,7 @@ import 'session_controller.dart';
 import 'session_providers.dart';
 
 /// Vị trí ô trong hàm, hiện cạnh tiêu đề ô.
-String cellWhere(Block b) => b.indentLevel >= 2
-    ? 'trong vòng for'
-    : b.indentLevel == 1
-    ? 'trong hàm'
-    : '';
+String cellWhere(Exercise e, Block b) => cellLocation(e, b.label);
 
 class CellEditorPage extends ConsumerStatefulWidget {
   const CellEditorPage({
@@ -113,7 +110,7 @@ class _CellEditorPageState extends ConsumerState<CellEditorPage> {
       ),
     );
     final canHint = used < 3 && used < block.hints.length;
-    final where = cellWhere(block);
+    final where = cellWhere(widget.exercise, block);
 
     return Scaffold(
       backgroundColor: p.surfaceRaised,

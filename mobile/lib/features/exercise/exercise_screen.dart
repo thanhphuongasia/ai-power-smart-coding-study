@@ -263,7 +263,7 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              '${located.file.name} · ${exercise.functionName}',
+                              '${located.file.name} · ${exercise.qualifiedName}',
                               key: const Key('exercise-subtitle'),
                               style: AppText.caption.copyWith(
                                 fontFamily: kMonoFamily,

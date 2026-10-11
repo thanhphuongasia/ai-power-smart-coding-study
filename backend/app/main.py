@@ -116,7 +116,12 @@ async def run(
         raise HTTPException(status_code=404, detail="exercise_not_found")
 
     payload = json.dumps(
-        {"code": request.code, "function": judge.function, "cases": judge.cases},
+        {
+            "code": request.code,
+            "function": judge.function,
+            "class_name": judge.class_name,
+            "cases": judge.cases,
+        },
         ensure_ascii=False,
     )
     started = time.monotonic()

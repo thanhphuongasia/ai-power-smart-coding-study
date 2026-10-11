@@ -39,6 +39,34 @@ def compute_version(data: dict) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _walk_topics(topics: list[dict], parent_id: str | None = None):
+    """Duyệt trước (preorder) cây module: yield (topic, parent_id) — cha trước con."""
+    for tp in topics:
+        yield tp, parent_id
+        yield from _walk_topics(tp.get("modules", []), tp.get("id"))
+
+
+def _scenario_errors(cases: list) -> list[tuple[int, str]]:
+    """Case dạng kịch bản (`call`): steps/call phải compile được và expect có `return` hoặc `raises`.
+
+    Bắt lỗi soạn bài ở đây — để lọt tới harness thì người học thấy lỗi như thể code của mình sai.
+    """
+    out: list[tuple[int, str]] = []
+    for i, case in enumerate(cases):
+        if not isinstance(case, dict) or "call" not in case:
+            continue
+        try:
+            for step in case.get("steps") or []:
+                compile(step, "<case>", "exec")
+            compile(case["call"], "<case>", "eval")
+        except (SyntaxError, TypeError, ValueError) as exc:
+            out.append((i, f"steps/call không compile được: {exc}"))
+        expect = case.get("expect")
+        if not isinstance(expect, dict) or not ({"return", "raises"} & expect.keys()):
+            out.append((i, "expect cần `return` hoặc `raises`"))
+    return out
+
+
 def _duplicates(ids: list[str]) -> list[str]:
     return sorted(i for i, n in Counter(ids).items() if n > 1)
 
@@ -59,7 +87,7 @@ def validate(data: dict) -> None:
     if not isinstance(themes, list) or not isinstance(exercises, dict):
         raise ValueError("content cần `themes` (list) và `exercises` (object)")
 
-    topics = [t for th in themes for t in th.get("topics", [])]
+    topics = [t for th in themes for t, _ in _walk_topics(th.get("topics", []))]
     files = [f for t in topics for f in t.get("files", [])]
     for kind, items in (("theme", themes), ("topic", topics), ("file", files)):
         dup = _duplicates([i.get("id") for i in items])
@@ -78,6 +106,15 @@ def validate(data: dict) -> None:
             errors.append(f"bài {key}: thiếu judge.solution")
         if not isinstance(judge, dict) or not judge.get("cases"):
             errors.append(f"bài {key}: judge.cases cần ít nhất 1 case")
+        else:
+            errors.extend(f"bài {key}: case {i}: {msg}" for i, msg in _scenario_errors(judge["cases"]))
+            if ex.get("class_name"):
+                # Bài method chỉ chấm được bằng case kịch bản (harness không gọi method theo `args`).
+                errors.extend(
+                    f"bài {key}: case {i}: bài method cần case dạng `call`"
+                    for i, case in enumerate(judge["cases"])
+                    if not isinstance(case, dict) or "call" not in case
+                )
 
     dup_blocks = _duplicates([b.get("id") for ex in exercises.values() for b in ex.get("blocks", [])])
     if dup_blocks:
@@ -113,6 +150,7 @@ def load_content(session: Session, data: dict[str, Any]) -> str:
             Exercise(
                 id=key,
                 title=ex["title"],
+                class_name=ex["class_name"],
                 function_name=ex["function_name"],
                 params=ex["params"],
                 template=ex["template"],
@@ -143,8 +181,18 @@ def load_content(session: Session, data: dict[str, Any]) -> str:
     for ti, th in enumerate(data["themes"]):
         session.add(Theme(id=th["id"], position=ti, name=th["name"], description=th["description"], tags=th["tags"]))
         session.flush()
-        for pi, tp in enumerate(th["topics"]):
-            session.add(Topic(id=tp["id"], theme_id=th["id"], position=pi, name=tp["name"], description=tp["description"]))
+        # position = thứ tự preorder trong theme → cha flush trước con (FK parent_id).
+        for pi, (tp, parent_id) in enumerate(_walk_topics(th["topics"])):
+            session.add(
+                Topic(
+                    id=tp["id"],
+                    theme_id=th["id"],
+                    parent_id=parent_id,
+                    position=pi,
+                    name=tp["name"],
+                    description=tp["description"],
+                )
+            )
             session.flush()
             for fi, f in enumerate(tp["files"]):
                 session.add(CodeFile(id=f["id"], topic_id=tp["id"], position=fi, name=f["name"]))

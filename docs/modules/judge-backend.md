@@ -25,8 +25,8 @@ backend: `DATABASE_URL`, `CODE_RUNNER`, `JUDGE0_URL`, `JUDGE0_TOKEN` (backend/.e
 ## Cách hoạt động
 
 `/run` tra `function` + `cases` của bài bằng một session DB ngắn, đóng ngay trước khi chờ máy chấm
-(để nhiều `/run` đồng thời không chiếm hết pool kết nối của `/content`, backend/app/content_api.py:155-166).
-Backend ghép payload JSON `{code, function, cases}`, gửi `harness.py` làm chương trình và payload làm
+(để nhiều `/run` đồng thời không chiếm hết pool kết nối của `/content`, backend/app/content_api.py:156-182).
+Backend ghép payload JSON `{code, function, class_name, cases}` (backend/app/main.py:118-125), gửi `harness.py` làm chương trình và payload làm
 stdin cho runner. Harness compile code người học với tên file `solution.py` (để số dòng lỗi là số
 dòng của code đã gửi), chạy từng case rồi in đúng một dòng `__JUDGE_RESULT__{json}`.
 
@@ -49,8 +49,21 @@ if "return" in expect:
 else:
     expected_value = expect["value"]
 ```
-(backend/app/harness.py:91-94) — dạng `return` so giá trị trả về; dạng `{"arg": i, "value": v}` so tham
+(backend/app/harness.py:153-156) — dạng `return` so giá trị trả về; dạng `{"arg": i, "value": v}` so tham
 số thứ i sau khi gọi (cho hàm sửa tham số tại chỗ như `save_document`).
+
+Bài method (có `class_name`) dùng dạng thứ ba — case kịch bản: `steps` (câu lệnh chuẩn bị, tuỳ chọn), `call`
+(biểu thức gọi) và `expect` là `{"return": v}` hoặc `{"raises": "TênLỗi"}`. Mỗi case chạy trong bản sao nông
+của namespace nên state không rò giữa các case:
+
+```python
+scope = dict(namespace)  # mỗi case một bản sao mới: state không rò giữa các case
+```
+(backend/app/harness.py:58; `raises` so tên trong MRO của exception, backend/app/harness.py:75-78). Harness kiểm
+`class_name` là class và có method trước khi chạy, thiếu thì báo "Không tìm thấy class/method ..."
+(backend/app/harness.py:123-139). Lỗi soạn case (không compile được, `expect` thiếu `return`/`raises`, bài
+method mà có case không phải dạng `call`) bị chặn lúc nạp nội dung, không tới được harness
+(backend/app/load_content.py:49-67,111-117). Tổng quan xem docs/ARCHITECTURE.md mục "Chấm bài method".
 
 Hợp đồng đáp ứng: `status`, `error {kind, line, message}`, `tests [{call, expected, actual, passed}]`,
 `stdout`, `duration_ms`; `expected`/`actual` là `repr()` (backend/app/main.py:81-99).
@@ -80,22 +93,23 @@ backend/app/runner.py:69-77); tối đa 4 request đồng thời tới máy ch�
 - Code học viên đi qua `https://ce.judge0.com` (bên thứ ba, giới hạn theo IP) — chỉ hợp dev local.
 - `JUDGE0_URL` không kiểm scheme: đặt `http://` thì token đi plaintext; hàng chờ semaphore không có
   timeout tổng (planning/crew/2026-10-11-exercise-tabs-judge/STATUS.md:39 — Backlog T-02).
-- Harness so bằng `==` nên `True == 1` coi là bằng; case ném exception thì dừng, các case sau không
-  chạy (backend/app/harness.py:99-104,108); test deepcopy yếu; `\r` lẻ trong code làm lệch số dòng
+- Harness so bằng `==` nên `True == 1` coi là bằng; case dạng args ném exception thì dừng, các case sau không
+  chạy (backend/app/harness.py:150-172); case kịch bản có `expect.raises` thì không dừng; test deepcopy yếu; `\r` lẻ trong code làm lệch số dòng
   so với `lineOrigin` của app (STATUS.md:47, M-8).
 - `os._exit` trong code học viên cho 503 thay vì lỗi của học viên (STATUS.md:47, M-7).
 - Đọc `/content` là 6 SELECT ở READ COMMITTED, chống lệch bằng so `version` đầu/cuối, đọc lại tối đa 3 lần;
   cửa sổ ABA (A→B→A) không bị bắt, đọc không ổn định thì `RuntimeError` → 500, cạn pool chưa thành 503
   (backend/app/content_api.py:42-59; planning/crew/2026-10-11-content-api-postgres/STATUS.md, Backlog T-06 r2).
 - `load_content.validate` chưa chặn `indent_level` âm; DB sửa tay sai hình dạng chưa có test (STATUS.md, Backlog T-10).
+- Bản sao nông của namespace: gán thuộc tính thẳng lên class ở một case có thể rò sang case sau; `SystemExit` trong `steps` chưa có test (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog harness).
 - Test thật gọi Judge0 là test `live`, mặc định skip (backend/tests/test_api.py).
 
 ## Nguồn
 
 - API, middleware, ánh xạ kết quả: backend/app/main.py:23-153
 - `CodeRunner`, `Judge0Runner`, `runner_from_env`: backend/app/runner.py:20-136
-- Harness: backend/app/harness.py:1-120
-- Nội dung + lời giải tham chiếu: nguồn soạn backend/content/content.json; nạp backend/app/load_content.py:98-156; bảng backend/app/tables.py:18-108; đọc backend/app/content_api.py:42-171
+- Harness: backend/app/harness.py:1-180; case kịch bản backend/app/harness.py:48-87; kiểm lúc nạp backend/app/load_content.py:49-67
+- Nội dung + lời giải tham chiếu: nguồn soạn backend/content/content.json; nạp backend/app/load_content.py:74-205; bảng backend/app/tables.py:18-108; đọc backend/app/content_api.py:42-171
 - Kết nối DB: backend/app/db.py:11-26
 - Phía app: mobile/lib/data/judge_client.dart:57-149; tải nội dung mobile/lib/data/content_repository.dart:40-115
 - Quyết định và lý do: docs/DECISIONS.md mục "Chấm bài bằng Python thật qua backend", "Máy chấm qua interface `CodeRunner`", "Harness độc lập máy chấm"

@@ -36,7 +36,7 @@ def small() -> dict:
 
     def ex(i: str) -> dict:
         return {
-            "id": i, "title": i, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
+            "id": i, "title": i, "class_name": None, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
             "challenge": {
                 "statement": "s", "motivation": "m",
                 "small": {"caption": "c", "input": "f(1)", "output": "1", "note": None},
@@ -49,7 +49,7 @@ def small() -> dict:
     return {
         "version": "source",
         "themes": [{"id": "th", "name": "T", "description": "d", "tags": ["x"], "topics": [
-            {"id": "tp", "name": "N", "description": "d", "files": [
+            {"id": "tp", "name": "N", "description": "d", "modules": [], "files": [
                 {"id": "f1", "name": "a.py", "exercise_ids": ["e1", "e2"]},
                 {"id": "f2", "name": "b.py", "exercise_ids": ["e2"]},
             ]}]}],
@@ -60,8 +60,8 @@ def small() -> dict:
 def test_load_real_file(db_session, real_data):
     version = load_content(db_session, real_data)
     assert version.startswith("sha256:")
-    assert count(db_session, Theme) == 3
-    assert count(db_session, Exercise) == 5
+    assert count(db_session, Theme) == 4
+    assert count(db_session, Exercise) == 13
     assert db_session.scalar(select(func.count()).select_from(FileExercise).where(FileExercise.exercise_id == "split-chunks")) == 2
     assert db_session.get(ContentMeta, "version").value == version
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
@@ -97,6 +97,89 @@ def test_position_order_kept(db_session):
     assert files == ["e1", "e2"]
 
 
+def nested() -> dict:
+    """small() + cây module 3 tầng: tp → sub → leaf, và tp2 anh em; e2 là method của class."""
+    d = small()
+    d["themes"][0]["topics"][0]["modules"] = [
+        {"id": "sub", "name": "S", "description": "d", "files": [
+            {"id": "f3", "name": "svc.py", "exercise_ids": ["e2"]},
+        ], "modules": [
+            {"id": "leaf", "name": "L", "description": "d", "files": [], "modules": []},
+        ]},
+    ]
+    d["themes"][0]["topics"].append({"id": "tp2", "name": "N2", "description": "d", "files": [], "modules": []})
+    d["exercises"]["e2"]["class_name"] = "Svc"
+    d["exercises"]["e2"]["judge"]["cases"] = [{"call": "1", "expect": {"return": 1}}]  # bài method: case kịch bản
+    return d
+
+
+def test_nested_modules_stored_preorder_with_parent(db_session):
+    load_content(db_session, nested())
+    rows = db_session.execute(select(Topic.id, Topic.parent_id).order_by(Topic.position)).all()
+    assert [tuple(r) for r in rows] == [("tp", None), ("sub", "tp"), ("leaf", "sub"), ("tp2", None)]
+    assert db_session.get(CodeFile, "f3").topic_id == "sub"
+    assert db_session.get(Exercise, "e2").class_name == "Svc"
+    assert db_session.get(Exercise, "e1").class_name is None
+
+
+def test_sibling_order_kept_and_reload_replaces_tree(db_session):
+    d = nested()
+    sub = d["themes"][0]["topics"][0]["modules"][0]
+    sub["modules"].append({"id": "leaf2", "name": "L2", "description": "d", "files": [], "modules": []})
+    load_content(db_session, d)
+    load_content(db_session, copy.deepcopy(d))  # nạp lại cùng id: không lỗi FK/unique
+    order = db_session.scalars(select(Topic.id).order_by(Topic.position)).all()
+    assert order == ["tp", "sub", "leaf", "leaf2", "tp2"]
+
+    d2 = nested()
+    d2["themes"][0]["topics"][0]["modules"] = []  # bỏ cả nhánh sub
+    d2["exercises"]["e2"]["class_name"] = None
+    load_content(db_session, d2)
+    assert db_session.scalars(select(Topic.id).order_by(Topic.position)).all() == ["tp", "tp2"]
+    assert db_session.get(CodeFile, "f3") is None
+
+
+@pytest.mark.parametrize(
+    "case, msg",
+    [
+        ({"steps": ["x = ("], "call": "x", "expect": {"return": 1}}, "compile"),
+        ({"call": "1 +", "expect": {"return": 1}}, "compile"),
+        ({"call": "1", "expect": {}}, "return"),
+    ],
+)
+def test_scenario_case_checked_at_load(db_session, case, msg):
+    """Lỗi soạn case kịch bản bị chặn lúc nạp, không để người học thấy như lỗi code của mình."""
+    d = small()
+    d["exercises"]["e1"]["judge"]["cases"] = [case]
+    with pytest.raises(ValueError, match=msg):
+        load_content(db_session, d)
+
+
+def test_method_exercise_requires_scenario_cases(db_session):
+    d = small()
+    d["exercises"]["e1"]["class_name"] = "Svc"  # case `args` cũ → harness không chấm được
+    with pytest.raises(ValueError, match="bài method cần case dạng `call`"):
+        load_content(db_session, d)
+
+
+def test_duplicate_module_id_across_levels_rejected(db_session):
+    d = nested()
+    d["themes"][0]["topics"][0]["modules"][0]["modules"][0]["id"] = "tp"
+    with pytest.raises(ValueError, match="id topic trùng"):
+        load_content(db_session, d)
+
+
+@pytest.mark.parametrize("drop", ["modules", "class_name"])
+def test_new_keys_are_required(db_session, drop):
+    d = small()
+    if drop == "modules":
+        del d["themes"][0]["topics"][0]["modules"]
+    else:
+        del d["exercises"]["e1"]["class_name"]
+    with pytest.raises(ValueError, match=drop):
+        load_content(db_session, d)
+
+
 def test_removed_exercise_disappears(db_session, real_data):
     load_content(db_session, real_data)
     data = copy.deepcopy(real_data)
@@ -107,7 +190,7 @@ def test_removed_exercise_disappears(db_session, real_data):
                 f["exercise_ids"] = [i for i in f["exercise_ids"] if i != "like-post"]
     load_content(db_session, data)
     assert db_session.get(Exercise, "like-post") is None
-    assert count(db_session, Exercise) == 4
+    assert count(db_session, Exercise) == 12
     assert db_session.scalar(select(func.count()).select_from(Block).where(Block.exercise_id == "like-post")) == 0
 
 
@@ -156,8 +239,8 @@ def test_invalid_data_raises_and_keeps_db(db_session, real_data, make, msg):
     with pytest.raises(ValueError, match=msg):
         load_content(db_session, make())
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 5
-    assert count(db_session, Theme) == 3
+    assert count(db_session, Exercise) == 13
+    assert count(db_session, Theme) == 4
 
 
 def test_judge_solution_matches_legacy_exercises_json(real_data):
@@ -224,7 +307,7 @@ def test_wrong_shape_raises_with_path_and_keeps_db(db_session, real_data, mutate
         load_content(db_session, bad)
     assert path in str(err.value)
     assert db_session.get(ContentMeta, "version").value == old
-    assert count(db_session, Exercise) == 5
+    assert count(db_session, Exercise) == 13
     assert count(db_session, Block) == sum(len(e["blocks"]) for e in real_data["exercises"].values())
 
 

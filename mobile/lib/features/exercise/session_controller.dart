@@ -299,6 +299,7 @@ class SessionController extends Notifier<SessionState> {
 }
 
 final RegExp _assignmentPattern = RegExp(r'^([A-Za-z_]\w*)\s*=(?!=)');
+final RegExp _selfAttrPattern = RegExp(r'\bself\.([A-Za-z_]\w*)\s*=(?!=)');
 final RegExp _forLoopPattern = RegExp(r'^for\s+([A-Za-z_]\w*)\s+in\b');
 
 /// Định danh đã biết tại block [blockIndex]: tên hàm, tham số, tên biến GÁN /
@@ -323,6 +324,16 @@ List<String> knownIdentifiersFor(Exercise exercise, int blockIndex) {
   }
 
   collect(exercise.template);
+
+  final className = exercise.className;
+  if (className != null) {
+    identifiers
+      ..add('self')
+      ..add(className);
+    for (final m in _selfAttrPattern.allMatches(exercise.template)) {
+      identifiers.add(m.group(1)!);
+    }
+  }
 
   final upperBound = blockIndex < exercise.blocks.length
       ? blockIndex

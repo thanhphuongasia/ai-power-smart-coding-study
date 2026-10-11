@@ -134,8 +134,7 @@ class _ThemeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final exercises = [
-      for (final topic in theme.topics)
-        for (final file in topic.files) ...file.exercises,
+      for (final file in theme.allFiles) ...file.exercises,
     ];
     final total = totalBlocksIn(exercises);
     final done = completedBlocksIn(exercises, progress);

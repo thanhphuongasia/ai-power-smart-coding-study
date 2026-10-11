@@ -22,9 +22,16 @@ class TopicDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = ref.watch(progressProvider);
     final content = ref.watch(contentIndexProvider);
-    final located = _locateTopic(content, topicId);
+    final located = content.locateTopic(topicId);
+    if (located == null) {
+      throw StateError('Không tìm thấy topic với id: $topicId');
+    }
     final theme = located.theme;
     final topic = located.topic;
+    final breadcrumb = [
+      theme.name,
+      for (final m in content.modulePath(topicId)) m.name,
+    ].join(' › ');
 
     return Scaffold(
       body: SafeArea(
@@ -32,20 +39,34 @@ class TopicDetailScreen extends ConsumerWidget {
           children: [
             ScreenHeader(
               title: topic.name,
-              subtitle: '${theme.name} › ${topic.name}',
+              subtitle: breadcrumb,
               onBack: () => context.pop(),
             ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(AppSpace.s4),
                 children: [
+                  for (final module in topic.modules) ...[
+                    _ModuleCard(module: module),
+                    const SizedBox(height: AppSpace.s4),
+                  ],
                   for (final file in topic.files) ...[
                     _FileHeader(file: file, content: content),
                     const SizedBox(height: AppSpace.s2),
-                    for (final exercise in file.exercises) ...[
+                    for (var i = 0; i < file.exercises.length; i++) ...[
+                      if (file.exercises[i].className != null &&
+                          (i == 0 ||
+                              file.exercises[i - 1].className !=
+                                  file.exercises[i].className)) ...[
+                        _ClassHeader(
+                          fileId: file.id,
+                          className: file.exercises[i].className!,
+                        ),
+                        const SizedBox(height: AppSpace.s2),
+                      ],
                       ExerciseRow(
-                        exercise: exercise,
-                        progress: progress[exercise.id],
+                        exercise: file.exercises[i],
+                        progress: progress[file.exercises[i].id],
                       ),
                       const SizedBox(height: AppSpace.s2),
                     ],
@@ -61,20 +82,6 @@ class TopicDetailScreen extends ConsumerWidget {
   }
 }
 
-({StudyTheme theme, Topic topic}) _locateTopic(
-  Content content,
-  String topicId,
-) {
-  for (final theme in content.themes) {
-    for (final topic in theme.topics) {
-      if (topic.id == topicId) {
-        return (theme: theme, topic: topic);
-      }
-    }
-  }
-  throw StateError('Không tìm thấy topic với id: $topicId');
-}
-
 /// Tên file; nếu file còn được dùng ở theme khác thì hiện nhãn "Dùng ở N
 /// theme" và chạm để mở màn File cross-cut.
 class _FileHeader extends StatelessWidget {
@@ -86,8 +93,11 @@ class _FileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final themeCount =
-        content.locateFilesNamed(file.name).map((u) => u.theme.id).toSet().length;
+    final themeCount = content
+        .locateFilesNamed(file.name)
+        .map((u) => u.theme.id)
+        .toSet()
+        .length;
     final name = Text(file.name, style: AppText.code.copyWith(color: p.ink));
     if (themeCount < 2) return name;
 
@@ -119,6 +129,59 @@ class _FileHeader extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Thẻ module con: tên, mô tả, số bài (gồm cả module lồng bên trong).
+class _ModuleCard extends StatelessWidget {
+  const _ModuleCard({required this.module});
+
+  final Topic module;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = [for (final f in module.allFiles) ...f.exercises].length;
+    return SurfaceCard(
+      key: Key('module-${module.id}'),
+      onTap: () => context.push('/topic/${module.id}'),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(module.name, style: AppText.title),
+            if (module.description.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.s1),
+              Text(
+                module.description,
+                style: AppText.body.copyWith(color: context.palette.inkMuted),
+              ),
+            ],
+            const SizedBox(height: AppSpace.s2),
+            Text(
+              '$count bài tập',
+              style: AppText.caption.copyWith(color: context.palette.inkMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassHeader extends StatelessWidget {
+  const _ClassHeader({required this.fileId, required this.className});
+
+  final String fileId;
+  final String className;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'class $className',
+      key: Key('class-$fileId-$className'),
+      style: AppText.label.copyWith(color: context.palette.inkMuted),
     );
   }
 }

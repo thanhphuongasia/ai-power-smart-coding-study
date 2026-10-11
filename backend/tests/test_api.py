@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from tests.conftest import CONTENT_PATH
 
-from app.content_api import get_judge_lookup, read_judge
+from app.content_api import Judge, get_judge_lookup, read_judge
 from app.db import get_session
 from app.main import app, get_runner
 from app.runner import Execution, Judge0Runner, RunnerUnavailable
@@ -83,6 +83,29 @@ def test_reference_solution_passes(exercise_id):
     assert body["error"] is None
     assert body["tests"] and all(t["passed"] for t in body["tests"])
     assert set(body) == {"status", "error", "tests", "stdout", "duration_ms"}
+
+
+def test_run_forwards_class_name_and_grades_scenario():
+    judge = Judge("add", [{"steps": ["c = Counter()"], "call": "c.add(2)", "expect": {"return": 2}}],
+                  class_name="Counter")
+    app.dependency_overrides[get_judge_lookup] = lambda: (lambda i: judge)
+    code = "class Counter:\n    def __init__(self):\n        self.n = 0\n    def add(self, k):\n        self.n += k\n        return self.n\n"
+    body = post(client_with(LocalRunner()), code, "any").json()
+    assert body["status"] == "passed", body
+    bad = post(client_with(LocalRunner()), "def add(k):\n    return k\n", "any").json()
+    assert bad["status"] == "error" and "class Counter" in bad["error"]["message"]
+
+
+def test_run_old_exercise_sends_class_name_none():
+    seen = {}
+
+    class Spy:
+        async def run(self, source, stdin):
+            seen.update(json.loads(stdin))
+            return Execution("ok", "", "")
+
+    post(client_with(Spy()), SPLIT)
+    assert "class_name" in seen and seen["class_name"] is None
 
 
 def test_missing_return_fails_with_none():

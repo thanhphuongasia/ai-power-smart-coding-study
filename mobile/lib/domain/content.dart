@@ -48,23 +48,22 @@ class Content {
   /// Throw [StateError] nếu không có.
   Exercise exerciseById(String id) {
     for (final theme in themes) {
-      for (final topic in theme.topics) {
-        for (final file in topic.files) {
-          for (final exercise in file.exercises) {
-            if (exercise.id == id) return exercise;
-          }
+      for (final file in theme.allFiles) {
+        for (final exercise in file.exercises) {
+          if (exercise.id == id) return exercise;
         }
       }
     }
     throw StateError('Không tìm thấy exercise với id: $id');
   }
 
-  /// Tìm theme/topic/file chứa exercise [exerciseId]. Throw [StateError].
+  /// Tìm theme/topic/file chứa exercise [exerciseId]. `topic` là module chứa
+  /// trực tiếp file. Throw [StateError].
   ({StudyTheme theme, Topic topic, CodeFile file}) locateExercise(
     String exerciseId,
   ) {
     for (final theme in themes) {
-      for (final topic in theme.topics) {
+      for (final topic in theme.allTopics) {
         for (final file in topic.files) {
           for (final exercise in file.exercises) {
             if (exercise.id == exerciseId) {
@@ -77,15 +76,46 @@ class Content {
     throw StateError('Không tìm thấy exercise với id: $exerciseId');
   }
 
-  /// Mỗi id một lần, theo thứ tự theme → topic → file.
+  /// Tìm topic/module ở mọi độ sâu; null nếu không có.
+  ({StudyTheme theme, Topic topic})? locateTopic(String topicId) {
+    for (final theme in themes) {
+      for (final topic in theme.allTopics) {
+        if (topic.id == topicId) return (theme: theme, topic: topic);
+      }
+    }
+    return null;
+  }
+
+  /// Chuỗi từ topic cấp trên cùng xuống [topicId] (gồm cả hai đầu); rỗng nếu
+  /// không tìm thấy.
+  List<Topic> modulePath(String topicId) {
+    List<Topic>? walk(Topic t, List<Topic> path) {
+      final here = [...path, t];
+      if (t.id == topicId) return here;
+      for (final m in t.modules) {
+        final found = walk(m, here);
+        if (found != null) return found;
+      }
+      return null;
+    }
+
+    for (final theme in themes) {
+      for (final top in theme.topics) {
+        final found = walk(top, const []);
+        if (found != null) return found;
+      }
+    }
+    return const [];
+  }
+
+  /// Mỗi id một lần, theo thứ tự theme → topic (preorder) → file.
   List<Exercise> uniqueExercises() {
     final seen = <String>{};
     return [
       for (final theme in themes)
-        for (final topic in theme.topics)
-          for (final file in topic.files)
-            for (final exercise in file.exercises)
-              if (seen.add(exercise.id)) exercise,
+        for (final file in theme.allFiles)
+          for (final exercise in file.exercises)
+            if (seen.add(exercise.id)) exercise,
     ];
   }
 
@@ -95,7 +125,7 @@ class Content {
   ) {
     return [
       for (final theme in themes)
-        for (final topic in theme.topics)
+        for (final topic in theme.allTopics)
           for (final file in topic.files)
             if (file.name == fileName) (theme: theme, topic: topic, file: file),
     ];

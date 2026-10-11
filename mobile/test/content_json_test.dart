@@ -45,6 +45,7 @@ void expectExercise(Exercise a, Exercise b) {
 }
 
 void main() {
+  nestedTests();
   group('Content index trên content.json', () {
     test('exerciseById', () {
       for (final e in testContent.uniqueExercises()) {
@@ -58,7 +59,7 @@ void main() {
         final loc = testContent.locateExercise(e.id);
         expect(loc.file.exercises.any((x) => identical(x, e)), isTrue);
         expect(loc.topic.files, contains(loc.file));
-        expect(loc.theme.topics, contains(loc.topic));
+        expect(loc.theme.allTopics, contains(loc.topic));
       }
       expect(() => testContent.locateExercise('nope'), throwsStateError);
     });
@@ -237,5 +238,192 @@ void main() {
         ),
       ),
     );
+  });
+}
+
+/// Fixture lồng nhau: theme → topic "root" (file r.py) → module "mod" (file
+/// m.py: bài a, b có class_name) → module "deep" (file d.py).
+Map<String, dynamic> _ex(String id, String? cls) => {
+  'id': id,
+  'title': id,
+  'function_name': 'fn_$id',
+  'class_name': cls,
+  'params': <String>[],
+  'template': '',
+  'challenge': {
+    'statement': '',
+    'motivation': '',
+    'small': {'caption': '', 'input': '', 'output': '', 'note': null},
+    'project': {'caption': '', 'input': '', 'output': '', 'note': null},
+  },
+  'blocks': <Map<String, dynamic>>[],
+};
+
+Map<String, dynamic> nestedJson() => {
+  'version': 'n1',
+  'themes': [
+    {
+      'id': 'th',
+      'name': 'Theme',
+      'description': '',
+      'tags': <String>[],
+      'topics': [
+        {
+          'id': 'root',
+          'name': 'Root',
+          'description': '',
+          'files': [
+            {
+              'id': 'f-r',
+              'name': 'r.py',
+              'exercise_ids': ['r1'],
+            },
+          ],
+          'modules': [
+            {
+              'id': 'mod',
+              'name': 'Mod',
+              'description': '',
+              'files': [
+                {
+                  'id': 'f-m',
+                  'name': 'm.py',
+                  'exercise_ids': ['a', 'b'],
+                },
+              ],
+              'modules': [
+                {
+                  'id': 'deep',
+                  'name': 'Deep',
+                  'description': '',
+                  'files': [
+                    {
+                      'id': 'f-d',
+                      'name': 'd.py',
+                      'exercise_ids': ['d1'],
+                    },
+                  ],
+                  'modules': <Map<String, dynamic>>[],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          'id': 'second',
+          'name': 'Second',
+          'description': '',
+          'files': <Map<String, dynamic>>[],
+          'modules': <Map<String, dynamic>>[],
+        },
+      ],
+    },
+  ],
+  'exercises': {
+    'r1': _ex('r1', null),
+    'a': _ex('a', 'FlightService'),
+    'b': _ex('b', 'FlightService'),
+    'd1': _ex('d1', null),
+  },
+};
+
+void nestedTests() {
+  group('module lồng nhau + class_name', () {
+    final c = Content.fromJson(nestedJson());
+
+    test('allTopics preorder, allFiles, uniqueExercises', () {
+      final th = c.themes.single;
+      expect(th.allTopics.map((t) => t.id), ['root', 'mod', 'deep', 'second']);
+      expect(th.allFiles.map((f) => f.id), ['f-r', 'f-m', 'f-d']);
+      expect(th.topics.first.allFiles.map((f) => f.id), ['f-r', 'f-m', 'f-d']);
+      expect(c.uniqueExercises().map((e) => e.id), ['r1', 'a', 'b', 'd1']);
+      expect(c.exerciseById('d1').id, 'd1');
+    });
+
+    test('locateExercise: topic là module chứa trực tiếp file', () {
+      final loc = c.locateExercise('b');
+      expect(loc.topic.id, 'mod');
+      expect(loc.file.id, 'f-m');
+      expect(loc.theme.id, 'th');
+      expect(c.locateExercise('d1').topic.id, 'deep');
+      expect(c.locateFilesNamed('d.py').single.topic.id, 'deep');
+    });
+
+    test('locateTopic và modulePath', () {
+      expect(c.locateTopic('deep')?.topic.id, 'deep');
+      expect(c.locateTopic('deep')?.theme.id, 'th');
+      expect(c.locateTopic('root')?.topic.id, 'root');
+      expect(c.locateTopic('nope'), isNull);
+      expect(c.modulePath('deep').map((t) => t.id), ['root', 'mod', 'deep']);
+      expect(c.modulePath('root').map((t) => t.id), ['root']);
+      expect(c.modulePath('second').map((t) => t.id), ['second']);
+      expect(c.modulePath('nope'), isEmpty);
+    });
+
+    test('qualifiedName', () {
+      expect(c.exerciseById('a').qualifiedName, 'FlightService.fn_a');
+      expect(c.exerciseById('r1').className, isNull);
+      expect(c.exerciseById('r1').qualifiedName, 'fn_r1');
+    });
+
+    test('toJson round trip giữ modules và class_name', () {
+      final j = jsonDecode(jsonEncode(c.toJson())) as Map<String, dynamic>;
+      expect(jsonEncode(j), jsonEncode(nestedJson()));
+      final back = Content.fromJson(j);
+      expect(back.modulePath('deep').length, 3);
+      expect(back.exerciseById('a').className, 'FlightService');
+    });
+
+    test('thiếu modules → FormatException nêu field', () {
+      final j = nestedJson();
+      (((j['themes'] as List).first as Map)['topics'] as List).first.remove(
+        'modules',
+      );
+      expect(
+        () => Content.fromJson(j),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('modules'),
+          ),
+        ),
+      );
+    });
+
+    test('modules sai kiểu → FormatException', () {
+      final j = nestedJson();
+      (((j['themes'] as List).first as Map)['topics'] as List)
+              .first['modules'] =
+          'x';
+      expect(() => Content.fromJson(j), throwsFormatException);
+    });
+
+    test('thiếu hoặc sai kiểu class_name → FormatException nêu field', () {
+      final j = nestedJson();
+      ((j['exercises'] as Map)['a'] as Map).remove('class_name');
+      expect(
+        () => Content.fromJson(j),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('class_name'),
+          ),
+        ),
+      );
+      final j2 = nestedJson();
+      ((j2['exercises'] as Map)['a'] as Map)['class_name'] = 5;
+      expect(
+        () => Content.fromJson(j2),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('class_name'),
+          ),
+        ),
+      );
+    });
   });
 }

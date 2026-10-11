@@ -374,3 +374,77 @@ chuyển tới Judge0 công khai nên IP VPS có thể bị chặn; HTTP thườ
 
 **Nguồn**: deploy/deploy.sh:1-108; deploy/README.md:11-41; planning/crew/2026-10-11-deploy-vps-web/DEVIATIONS.md,
 reviews/SEAM.md.
+### Module lồng nhau = `topics.parent_id` + `position` theo thứ tự duyệt trước (preorder)
+
+**Quyết định**: module con là hàng `topics` tự tham chiếu qua `parent_id` (FK về `topics.id`, CASCADE, nullable);
+`content.json` thêm key `modules` (đệ quy, rỗng = `[]`) vào mỗi topic. `position` là số thứ tự preorder (cha trước con)
+trong cả theme, nên ràng buộc unique `(theme_id, position)` giữ nguyên. Tên bảng/route (`theme`, `topic`) không đổi.
+
+**Vì sao**: `/content` vẫn đọc topics bằng một SELECT rồi ghép cha–con trong bộ nhớ, số query không tăng; không cần
+truy vấn đệ quy hay bảng phụ. Đổi tên bảng/route chỉ để khớp từ "module" tốn nhiều hơn lợi.
+
+**Đánh đổi đã chấp nhận**: thứ tự anh em chỉ đúng nếu loader là nơi duy nhất ghi; `/content` không kiểm module con
+cùng theme với cha (sửa DB tay có thể sai). Client mất vòng lặp 4 tầng cố định: mọi chỗ duyệt cây phải đi qua
+`Theme.allFiles`/`allTopics`/`Topic.allModules`.
+
+**Nguồn**: backend/app/tables.py:5,31-41; backend/app/load_content.py:42-46,184-191; backend/app/content_api.py:72-80,95-107;
+mobile/lib/domain/models.dart:60-75,116-135; planning/crew/2026-10-11-project-tree-airline/PLAN.md (Quyết định thiết kế 1).
+
+### `class_name` là thuộc tính của bài, không phải bảng
+
+**Quyết định**: bài method mang `exercises.class_name` (nullable; `null` = hàm rời). Template của bài chứa cả khung class
+(method khác là code khoá). Màn Topic nhóm bài theo class bằng cách so `className` của hai bài liền kề. Mở khoá/bài kế
+vẫn theo file, class chỉ là nhóm hiển thị.
+
+**Vì sao**: đơn giản nhất mà đủ cho "file → class → method"; chưa có dữ liệu nào cần gắn vào class ngoài tên. Tách bảng
+`classes` khi có nhu cầu thật (vd metadata riêng cho class).
+
+**Đánh đổi đã chấp nhận**: tên class lặp ở nhiều bài; hai bài cùng class nhưng không liền kề sẽ có hai tiêu đề class.
+
+**Nguồn**: backend/app/tables.py:67; backend/app/content_schema.py:52; mobile/lib/domain/models.dart:316-320;
+mobile/lib/features/browse/topic_detail_screen.dart:55-64; PLAN.md (Quyết định thiết kế 2, 5).
+
+### Case chấm dạng kịch bản (`steps`/`call`/`expect return|raises`) và kiểm lúc nạp
+
+**Quyết định**: ngoài hai dạng case `args`, harness nhận case kịch bản `{steps?, call, expect}` với `expect` là
+`{"return": v}` hoặc `{"raises": "TênLỗi"}`. Mỗi case chạy `exec` các step rồi `eval` `call` trong bản sao nông của
+namespace; `raises` so tên trong MRO của exception. Payload `/run` thêm `class_name`; harness báo "Không tìm thấy
+class/method" nếu thiếu. `load_content.validate` chặn trước: step/call phải compile được, `expect` phải có `return`
+hoặc `raises`, và bài có `class_name` chỉ được có case dạng `call`.
+
+**Vì sao**: method cần đối tượng đã dựng nên không gọi được bằng `func(*args)`. Lỗi soạn bài mà lọt tới harness sẽ hiện
+cho người học như thể code của họ sai, nên bắt ở lúc nạp. `steps`/`call` là nội dung do tác giả viết trong DB, không
+bao giờ đến từ client.
+
+**Đánh đổi đã chấp nhận**: bản sao nông nên thuộc tính gán lên class rò giữa các case (chưa có test); `SystemExit` trong
+`steps` chưa test. Case `expect.raises` không dừng bài, khác case `return` ném exception (dừng).
+
+**Nguồn**: backend/app/harness.py:48-87,123-148; backend/app/main.py:118-125; backend/app/load_content.py:49-67,111-117;
+backend/app/content_api.py:29,164; PLAN.md (Quyết định thiết kế 3), STATUS.md (Backlog harness).
+
+### Vị trí ô (hàm/method/class) suy từ template, không lưu
+
+**Quyết định**: nhãn "trong hàm / trong method / trong class" ở tiêu đề ô do `cellLocation` suy từ template: tìm dòng
+marker, lấy dòng cha gần nhất có thụt lề nhỏ hơn rồi phân loại. Thay cách cũ ánh xạ từ `indent_level` (sai cho method
+vì thân method đã ở indent 2). `indent_level` vẫn còn như metadata.
+
+**Vì sao**: template đã chứa toàn bộ cấu trúc nên không cần dữ liệu thứ hai có thể lệch với nó.
+
+**Đánh đổi đã chấp nhận**: heuristic thụt lề sai ở ca lạ (comment `#` thụt ít hơn, `async for/with`, header nhiều dòng,
+`self.x` gán ở ô trước); nhãn không kèm tên method cho vừa tiêu đề ô 375px.
+
+**Nguồn**: mobile/lib/domain/merge.dart:135-175; mobile/lib/features/exercise/code_tab.dart:444;
+mobile/lib/features/exercise/cell_editor_page.dart:18,113; DEVIATIONS.md của run (dòng "nhãn vị trí").
+
+### Hạ cấp migration 0002 mất dữ liệu cây/class: chấp nhận
+
+**Quyết định**: `downgrade` của migration 0002 bỏ `topics.parent_id` và `exercises.class_name`, không bảo toàn quan hệ cha–con
+hay tên class.
+
+**Vì sao**: bảng nội dung chỉ là bản dẫn xuất của `backend/content/content.json`; chạy lại `python -m app.load_content` là có
+lại đủ. Bảo toàn dữ liệu ở downgrade là công sức cho thứ tái tạo được.
+
+**Đánh đổi đã chấp nhận**: hạ cấp rồi quên nạp lại thì cây mất tầng. Không áp cho dữ liệu không dẫn xuất từ file (nếu sau
+này bảng nội dung có dữ liệu nhập tay thì quyết định này phải xét lại).
+
+**Nguồn**: backend/migrations/versions/0002_module_tree_class.py:22-35.

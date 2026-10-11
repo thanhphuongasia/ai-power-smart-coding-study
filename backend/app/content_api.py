@@ -25,6 +25,8 @@ router = APIRouter()
 class Judge:
     function: str
     cases: list
+    # Khác None: `function` là method của class này (harness kiểm class + method).
+    class_name: str | None = None
 
 
 class ContentNotLoaded(Exception):
@@ -67,9 +69,14 @@ def _read_tree(session: Session) -> dict:
     exercises = {e.id: e for e in session.scalars(select(Exercise)).all()}
     blocks = session.scalars(select(Block).order_by(Block.position)).all()
 
+    # Module cấp 1 theo theme, sub-module theo cha; `position` preorder nên anh em giữ đúng thứ tự.
     topics_by_theme: dict[str, list[Topic]] = defaultdict(list)
+    children: dict[str, list[Topic]] = defaultdict(list)
     for topic in topics:
-        topics_by_theme[topic.theme_id].append(topic)
+        if topic.parent_id is None:
+            topics_by_theme[topic.theme_id].append(topic)
+        else:
+            children[topic.parent_id].append(topic)
     files_by_topic: dict[str, list[CodeFile]] = defaultdict(list)
     for code_file in files:
         files_by_topic[code_file.topic_id].append(code_file)
@@ -82,19 +89,26 @@ def _read_tree(session: Session) -> dict:
 
     # Bài theo thứ tự xuất hiện đầu tiên trong cây (khớp uniqueExercises ở app); bài không thuộc
     # file nào xếp cuối theo id.
+    # file của module trước, rồi tới sub-module (cùng thứ tự với Topic.allFiles ở app).
     ordered_ids: list[str] = []
+
+    def topic_payload(topic: Topic) -> dict:
+        payload_files = []
+        for code_file in files_by_topic[topic.id]:
+            ids = exercise_ids_by_file[code_file.id]
+            ordered_ids.extend(i for i in ids if i not in ordered_ids)
+            payload_files.append({"id": code_file.id, "name": code_file.name, "exercise_ids": ids})
+        return {
+            "id": topic.id,
+            "name": topic.name,
+            "description": topic.description,
+            "files": payload_files,
+            "modules": [topic_payload(child) for child in children[topic.id]],
+        }
+
     payload_themes = []
     for theme in themes:
-        payload_topics = []
-        for topic in topics_by_theme[theme.id]:
-            payload_files = []
-            for code_file in files_by_topic[topic.id]:
-                ids = exercise_ids_by_file[code_file.id]
-                ordered_ids.extend(i for i in ids if i not in ordered_ids)
-                payload_files.append({"id": code_file.id, "name": code_file.name, "exercise_ids": ids})
-            payload_topics.append(
-                {"id": topic.id, "name": topic.name, "description": topic.description, "files": payload_files}
-            )
+        payload_topics = [topic_payload(topic) for topic in topics_by_theme[theme.id]]
         payload_themes.append(
             {
                 "id": theme.id,
@@ -116,6 +130,7 @@ def _exercise_payload(exercise: Exercise, blocks: list[Block]) -> dict:
     return {
         "id": exercise.id,
         "title": exercise.title,
+        "class_name": exercise.class_name,
         "function_name": exercise.function_name,
         "params": exercise.params,
         "template": exercise.template,
@@ -146,7 +161,7 @@ def read_judge(session: Session, exercise_id: str) -> Judge | None:
         if _version(session) is None:
             raise ContentNotLoaded()
         return None
-    return Judge(function=exercise.function_name, cases=exercise.judge_cases)
+    return Judge(function=exercise.function_name, cases=exercise.judge_cases, class_name=exercise.class_name)
 
 
 JudgeLookup = Callable[[str], "Judge | None"]

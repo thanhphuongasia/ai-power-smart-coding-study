@@ -10,6 +10,7 @@ import 'support/content_fixture.dart';
 final content = testContent;
 
 void main() {
+  nestedProgressionTests();
   group('isExerciseUnlocked', () {
     test('overlap-chunks khoá khi split-chunks chưa pass, mở khi đã pass', () {
       expect(isExerciseUnlocked(content, 'overlap-chunks', {}), isFalse);
@@ -179,6 +180,71 @@ void main() {
       expect(progress['clean-text']?.passed, isTrue);
       expect(progress['overlap-chunks']?.drafts['A'], 'draft');
       expect(container.read(exerciseUnlockedProvider('brand-new')), isTrue);
+    });
+  });
+}
+
+// Module lồng nhau: bài trong sub-module khoá/mở theo quy tắc per-file.
+void nestedProgressionTests() {
+  Exercise ex(String id) => Exercise(
+    id: id,
+    title: id,
+    functionName: 'fn_$id',
+    className: 'Svc',
+    params: const [],
+    blocks: const [],
+  );
+  final a = ex('a'), b = ex('b'), c = ex('c');
+  final nested = Content(
+    version: 'n',
+    themes: [
+      StudyTheme(
+        id: 't',
+        name: 't',
+        description: '',
+        tags: const [],
+        topics: [
+          Topic(
+            id: 'root',
+            name: 'root',
+            description: '',
+            files: const [],
+            modules: [
+              Topic(
+                id: 'mod',
+                name: 'mod',
+                description: '',
+                files: [
+                  CodeFile(id: 'f', name: 'f.py', exercises: [a, b, c]),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+
+  group('bài trong sub-module', () {
+    test('isExerciseUnlocked theo thứ tự trong file', () {
+      expect(isExerciseUnlocked(nested, 'a', {}), isTrue);
+      expect(isExerciseUnlocked(nested, 'b', {}), isFalse);
+      expect(isExerciseUnlocked(nested, 'b', {'a'}), isTrue);
+      expect(isExerciseUnlocked(nested, 'c', {'a'}), isFalse);
+    });
+
+    test('nextExerciseAfter', () {
+      expect(nextExerciseAfter(nested, 'a')?.id, 'b');
+      expect(nextExerciseAfter(nested, 'c'), isNull);
+    });
+
+    test('inProgressExerciseProvider thấy bài trong sub-module', () {
+      final container = ProviderContainer(
+        overrides: [contentIndexProvider.overrideWithValue(nested)],
+      );
+      addTearDown(container.dispose);
+      container.read(progressProvider.notifier).saveDraft('b', 'A', 'x = 1');
+      expect(container.read(inProgressExerciseProvider)?.id, 'b');
     });
   });
 }

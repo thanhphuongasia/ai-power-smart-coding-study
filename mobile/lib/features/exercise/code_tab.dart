@@ -441,7 +441,7 @@ class _CodeTabState extends ConsumerState<CodeTab>
     final p = context.palette;
     final isEmpty = _emptyLabels.contains(label);
     final used = progress?.hintsUsed[label] ?? 0;
-    final where = cellWhere(b);
+    final where = cellWhere(_exercise, b);
     final prompt = _runCount > 0 ? '[$_runCount]:' : '[ ]:';
 
     return Column(

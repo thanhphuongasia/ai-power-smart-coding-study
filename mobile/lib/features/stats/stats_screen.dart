@@ -92,10 +92,10 @@ class StatsScreen extends ConsumerWidget {
                         label: topic.name,
                         caption: theme.name,
                         done: completedBlocksIn([
-                          for (final f in topic.files) ...f.exercises,
+                          for (final f in topic.allFiles) ...f.exercises,
                         ], progress),
                         total: totalBlocksIn([
-                          for (final f in topic.files) ...f.exercises,
+                          for (final f in topic.allFiles) ...f.exercises,
                         ]),
                       ),
                       const SizedBox(height: AppSpace.s4),

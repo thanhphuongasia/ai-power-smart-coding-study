@@ -45,6 +45,48 @@ def _call_repr(function, args):
     return "%s(%s)" % (function, ", ".join(map(repr, args)))
 
 
+def _run_scenario(case, namespace, tests):
+    """Chạy một case dạng kịch bản trong bản sao nông của namespace. Thêm 1 test vào `tests`.
+    Trả error dict nếu phải dừng (exception ngoài kỳ vọng với expect.return), ngược lại None."""
+    steps = list(case.get("steps") or [])
+    call_expr = case["call"]
+    expect = case["expect"]
+    label = "; ".join([*steps, call_expr])
+    # Filename "<case>" để _runtime_error chỉ lấy frame nằm trong solution.py.
+    compiled_steps = [compile(st, "<case>", "exec") for st in steps]
+    compiled_call = compile(call_expr, "<case>", "eval")
+    scope = dict(namespace)  # mỗi case một bản sao mới: state không rò giữa các case
+    raised = None
+    value = None
+    try:
+        for st in compiled_steps:
+            exec(st, scope)
+        value = eval(compiled_call, scope)
+    except (Exception, SystemExit) as e:
+        raised = e
+
+    if "raises" in expect:
+        want = expect["raises"]
+        expected_label = "raises %s" % want
+        if raised is None:
+            tests.append({"call": label, "expected": expected_label,
+                          "actual": repr(value), "passed": False})
+        else:
+            names = {c.__name__ for c in type(raised).__mro__}
+            tests.append({"call": label, "expected": expected_label,
+                          "actual": "raises %s" % type(raised).__name__,
+                          "passed": want in names})
+        return None
+
+    expected_repr = repr(expect["return"])
+    if raised is not None:
+        tests.append({"call": label, "expected": expected_repr, "actual": None, "passed": False})
+        return _runtime_error(raised)
+    tests.append({"call": label, "expected": expected_repr, "actual": repr(value),
+                  "passed": bool(value == expect["return"])})
+    return None
+
+
 def run(payload):
     """Trả dict kết quả (chưa gồm tiền tố)."""
     code = payload["code"]
@@ -78,13 +120,33 @@ def run(payload):
             error = _runtime_error(e)
             return finish()
 
-        func = namespace.get(function)
-        if not callable(func):
-            error = {"kind": "runtime", "line": None,
-                     "message": "Không tìm thấy hàm %s() trong code" % function}
-            return finish()
+        class_name = payload.get("class_name")
+        func = None
+        if class_name:
+            cls = namespace.get(class_name)
+            if not isinstance(cls, type):
+                error = {"kind": "runtime", "line": None,
+                         "message": "Không tìm thấy class %s trong code" % class_name}
+                return finish()
+            if not callable(getattr(cls, function, None)):
+                error = {"kind": "runtime", "line": None,
+                         "message": "Không tìm thấy method %s.%s() trong code" % (class_name, function)}
+                return finish()
+        else:
+            func = namespace.get(function)
+            if not callable(func):
+                error = {"kind": "runtime", "line": None,
+                         "message": "Không tìm thấy hàm %s() trong code" % function}
+                return finish()
 
         for case in cases:
+            if "call" in case:
+                # `steps`/`call` do tác giả bài viết trong content DB, không bao giờ đến từ client.
+                outcome = _run_scenario(case, namespace, tests)
+                if outcome is not None:
+                    error = outcome
+                    return finish()
+                continue
             args = case["args"]
             expect = case["expect"]
             call = _call_repr(function, args)
