@@ -42,70 +42,68 @@ Finder _status(String id, String text) => find.descendant(
 );
 
 void main() {
-  testWidgets(
-    'Home → continue-card → tab Code → gõ 3 ô → Run passed → '
-    'split-chunks Đã xong, overlap-chunks mở khoá',
-    (tester) async {
-      final judge = _FakeJudge();
-      final clock = DateTime(2024, 1, 1, 9);
-      await tester.binding.setSurfaceSize(const Size(420, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      appRouter.go('/');
+  testWidgets('Home → continue-card → tab Code → gõ 3 ô → Run passed → '
+      'split-chunks Đã xong, overlap-chunks mở khoá', (tester) async {
+    final judge = _FakeJudge();
+    final clock = DateTime(2024, 1, 1, 9);
+    await tester.binding.setSurfaceSize(const Size(420, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    appRouter.go('/');
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...contentOverrides,
-            clockProvider.overrideWithValue(() => clock),
-            judgeClientProvider.overrideWithValue(judge),
-          ],
-          child: const SmartCodingStudyApp(),
-        ),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...contentOverrides,
+          clockProvider.overrideWithValue(() => clock),
+          judgeClientProvider.overrideWithValue(judge),
+        ],
+        child: const SmartCodingStudyApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Bắt đầu ở Home.
+    expect(find.byKey(const Key('continue-card')), findsOneWidget);
+
+    // Chạm 1: continue-card → ExerciseScreen. Bài có draft nên mở thẳng
+    // tab Code.
+    await tester.tap(find.byKey(const Key('continue-card')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('exercise-title')), findsOneWidget);
+    expect(find.byKey(const Key('run-button')), findsOneWidget);
+
+    // Draft seed đã có ô A đúng ⇒ A thu gọn, B mở. Gõ B đúng thì C tự mở.
+    final exercise = testContent.exerciseById('split-chunks');
+    expect(find.byKey(const Key('cell-A-collapsed')), findsOneWidget);
+    for (final b in exercise.blocks.skip(1)) {
+      await tester.enterText(
+        find.byKey(Key('cell-${b.label}-field')),
+        b.acceptedAnswers.first,
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+    }
 
-      // Bắt đầu ở Home.
-      expect(find.byKey(const Key('continue-card')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('run-button')));
+    await tester.pumpAndSettle();
+    expect(judge.calls, hasLength(1));
+    expect(find.byKey(const Key('next-exercise')), findsOneWidget);
 
-      // Chạm 1: continue-card → ExerciseScreen. Bài có draft nên mở thẳng
-      // tab Code.
-      await tester.tap(find.byKey(const Key('continue-card')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('exercise-title')), findsOneWidget);
-      expect(find.byKey(const Key('run-button')), findsOneWidget);
+    // Về Home: bài đã xong nên không còn "đang dở".
+    await tester.tap(find.byKey(const Key('exercise-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('continue-card')), findsNothing);
 
-      // Gõ cả 3 ô bằng đáp án đúng.
-      final exercise = testContent.exerciseById('split-chunks');
-      for (final b in exercise.blocks) {
-        await tester.enterText(
-          find.byKey(Key('cell-${b.label}-field')),
-          b.acceptedAnswers.first,
-        );
-        await tester.pump();
-      }
+    // Topic Chunking: split-chunks Đã xong, overlap-chunks không còn khoá.
+    await tester.tap(find.byKey(const Key('theme-rag')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('topic-rag-chunking')));
+    await tester.pumpAndSettle();
+    expect(_status('split-chunks', 'Đã xong'), findsOneWidget);
+    expect(_status('overlap-chunks', 'Khoá'), findsNothing);
+    expect(_status('overlap-chunks', 'Mới'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('run-button')));
-      await tester.pumpAndSettle();
-      expect(judge.calls, hasLength(1));
-      expect(find.byKey(const Key('next-exercise')), findsOneWidget);
-
-      // Về Home: bài đã xong nên không còn "đang dở".
-      await tester.tap(find.byKey(const Key('exercise-back')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('continue-card')), findsNothing);
-
-      // Topic Chunking: split-chunks Đã xong, overlap-chunks không còn khoá.
-      await tester.tap(find.byKey(const Key('theme-rag')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('topic-rag-chunking')));
-      await tester.pumpAndSettle();
-      expect(_status('split-chunks', 'Đã xong'), findsOneWidget);
-      expect(_status('overlap-chunks', 'Khoá'), findsNothing);
-      expect(_status('overlap-chunks', 'Mới'), findsOneWidget);
-
-      // Dọn timer debounce 5s của flutter_code_editor.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 6));
-    },
-  );
+    // Dọn timer debounce 5s của flutter_code_editor.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
 }

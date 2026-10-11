@@ -1,5 +1,8 @@
 /// Tab Code: notebook kiểu Jupyter — ô khoá "có sẵn" xen kẽ ô TODO, Run tất
 /// cả → ghép ô → judge → kết quả (Out) → "Bài tiếp theo".
+///
+/// Ô TODO mở lần lượt: ô sau khoá tới khi ô trước khớp đáp án mẫu; ô khớp tự
+/// thu gọn thành một dòng và ô kế mở ra. Chỉ một ô mở (accordion).
 library;
 
 import 'package:flutter/material.dart';
@@ -42,6 +45,9 @@ class _CodeTabState extends ConsumerState<CodeTab>
   /// Ô đang/đã focus gần nhất — nút Gợi ý nhắm vào ô này.
   late String _activeLabel;
 
+  /// Ô đang mở editor; null = mọi ô thu gọn.
+  String? _open;
+
   bool _running = false;
   int _runCount = 0;
   JudgeResult? _result;
@@ -61,14 +67,54 @@ class _CodeTabState extends ConsumerState<CodeTab>
     for (final b in _exercise.blocks) {
       _cells[b.label] = drafts[b.label] ?? '';
       final node = FocusNode(debugLabel: 'cell-${b.label}');
+      // Rebuild mỗi lần đổi focus: thanh phím chỉ hiện khi có ô đang gõ.
       node.addListener(() {
-        if (node.hasFocus && _activeLabel != b.label && mounted) {
-          setState(() => _activeLabel = b.label);
-        }
+        if (!mounted) return;
+        setState(() {
+          if (node.hasFocus) _activeLabel = b.label;
+        });
       });
       _focus[b.label] = node;
     }
-    _activeLabel = _exercise.blocks.first.label;
+    _open = _frontier();
+    _activeLabel = _open ?? _exercise.blocks.first.label;
+  }
+
+  /// Ô khớp một đáp án mẫu (cùng chuẩn hoá với `_recheck`).
+  bool _isDone(Block b) {
+    final mine = normalizeCode(_cells[b.label] ?? '');
+    return mine.isNotEmpty &&
+        b.acceptedAnswers.any((a) => normalizeCode(a) == mine);
+  }
+
+  /// Bài đã từng passed → mở hết (cách viết khác đáp án mẫu vẫn sửa được).
+  bool get _passedBefore =>
+      ref.read(progressProvider)[_exercise.id]?.passed ?? false;
+
+  /// Ô mở được khi mọi ô đứng trước đã xong.
+  bool _unlocked(Block b) {
+    if (_passedBefore) return true;
+    for (final x in _exercise.blocks) {
+      if (x.label == b.label) return true;
+      if (!_isDone(x)) return false;
+    }
+    return true;
+  }
+
+  /// Ô chưa xong đầu tiên (chỗ người học đang làm); null = xong hết.
+  String? _frontier() {
+    for (final b in _exercise.blocks) {
+      if (!_isDone(b)) return b.label;
+    }
+    return null;
+  }
+
+  void _toggle(String label) {
+    _activity();
+    setState(() {
+      _open = _open == label ? null : label;
+      if (_open != null) _activeLabel = label;
+    });
   }
 
   @override
@@ -85,11 +131,32 @@ class _CodeTabState extends ConsumerState<CodeTab>
       ref.read(sessionProvider(_exercise.id).notifier).activity();
 
   void _onCellChanged(String label, String code) {
+    final block = _block(label);
+    final wasDone = _isDone(block);
     _cells[label] = code;
     ref.read(progressProvider.notifier).saveDraft(_exercise.id, label, code);
     if (_emptyLabels.contains(label)) {
       setState(() => _emptyLabels = {..._emptyLabels}..remove(label));
     }
+    final done = _isDone(block);
+    if (done == wasDone) return;
+    setState(() {}); // ✓ / khoá các ô sau đổi theo
+    if (done && _open == label) _advanceFrom(label);
+  }
+
+  /// Ô vừa xong: thu gọn nó, mở và focus ô chưa xong kế tiếp.
+  void _advanceFrom(String label) {
+    final blocks = _exercise.blocks;
+    final after = blocks.skip(blocks.indexWhere((b) => b.label == label) + 1);
+    final next = after.where((b) => !_isDone(b)).firstOrNull;
+    setState(() {
+      _open = next?.label;
+      if (next != null) _activeLabel = next.label;
+    });
+    if (next == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus[next.label]!.requestFocus();
+    });
   }
 
   Block _block(String label) =>
@@ -104,6 +171,8 @@ class _CodeTabState extends ConsumerState<CodeTab>
     ];
     if (empties.isNotEmpty) {
       setState(() {
+        _open = _frontier() ?? empties.first;
+        _activeLabel = _open!;
         _emptyLabels = empties.toSet();
         _result = null;
         _merged = null;
@@ -205,12 +274,13 @@ class _CodeTabState extends ConsumerState<CodeTab>
     final labels = _exercise.blocks.map((b) => b.label).toList();
     final known = knownIdentifiersFor(_exercise, _exercise.blocks.length);
     final vocab = {for (final b in _exercise.blocks) ...b.vocab}.toList();
+    final typing = _focus.values.any((n) => n.hasFocus);
     var promptNo = 0;
 
     return Column(
       children: [
         Expanded(
-          // Ít ô nên dựng hết một lượt (không lazy) → mọi ô luôn có editor.
+          // Ít ô nên dựng hết một lượt (không lazy); chỉ ô đang mở có editor.
           child: SingleChildScrollView(
             key: const Key('code-scroll'),
             controller: _scroll,
@@ -275,11 +345,13 @@ class _CodeTabState extends ConsumerState<CodeTab>
             ),
           ),
         ),
-        CodeToolbar(
-          controller: _toolbar,
-          knownIdentifiers: known,
-          vocab: vocab,
-        ),
+        // Không ô nào focus thì phím bị vô hiệu → ẩn cho code có chỗ.
+        if (typing)
+          CodeToolbar(
+            controller: _toolbar,
+            knownIdentifiers: known,
+            vocab: vocab,
+          ),
         Container(
           padding: const EdgeInsets.all(AppSpace.s2),
           decoration: BoxDecoration(
@@ -355,9 +427,19 @@ class _CodeTabState extends ConsumerState<CodeTab>
   }
 
   Widget _todoCell(BuildContext context, Block b, ExerciseProgress? progress) {
-    final p = context.palette;
     final label = b.label;
     final isError = _errorLabel == label;
+    if (!isError && _open != label) {
+      return _CollapsedCell(
+        block: b,
+        code: _cells[label] ?? '',
+        done: _isDone(b),
+        unlocked: _unlocked(b),
+        lockedBy: _frontier(),
+        onTap: () => _toggle(label),
+      );
+    }
+    final p = context.palette;
     final isEmpty = _emptyLabels.contains(label);
     final used = progress?.hintsUsed[label] ?? 0;
     final where = b.indentLevel >= 2
@@ -371,27 +453,38 @@ class _CodeTabState extends ConsumerState<CodeTab>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 52, bottom: AppSpace.s1),
-          child: Row(
-            children: [
-              LabelTag(label),
-              const SizedBox(width: AppSpace.s2),
-              Flexible(
-                child: Text(
-                  b.title,
-                  style: AppText.label,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (where.isNotEmpty) ...[
+        InkWell(
+          key: Key('cell-$label-header'),
+          onTap: () => _toggle(label),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 52, bottom: AppSpace.s1),
+            child: Row(
+              children: [
+                LabelTag(label),
                 const SizedBox(width: AppSpace.s2),
-                Text(
-                  where,
-                  style: AppText.code.copyWith(fontSize: 11, color: p.inkMuted),
+                Flexible(
+                  child: Text(
+                    b.title,
+                    style: AppText.label,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                if (where.isNotEmpty) ...[
+                  const SizedBox(width: AppSpace.s2),
+                  Text(
+                    where,
+                    style: AppText.code.copyWith(
+                      fontSize: 11,
+                      color: p.inkMuted,
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                if (_isDone(b))
+                  Icon(Icons.check_circle, size: 16, color: p.primary),
+                Icon(Icons.expand_less, size: 18, color: p.inkMuted),
               ],
-            ],
+            ),
           ),
         ),
         Row(
@@ -485,6 +578,102 @@ class _CodeTabState extends ConsumerState<CodeTab>
       style: AppText.caption.copyWith(color: color),
     ),
   );
+}
+
+/// Ô TODO đang thu gọn: đã xong (✓ + một dòng code, chạm để mở lại), hoặc
+/// còn khoá (chờ ô trước xong).
+class _CollapsedCell extends StatelessWidget {
+  const _CollapsedCell({
+    required this.block,
+    required this.code,
+    required this.done,
+    required this.unlocked,
+    required this.lockedBy,
+    required this.onTap,
+  });
+
+  final Block block;
+  final String code;
+  final bool done;
+  final bool unlocked;
+  final String? lockedBy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final label = block.label;
+    final firstLine = code
+        .split('\n')
+        .map((l) => l.trim())
+        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+    final subtitle = !unlocked
+        ? 'Làm xong ô ${lockedBy ?? ''} để mở'
+        : firstLine.isNotEmpty
+        ? firstLine
+        : 'Chạm để mở';
+    return Padding(
+      padding: const EdgeInsets.only(left: 52),
+      child: Opacity(
+        opacity: unlocked ? 1 : 0.5,
+        child: InkWell(
+          key: Key(unlocked ? 'cell-$label-collapsed' : 'cell-$label-locked'),
+          onTap: unlocked ? onTap : null,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.s2,
+              vertical: AppSpace.s2,
+            ),
+            decoration: BoxDecoration(
+              color: p.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: p.outline.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                LabelTag(label),
+                const SizedBox(width: AppSpace.s2),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        block.title,
+                        style: AppText.label,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            (unlocked && firstLine.isNotEmpty
+                                    ? AppText.code.copyWith(fontSize: 12)
+                                    : AppText.caption)
+                                .copyWith(color: p.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpace.s2),
+                Icon(
+                  !unlocked
+                      ? Icons.lock_outline
+                      : done
+                      ? Icons.check_circle
+                      : Icons.expand_more,
+                  key: Key('cell-$label-status'),
+                  size: 18,
+                  color: done ? p.primary : p.inkMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Ô khoá: nền xám đậm hơn, chữ "có sẵn" + icon khoá, highlight Python.
