@@ -3,6 +3,7 @@
 Worktree: /Users/phuongmacbook/Developer/Personal/Projects/ai-power-coding-study.worktrees/crew-2026-10-11-content-api-postgres
 Branch:   crew/2026-10-11-content-api-postgres (stacked trên crew/2026-10-11-exercise-tabs-judge = PR #9)
 Issue:    #10 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/10
+PR:       #11 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/11 (base: crew/2026-10-11-exercise-tabs-judge)
 
 State: done (chờ user merge — merge PR #9 trước) — mọi task đóng, verify-seam exit 0
 
