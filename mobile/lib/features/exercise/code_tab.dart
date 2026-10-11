@@ -462,24 +462,30 @@ class _CodeTabState extends ConsumerState<CodeTab>
               children: [
                 LabelTag(label),
                 const SizedBox(width: AppSpace.s2),
-                Flexible(
-                  child: Text(
-                    b.title,
-                    style: AppText.label,
-                    overflow: TextOverflow.ellipsis,
+                // Tiêu đề + "trong …" chiếm phần còn lại → icon nằm sát phải.
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          b.title,
+                          style: AppText.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (where.isNotEmpty) ...[
+                        const SizedBox(width: AppSpace.s2),
+                        Text(
+                          where,
+                          style: AppText.code.copyWith(
+                            fontSize: 11,
+                            color: p.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                if (where.isNotEmpty) ...[
-                  const SizedBox(width: AppSpace.s2),
-                  Text(
-                    where,
-                    style: AppText.code.copyWith(
-                      fontSize: 11,
-                      color: p.inkMuted,
-                    ),
-                  ),
-                ],
-                const Spacer(),
                 if (_isDone(b))
                   Icon(Icons.check_circle, size: 16, color: p.primary),
                 Icon(Icons.expand_less, size: 18, color: p.inkMuted),
