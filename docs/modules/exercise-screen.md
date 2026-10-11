@@ -47,6 +47,17 @@ mobile/lib/features/exercise/cell_editor_page.dart:18,113). Cha là marker ô kh
 đó; `def` lấy từ đáp án mẫu coi là hàm vì không biết có nằm trong class (mobile/lib/domain/merge.dart:158-168).
 Nhãn không kèm tên method (ngắn, vừa tiêu đề ô ở 375px; planning/crew/2026-10-11-project-tree-airline/DEVIATIONS.md).
 
+Tab Challenge có thêm mục "SƠ ĐỒ CLASS" sau phần ví dụ, chỉ hiện khi bài là method (`classScope` khác null) và theme có class đó trong `diagram` (mobile/lib/features/exercise/challenge_tab.dart:36-45,101-105). Phần được tô là thuộc tính `self.<x>` trong thân method của bài, suy từ code ghép đáp án mẫu, cộng chính method đó:
+
+| Thành phần | Hiển thị | Nguồn |
+|---|---|---|
+| Class của bài | hộp đủ thuộc tính (core/support) + method; mục thuộc bài nền accent, chữ đậm | mobile/lib/features/exercise/class_diagram.dart:88-96,138,165 |
+| Class có quan hệ, là `from` | hộp thu gọn, chỉ method trong `via` | mobile/lib/features/exercise/class_diagram.dart:195,232-234 |
+| Class có quan hệ, là `to` | hộp thu gọn, chỉ tên | mobile/lib/features/exercise/class_diagram.dart:195-222 |
+| Bài hàm rời / theme chưa có sơ đồ | không hiện mục | mobile/lib/features/exercise/challenge_tab.dart:44-45 |
+
+Ký hiệu quan hệ: ◇ aggregation, ◆ composition, ⇢ dependency, → association (mobile/lib/features/exercise/class_diagram.dart:175-180).
+
 Quy tắc khoá một nơi: bài k trong `CodeFile` mở khi k = 0 hoặc bài k-1 đã passed; bài đã passed luôn mở;
 bài nằm ở nhiều file mở nếu mở ở bất kỳ file nào (mobile/lib/domain/progression.dart:22-33). `ExerciseRow`,
 `ExerciseScreen` đều qua `exerciseUnlockedProvider` (mobile/lib/features/exercise/session_providers.dart:45-52).
@@ -82,6 +93,7 @@ Không làm: nút "chép lời giải vào ô", khoá bài xuyên file/topic.
 - Thẻ theme ở Home vẫn ghi "x/y block" trong khi app gọi là "ô" (STATUS.md:46).
 - Chưa chạy trên simulator bằng tay; e2e dùng widget test tạm với backend + Judge0 thật
   (planning/crew/2026-10-11-exercise-tabs-judge/STATUS.md:28-31).
+- Sơ đồ: `classScope` bỏ sót `def` một dòng/nhiều dòng (0 bài dính), đếm cả `self.x` trong comment/string, chạy lại mỗi build; key hàng quan hệ trùng nếu hai quan hệ cùng cặp; test highlight chỉ kiểm key, chưa test kiểu dài/dark/375px riêng (planning/crew/2026-10-11-class-diagram/STATUS.md, Backlog).
 - Backlog T-07 chưa có câu trả lời: ô đã xem lời giải bị ôn mỗi ngày mãi (STATUS.md:41).
 
 ## Nguồn
@@ -92,5 +104,6 @@ Không làm: nút "chép lời giải vào ô", khoá bài xuyên file/topic.
 - Nội dung bài: backend/content/content.json → GET /content (xem docs/ARCHITECTURE.md, mục "Luồng nội dung"); đọc qua mobile/lib/data/content_providers.dart:11
 - Ghép ô: mobile/lib/domain/merge.dart; khoá bài: mobile/lib/domain/progression.dart
 - Client chấm: mobile/lib/data/judge_client.dart:57-149
+- Sơ đồ class: mobile/lib/domain/class_scope.dart:24-55, mobile/lib/features/exercise/class_diagram.dart, challenge_tab.dart:36-105
 - Quyết định: docs/DECISIONS.md (các mục của run 2026-10-11-exercise-tabs-judge)
 - Run: planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md, DEVIATIONS.md, reviews/SEAM.md

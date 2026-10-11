@@ -114,6 +114,7 @@ này (module con, tên class) cùng đi từ file soạn tới DB, tới `/conte
 | --- | --- | --- | --- |
 | Module con | key `modules` (đệ quy) trong `content.json`; DB lưu `topics.parent_id` (FK về chính nó, CASCADE) + `topics.position` là thứ tự preorder trong theme — backend/app/tables.py:31-41, backend/migrations/versions/0002_module_tree_class.py:22-27 | `topics` cấp 1 theo theme, `modules` lồng theo `parent_id` — backend/app/content_api.py:72-80,95-107 | `Topic.modules`, `allFiles`/`allModules` duyệt preorder (file của module trước, rồi module con) — mobile/lib/domain/models.dart:116-135 |
 | Tên class | `Exercise.class_name` là cột nullable, không phải bảng riêng — backend/app/tables.py:67 | `class_name` trong payload bài; cũng nằm trong `Judge` để `/run` dùng — backend/app/content_api.py:29,133,164 | `Exercise.className`, `qualifiedName` — mobile/lib/domain/models.dart:316-320 |
+| Sơ đồ class | key bắt buộc `diagram` mỗi theme; DB cột JSONB `themes.diagram` — backend/app/content_schema.py:76-113, backend/app/tables.py:30, backend/migrations/versions/0003_theme_diagram.py:22-38 | `diagram` nằm trong payload theme, không thêm query — backend/app/content_api.py:118 | `StudyTheme.diagram` (`ClassDiagram`), highlight suy từ code bài bằng `classScope` — mobile/lib/domain/models.dart:53,224-243, mobile/lib/domain/class_scope.dart:27-55 |
 
 Nạp cây bằng duyệt trước (cha trước con) nên `position` tăng đúng thứ tự và FK `parent_id` luôn trỏ vào
 hàng đã flush:
@@ -138,6 +139,7 @@ bài chỉ lặp chuỗi tên (backend/app/tables.py:67). Nhóm bài theo class 
 `className` liền kề khác nhau trong cùng file (mobile/lib/features/browse/topic_detail_screen.dart:55-64).
 Hạ cấp migration 0002 làm mất quan hệ cha–con và `class_name`; chấp nhận được vì bảng nội dung chỉ là bản
 dẫn xuất của `content.json`, nạp lại là có đủ (backend/migrations/versions/0002_module_tree_class.py:33-35).
+Sơ đồ class của theme soạn tay (quan hệ không suy ra được từ code mẫu) và loader chỉ kiểm tính nhất quán nội bộ: tên class duy nhất, `from`/`to` có thật, `via` ⊆ methods của `from` (backend/app/load_content.py:70-87); schema chỉ nhận key `from` (backend/app/content_schema.py:96). Việc sơ đồ khớp code bài do test hợp đồng bên Dart kiểm (mobile/test/content_contract_test.dart:367-426), không phải runtime. Tab Challenge hiện mục "SƠ ĐỒ CLASS" cho bài method có class trong sơ đồ (mobile/lib/features/exercise/challenge_tab.dart:44-45,101-105).
 `/content` không kiểm module con có cùng theme với cha hay không (chỉ đúng nếu DB do loader ghi); sửa DB tay
 có thể làm sai (planning/crew/2026-10-11-project-tree-airline/STATUS.md, Backlog T-07).
 

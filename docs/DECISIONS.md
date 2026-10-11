@@ -448,3 +448,53 @@ lại đủ. Bảo toàn dữ liệu ở downgrade là công sức cho thứ tá
 này bảng nội dung có dữ liệu nhập tay thì quyết định này phải xét lại).
 
 **Nguồn**: backend/migrations/versions/0002_module_tree_class.py:22-35.
+
+### Sơ đồ class soạn tay theo theme, lưu ở `themes.diagram` (JSONB)
+
+**Quyết định**: mỗi theme có key bắt buộc `diagram = {classes[{name,file,attributes[{name,type,group}],methods[]}], relations[{from,to,kind,label,via[]}]}`, soạn tay trong `content.json`, lưu một cột JSONB `themes.diagram` (migration 0003) và phát nguyên trạng trong `/content`. Theme chưa có sơ đồ phải ghi `{"classes": [], "relations": []}`. `kind` chỉ nhận association/aggregation/composition/dependency; `group` chỉ nhận core/support.
+
+**Vì sao**: quan hệ giữa class không suy ra được từ code mẫu (vd FlightService dùng SimpleNamespace thay vì Flight thật), nên phải soạn tay. JSONB nằm sẵn trong SELECT `themes` nên `/content` không thêm query.
+
+**Đánh đổi đã chấp nhận**: sơ đồ có thể lệch code; test hợp đồng chỉ chặn thuộc tính/method không có thật (xem mục INV-02 bên dưới), không chặn quan hệ hay nhãn sai nghĩa. Hạ cấp 0003 bỏ cột, chấp nhận vì nội dung là bản dẫn xuất của `content.json`.
+
+**Nguồn**: backend/app/content_schema.py:76-113; backend/app/tables.py:29-30; backend/migrations/versions/0003_theme_diagram.py:22-38; backend/app/content_api.py:118; mobile/lib/domain/models.dart:53,95.
+
+### Ngữ nghĩa `via` của quan hệ và cách hiện trên app
+
+**Quyết định**: `via` là danh sách method của class `from` tác động lên class `to`. Loader bắt `via` phải là tập con methods của `from`, `from`/`to` phải là class có trong sơ đồ, tên class không trùng. Trên app, class của bài hiện đủ hộp; class đối diện hiện thu gọn: nếu nó là `from` thì chỉ liệt kê các method trong `via`, nếu là `to` thì chỉ tên (kèm nhãn quan hệ). Quan hệ mà bản code mẫu đã rút gọn thì nhãn nói thẳng điều đó (vd SeatMap → Flight có `via` rỗng, nhãn "thiết kế; bản rút gọn chưa giữ mã chuyến"); quan hệ FlightController → FlightService là association vì service được tiêm qua `__init__`.
+
+**Vì sao**: code mẫu mỗi bài là bản rút gọn độc lập, sơ đồ thể hiện quan hệ thiết kế; nhãn phải nói rõ chỗ lệch để người học không hiểu nhầm.
+
+**Đánh đổi đã chấp nhận**: Booking/SeatMap → Flight có thể là dependency theo UML chặt (nhãn đã nói rõ); loader chưa kiểm `via` rỗng/trùng, thuộc tính trùng, quan hệ tự trỏ (planning/crew/2026-10-11-class-diagram/STATUS.md, Backlog).
+
+**Nguồn**: backend/app/load_content.py:70-87; mobile/lib/features/exercise/class_diagram.dart:195-240 (`otherIsFrom`, `r.via`); mobile/lib/domain/models.dart:240-243; backend/content/content.json:152-210.
+
+### Schema chỉ nhận key `from`, bỏ alias `from_`
+
+**Quyết định**: `DiagramRelation.from_` khai `Field(alias="from")` và KHÔNG bật `populate_by_name`, nên key `from_` trong `content.json` bị `extra="forbid"` từ chối ngay ở schema. Hợp đồng JSON vẫn là `from` ở cả backend lẫn Dart.
+
+**Vì sao**: bản đầu cho phép cả hai tên; `from_` lọt qua schema rồi tới `_diagram_errors` với endpoint `None`. External review bắt lỗi này (Major) và run sửa bằng cách bỏ alias thứ hai.
+
+**Đánh đổi đã chấp nhận**: tác giả nội dung phải gõ đúng `from` (từ khoá Python) dù tên field Python là `from_`.
+
+**Nguồn**: backend/app/content_schema.py:89-100; backend/tests/test_load_content.py:221; planning/crew/2026-10-11-class-diagram/DEVIATIONS.md.
+
+### Phần được highlight trên sơ đồ suy từ code bài (`classScope`), không lưu
+
+**Quyết định**: app ghép `accepted_answers[0]` của mọi ô vào template (`mergeCells`), tìm `def <function_name>(`, rồi trong thân method lấy mọi `self.<x>` không phải lời gọi (`self.x(`) làm thuộc tính được tô; method của bài cũng được tô. Bài hàm rời (`class_name` null) hoặc class không có trong sơ đồ thì không hiện mục "SƠ ĐỒ CLASS".
+
+**Vì sao**: code đã chứa thông tin này, lưu thêm một danh sách "thuộc tính của bài" chỉ tạo bản thứ hai có thể lệch (cùng lập luận với vị trí ô suy từ template).
+
+**Đánh đổi đã chấp nhận**: regex theo dòng nên `def` viết một dòng hoặc nhiều dòng cho thuộc tính rỗng (hiện 0 bài dính), `self.x` trong comment/string vẫn bị đếm, `classScope` chạy lại mỗi lần build (Backlog của run).
+
+**Nguồn**: mobile/lib/domain/class_scope.dart:24-55; mobile/lib/features/exercise/challenge_tab.dart:36-45,101-105; mobile/lib/features/exercise/class_diagram.dart:138,165.
+
+### Test hợp đồng INV-02 kiểm trong đúng thân class, không kiểm chuỗi con
+
+**Quyết định**: `mobile/test/content_contract_test.dart` lấy thân `class <Name>` chính xác (dòng bắt đầu cột 0, đến dòng kế tiếp không rỗng ở cột 0), rồi yêu cầu mỗi thuộc tính khai trong sơ đồ có `self.<attr> =` và mỗi method có `def <m>(` trong ít nhất một thân như vậy ở code ghép của các bài cùng theme. Class có method mà không bài nào chứa `class <Name>` thì fail. INV-03: mọi bài có `class_name` phải có class đó trong sơ đồ theme.
+
+**Vì sao**: vòng review đầu của T-05 bắt 2 Major: tìm chuỗi con trên cả đoạn code làm `class FlightService` khớp nhầm `class FlightServiceX` hoặc member của class khác. Chỉ thân class chính xác mới chặn được.
+
+**Đánh đổi đã chấp nhận**: test không kiểm nhãn quan hệ khớp code, cũng không kiểm quan hệ.
+
+**Nguồn**: mobile/test/content_contract_test.dart:13-27,367-426; planning/crew/2026-10-11-class-diagram/reviews/T-05.md.
