@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:highlight/languages/python.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/answer_checker.dart';
 import 'package:smart_coding_study/features/exercise/code_input.dart';
 
@@ -51,7 +51,7 @@ Future<void> _tap(WidgetTester tester, String key) async {
 }
 
 /// Python block `split-chunks` [i] trong seed.
-final _splitChunks = exerciseById('split-chunks').blocks;
+final _splitChunks = testContent.exerciseById('split-chunks').blocks;
 
 /// Backspace như IME: xoá 1 ký tự trước con trỏ.
 Future<void> _backspace(WidgetTester tester) async {

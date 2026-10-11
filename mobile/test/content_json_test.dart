@@ -3,14 +3,13 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
-import 'package:smart_coding_study/data/seed.dart' as seed;
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/domain/models.dart';
 
-final seedContent = Content(version: 'seed', themes: seed.seedThemes);
+import 'support/content_fixture.dart';
 
 Map<String, dynamic> roundTripJson() =>
-    jsonDecode(jsonEncode(seedContent.toJson())) as Map<String, dynamic>;
+    jsonDecode(jsonEncode(testContent.toJson())) as Map<String, dynamic>;
 
 void expectExample(Example a, Example b) {
   expect(a.caption, b.caption);
@@ -46,64 +45,57 @@ void expectExercise(Exercise a, Exercise b) {
 }
 
 void main() {
-  group('Content index khớp hàm seed', () {
+  group('Content index trên content.json', () {
     test('exerciseById', () {
-      for (final e in seed.uniqueExercises()) {
-        expect(
-          identical(seedContent.exerciseById(e.id), seed.exerciseById(e.id)),
-          isTrue,
-        );
+      for (final e in testContent.uniqueExercises()) {
+        expect(identical(testContent.exerciseById(e.id), e), isTrue);
       }
-      expect(() => seedContent.exerciseById('nope'), throwsStateError);
+      expect(() => testContent.exerciseById('nope'), throwsStateError);
     });
 
-    test('locateExercise', () {
-      for (final e in seed.uniqueExercises()) {
-        final a = seedContent.locateExercise(e.id);
-        final b = seed.locateExercise(e.id);
-        expect(identical(a.theme, b.theme), isTrue);
-        expect(identical(a.topic, b.topic), isTrue);
-        expect(identical(a.file, b.file), isTrue);
+    test('locateExercise: file tìm được thật sự chứa bài', () {
+      for (final e in testContent.uniqueExercises()) {
+        final loc = testContent.locateExercise(e.id);
+        expect(loc.file.exercises.any((x) => identical(x, e)), isTrue);
+        expect(loc.topic.files, contains(loc.file));
+        expect(loc.theme.topics, contains(loc.topic));
       }
-      expect(() => seedContent.locateExercise('nope'), throwsStateError);
+      expect(() => testContent.locateExercise('nope'), throwsStateError);
     });
 
-    test('uniqueExercises', () {
-      final a = seedContent.uniqueExercises();
-      final b = seed.uniqueExercises();
-      expect(a.length, b.length);
-      for (var i = 0; i < a.length; i++) {
-        expect(identical(a[i], b[i]), isTrue);
-      }
+    test('uniqueExercises: mỗi id một lần, đủ số bài của file', () {
+      final ids = testContent.uniqueExercises().map((e) => e.id).toList();
+      expect(ids.toSet().length, ids.length);
+      expect(
+        ids.toSet(),
+        (contentJson['exercises'] as Map<String, dynamic>).keys.toSet(),
+      );
     });
 
     test('locateFilesNamed', () {
       final names = {
-        for (final t in seed.seedThemes)
+        for (final t in testContent.themes)
           for (final p in t.topics)
             for (final f in p.files) f.name,
-        'khong-co.py',
       };
       for (final n in names) {
-        final a = seedContent.locateFilesNamed(n);
-        final b = seed.locateFilesNamed(n);
-        expect(a.length, b.length, reason: n);
-        for (var i = 0; i < a.length; i++) {
-          expect(identical(a[i].file, b[i].file), isTrue);
-          expect(identical(a[i].topic, b[i].topic), isTrue);
-          expect(identical(a[i].theme, b[i].theme), isTrue);
+        final found = testContent.locateFilesNamed(n);
+        expect(found, isNotEmpty, reason: n);
+        for (final x in found) {
+          expect(x.file.name, n);
         }
       }
+      expect(testContent.locateFilesNamed('khong-co.py'), isEmpty);
     });
   });
 
   group('JSON', () {
-    test('round-trip bằng seed về mọi field', () {
+    test('round-trip content.json về mọi field', () {
       final back = Content.fromJson(roundTripJson());
-      expect(back.version, 'seed');
-      expect(back.themes.length, seedContent.themes.length);
+      expect(back.version, testContent.version);
+      expect(back.themes.length, testContent.themes.length);
       for (var i = 0; i < back.themes.length; i++) {
-        final a = back.themes[i], b = seedContent.themes[i];
+        final a = back.themes[i], b = testContent.themes[i];
         expect(a.id, b.id);
         expect(a.name, b.name);
         expect(a.description, b.description);
@@ -127,7 +119,7 @@ void main() {
         }
       }
       // toJson của bản parse lại bằng toJson gốc (bắt field bị rơi).
-      expect(jsonEncode(back.toJson()), jsonEncode(seedContent.toJson()));
+      expect(jsonEncode(back.toJson()), jsonEncode(testContent.toJson()));
     });
 
     test('bài dùng chung là cùng một instance', () {
@@ -141,7 +133,7 @@ void main() {
         }
       }
       final multi = shared.values.where((l) => l.length > 1).toList();
-      expect(multi, isNotEmpty, reason: 'seed phải có bài dùng chung');
+      expect(multi, isNotEmpty, reason: 'content.json phải có bài dùng chung');
       for (final l in multi) {
         for (final e in l) {
           expect(identical(e, l.first), isTrue);
@@ -233,11 +225,17 @@ void main() {
     });
   });
 
-  test('contentIndexProvider mặc định = seed', () {
+  test('contentIndexProvider không có mặc định: ném UnimplementedError', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    final c = container.read(contentIndexProvider);
-    expect(c.version, 'seed');
-    expect(identical(c.themes, seed.seedThemes), isTrue);
+    expect(
+      () => container.read(contentIndexProvider),
+      throwsA(
+        anyOf(
+          isA<UnimplementedError>(),
+          predicate((e) => '$e'.contains('override contentIndexProvider')),
+        ),
+      ),
+    );
   });
 }

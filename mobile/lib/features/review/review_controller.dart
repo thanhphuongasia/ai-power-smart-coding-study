@@ -5,7 +5,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/content_providers.dart';
-import '../../data/seed.dart';
+import '../../data/demo_seed.dart';
 import '../../domain/models.dart';
 import '../exercise/session_providers.dart';
 import '../stats/activity.dart';

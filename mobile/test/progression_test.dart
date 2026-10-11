@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
-import 'package:smart_coding_study/data/seed.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/domain/models.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/domain/progression.dart';
+import 'support/content_fixture.dart';
 
-final content = Content(version: 'seed', themes: seedThemes);
+final content = testContent;
 
 void main() {
   group('isExerciseUnlocked', () {
@@ -40,18 +40,18 @@ void main() {
       expect(isExerciseUnlocked(content, 'like-post', {}), isTrue);
     });
 
-    test('id không có trong seed → khoá', () {
+    test('id không có trong nội dung → khoá', () {
       expect(isExerciseUnlocked(content, 'khong-co', {}), isFalse);
     });
 
-    test('seed: mọi bài không đầu file đều khoá khi chưa pass gì', () {
-      for (final theme in seedThemes) {
+    test('mọi bài không đầu file đều khoá khi chưa pass gì', () {
+      for (final theme in content.themes) {
         for (final topic in theme.topics) {
           for (final file in topic.files) {
             for (var i = 1; i < file.exercises.length; i++) {
               final id = file.exercises[i].id;
               // Bài dùng chung có thể mở ở file khác — bỏ qua nếu đầu file nào đó.
-              final firstElsewhere = seedThemes.any(
+              final firstElsewhere = content.themes.any(
                 (t) => t.topics.any(
                   (tp) => tp.files.any((f) => f.exercises.first.id == id),
                 ),
@@ -103,7 +103,7 @@ void main() {
     Content withNewExercise() {
       var added = false;
       final themes = [
-        for (final t in seedThemes)
+        for (final t in content.themes)
           StudyTheme(
             id: t.id,
             name: t.name,
@@ -152,8 +152,8 @@ void main() {
       expect(container.read(inProgressExerciseProvider)?.id, 'brand-new');
     });
 
-    test('seed mặc định không có bài mới → khoá', () {
-      final container = ProviderContainer();
+    test('nội dung gốc không có bài mới → khoá', () {
+      final container = testContainer();
       addTearDown(container.dispose);
       expect(container.read(exerciseUnlockedProvider('brand-new')), isFalse);
     });

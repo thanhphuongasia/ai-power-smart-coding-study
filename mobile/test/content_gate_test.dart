@@ -7,26 +7,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_coding_study/app/content_gate.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
 import 'package:smart_coding_study/data/content_repository.dart';
-import 'package:smart_coding_study/data/seed.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/domain/models.dart';
 import 'package:smart_coding_study/main.dart';
+import 'support/content_fixture.dart';
 
 const fakeThemeName = 'Chủ đề giả từ máy chủ';
 
-/// Seed với tên theme đầu bị đổi: khác seed (chứng minh override), nhưng vẫn
+/// Nội dung fixture với tên theme đầu bị đổi: khác fixture (chứng minh override), nhưng vẫn
 /// đủ id bài để tiến độ demo (seedPassedExercises/seedDrafts) tra được.
 Content fakeContent() => Content(
   version: 'fake-1',
   themes: [
     StudyTheme(
-      id: seedThemes.first.id,
+      id: testContent.themes.first.id,
       name: fakeThemeName,
-      description: seedThemes.first.description,
-      tags: seedThemes.first.tags,
-      topics: seedThemes.first.topics,
+      description: testContent.themes.first.description,
+      tags: testContent.themes.first.tags,
+      topics: testContent.themes.first.topics,
     ),
-    ...seedThemes.skip(1),
+    ...testContent.themes.skip(1),
   ],
 );
 

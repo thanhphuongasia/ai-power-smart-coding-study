@@ -4,7 +4,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/seed.dart';
+import '../../data/demo_seed.dart';
 import '../exercise/session_providers.dart';
 
 /// Nửa đêm của ngày chứa [t] (giờ địa phương).

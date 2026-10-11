@@ -2,13 +2,19 @@
 // để giả lập Timer/clock trong test, không sleep thật. pubspec.yaml không
 // thuộc phạm vi sửa của task này (xem T-04.md Forbidden).
 // ignore_for_file: depend_on_referenced_packages
+import 'dart:convert';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'package:smart_coding_study/data/demo_seed.dart';
+import 'package:smart_coding_study/data/content_providers.dart';
+import 'package:smart_coding_study/domain/content.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/stats/activity.dart';
+
+import 'support/content_fixture.dart';
 
 /// Chạy [body] trong một [ProviderContainer] mà [clockProvider] đọc thời
 /// gian từ [FakeAsync] — cho phép test Timer.periodic bằng `async.elapse`
@@ -28,7 +34,10 @@ void _withFakeSession(
   fakeAsync((async) {
     final fakeClock = async.getClock(DateTime(2024, 1, 1));
     final container = ProviderContainer(
-      overrides: [clockProvider.overrideWithValue(fakeClock.now)],
+      overrides: [
+        ...contentOverrides,
+        clockProvider.overrideWithValue(fakeClock.now),
+      ],
     );
     addTearDown(container.dispose);
     ProviderSubscription<SessionState> listen(String exerciseId) {
@@ -43,7 +52,7 @@ void _withFakeSession(
 void main() {
   group('ProgressController', () {
     test('khởi tạo từ seedPassedExercises + seedDrafts', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       final progress = container.read(progressProvider);
@@ -51,7 +60,7 @@ void main() {
       expect(progress['clean-text']!.passed, isTrue);
       expect(
         progress['clean-text']!.completedBlocks,
-        exerciseById('clean-text').blocks.length,
+        testContent.exerciseById('clean-text').blocks.length,
       );
       expect(progress['split-chunks']!.passed, isFalse);
       expect(progress['split-chunks']!.completedBlocks, 0);
@@ -62,31 +71,78 @@ void main() {
       expect(progress['overlap-chunks'], isNull);
     });
 
+    test('dữ liệu demo tiến độ ban đầu', () {
+      expect(seedPassedExercises, {'clean-text'});
+      expect(seedDrafts, {
+        'split-chunks': {'A': 'for i in range(0, len(text), size):'},
+      });
+    });
+
+    test('content không có id demo (clean-text) → bỏ qua, không lỗi', () {
+      // Bỏ clean-text khỏi content: seedPassedExercises trỏ vào id không có.
+      final json = jsonDecode(jsonEncode(contentJson)) as Map<String, dynamic>;
+      (json['exercises'] as Map).remove('clean-text');
+      for (final t in json['themes'] as List) {
+        for (final tp in (t as Map)['topics'] as List) {
+          for (final f in (tp as Map)['files'] as List) {
+            ((f as Map)['exercise_ids'] as List).remove('clean-text');
+          }
+        }
+      }
+      final content = Content.fromJson(json);
+      expect(() => content.exerciseById('clean-text'), throwsStateError);
+
+      final container = ProviderContainer(
+        overrides: [contentIndexProvider.overrideWithValue(content)],
+      );
+      addTearDown(container.dispose);
+
+      final progress = container.read(progressProvider);
+      expect(progress.containsKey('clean-text'), isFalse);
+      // id demo còn trong content vẫn được nạp.
+      expect(
+        progress['split-chunks']!.drafts['A'],
+        'for i in range(0, len(text), size):',
+      );
+      // Bài không có trong content vẫn throw ở đường tra cứu trực tiếp (hành vi cũ).
+      expect(
+        () =>
+            container.read(progressProvider.notifier).markPassed('clean-text'),
+        throwsStateError,
+      );
+    });
+
     test('markPassed ⇒ passed và completedBlocks == số ô của bài', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       container.read(progressProvider.notifier).markPassed('split-chunks');
 
       final p = container.read(progressProvider)['split-chunks']!;
       expect(p.passed, isTrue);
-      expect(p.completedBlocks, exerciseById('split-chunks').blocks.length);
+      expect(
+        p.completedBlocks,
+        testContent.exerciseById('split-chunks').blocks.length,
+      );
       expect(p.drafts['A'], isNotNull, reason: 'draft không bị mất');
     });
 
     test('markPassed bài chưa có entry vẫn đúng', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       container.read(progressProvider.notifier).markPassed('overlap-chunks');
 
       final p = container.read(progressProvider)['overlap-chunks']!;
       expect(p.passed, isTrue);
-      expect(p.completedBlocks, exerciseById('overlap-chunks').blocks.length);
+      expect(
+        p.completedBlocks,
+        testContent.exerciseById('overlap-chunks').blocks.length,
+      );
     });
 
     test('markPassed ghi activity đúng một lần (idempotent)', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
       final before = container.read(activityProvider);
       final notifier = container.read(progressProvider.notifier);
@@ -101,7 +157,7 @@ void main() {
     });
 
     test('useHint tối đa 3 mỗi ô (key = nhãn)', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
       final notifier = container.read(progressProvider.notifier);
 
@@ -119,7 +175,7 @@ void main() {
     });
 
     test('viewSolution ghi nhận nhãn ô, gọi lại không đổi', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
       final notifier = container.read(progressProvider.notifier);
 
@@ -132,7 +188,7 @@ void main() {
     });
 
     test('draft, hint, lời giải sống qua việc sessionProvider bị huỷ', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       container.read(sessionProvider('split-chunks'));
@@ -154,14 +210,14 @@ void main() {
 
   group('inProgressExerciseProvider / exerciseUnlockedProvider', () {
     test('seed: split-chunks đang làm dở (INV-09)', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       expect(container.read(inProgressExerciseProvider)?.id, 'split-chunks');
     });
 
     test('hết dở khi passed, hoặc khi draft rỗng toàn bộ', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
       final notifier = container.read(progressProvider.notifier);
 
@@ -176,7 +232,7 @@ void main() {
     });
 
     test('draft ở bài chưa mở vẫn không làm dở bài đã passed', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
       final notifier = container.read(progressProvider.notifier);
 
@@ -186,7 +242,7 @@ void main() {
     });
 
     test('overlap-chunks khoá tới khi split-chunks pass (INV-08)', () {
-      final container = ProviderContainer();
+      final container = testContainer();
       addTearDown(container.dispose);
 
       expect(
@@ -415,7 +471,7 @@ void main() {
   });
 
   group('knownIdentifiersFor', () {
-    final exercise = exerciseById('split-chunks');
+    final exercise = testContent.exerciseById('split-chunks');
 
     test('luôn có tên hàm, tham số và biến gán trong template', () {
       expect(

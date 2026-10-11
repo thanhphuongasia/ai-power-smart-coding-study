@@ -9,8 +9,10 @@ import sys
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
+from app.content_api import get_judge_lookup, read_judge
 from app.db import get_session
 from app.load_content import compute_version, load_content, public_payload
 from app.main import app, get_runner
@@ -27,6 +29,7 @@ class LocalRunner:
 def client_for():
     def make(session) -> TestClient:
         app.dependency_overrides[get_session] = lambda: session
+        app.dependency_overrides[get_judge_lookup] = lambda: (lambda i: read_judge(session, i))
         app.dependency_overrides[get_runner] = lambda: LocalRunner()
         return TestClient(app)
 
@@ -109,3 +112,51 @@ def test_removed_exercise_disappears_from_both(db_session, content_data, client_
     client = client_for(db_session)
     assert "like-post" not in json.dumps(client.get("/content").json())
     assert client.post("/run", json={"exercise_id": "like-post", "code": "x = 1"}).status_code == 404
+
+
+@pytest.fixture()
+def dead_db_session():
+    engine = create_engine("postgresql+psycopg://localhost:1/nope", connect_args={"connect_timeout": 1})
+    session = sessionmaker(bind=engine)()
+    yield session
+    session.close()
+    engine.dispose()
+
+
+def test_database_down_is_503_for_both_endpoints(dead_db_session, client_for):
+    client = client_for(dead_db_session)
+    assert client.get("/content").status_code == 503
+    assert client.get("/content").json() == {"detail": "database_unavailable"}
+    run = client.post("/run", json={"exercise_id": "clean-text", "code": "x = 1"})
+    assert run.status_code == 503
+    assert run.json() == {"detail": "database_unavailable"}
+
+
+def test_run_releases_db_session_before_judging(loaded_session, monkeypatch):
+    """Session tra bài phải đóng (trả kết nối về pool) TRƯỚC khi gọi máy chấm (chậm vài giây)."""
+    from app import content_api
+
+    events: list[str] = []
+
+    class TrackedSession:
+        def __enter__(self):
+            events.append("open")
+            return loaded_session
+
+        def __exit__(self, *exc):
+            events.append("close")
+            return False
+
+    class SlowRunner:
+        async def run(self, source, stdin):
+            events.append("judge")
+            return Execution("timeout", "", "", "slow")
+
+    monkeypatch.setattr(content_api, "SessionLocal", lambda: TrackedSession())
+    app.dependency_overrides[get_runner] = lambda: SlowRunner()
+    try:
+        response = TestClient(app).post("/run", json={"exercise_id": "clean-text", "code": "x = 1"})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert events == ["open", "close", "judge"]

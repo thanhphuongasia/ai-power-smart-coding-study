@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/features/exercise/exercise_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
+import 'support/content_fixture.dart';
 
 class _FakeClock {
   DateTime now = DateTime(2024, 1, 1, 9);
@@ -32,7 +33,7 @@ Future<ProviderContainer> _pumpScreen(
   late ProviderContainer container;
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [clockProvider.overrideWithValue(() => fakeClock.now)],
+      overrides: [...contentOverrides, clockProvider.overrideWithValue(() => fakeClock.now)],
       child: Builder(
         builder: (context) {
           container = ProviderScope.containerOf(context);

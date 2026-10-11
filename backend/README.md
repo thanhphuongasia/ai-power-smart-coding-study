@@ -14,10 +14,10 @@ Cần Postgres đang chạy (Homebrew: `brew services start postgresql@15`, cổ
 ```bash
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+set -a; [ -f .env ] && . ./.env; set +a        # tuỳ chọn (DATABASE_URL, máy chấm) — trước các lệnh dưới
 createdb smart_coding_study                    # một lần
 .venv/bin/alembic upgrade head                 # tạo bảng
 .venv/bin/python -m app.load_content           # nạp content/content.json, in version
-set -a; [ -f .env ] && . ./.env; set +a        # tuỳ chọn (DATABASE_URL, máy chấm)
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 

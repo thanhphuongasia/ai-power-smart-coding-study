@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_coding_study/app/theme.dart';
-import 'package:smart_coding_study/data/seed.dart';
+import 'support/content_fixture.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/review/review_controller.dart';
 import 'package:smart_coding_study/features/stats/activity.dart';
@@ -47,7 +47,7 @@ void main() {
   });
 
   test('fillBlank ẩn từ vựng dài nhất có trong đáp án', () {
-    final block = splitChunksExercise.blocks[2];
+    final block = testContent.exerciseById('split-chunks').blocks[2];
     final blank = fillBlank(block)!;
     expect(block.acceptedAnswers.first.contains(blank.missing), isTrue);
     expect(blank.masked.contains('____'), isTrue);
@@ -80,6 +80,7 @@ void main() {
     setUp(() {
       c = ProviderContainer(
         overrides: [
+          ...contentOverrides,
           clockProvider.overrideWithValue(() => DateTime(2026, 3, 10, 9)),
         ],
       );
@@ -152,7 +153,7 @@ void main() {
   });
 
   test('chunker.py dùng ở 2 theme, split_chunks là cùng một exercise', () {
-    final usages = locateFilesNamed('chunker.py');
+    final usages = testContent.locateFilesNamed('chunker.py');
     expect(usages.map((u) => u.theme.id), ['rag', 'doc-system']);
     expect(
       identical(usages[0].file.exercises.first, usages[1].file.exercises.first),
@@ -166,6 +167,7 @@ void main() {
       late ProviderContainer container;
       await tester.pumpWidget(
         ProviderScope(
+          overrides: contentOverrides,
           child: Builder(
             builder: (context) {
               container = ProviderScope.containerOf(context);

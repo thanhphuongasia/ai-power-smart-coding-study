@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/content.dart';
 import 'content_repository.dart';
-import 'seed.dart';
 
-/// T-03: mặc định là seed; T-09 mới đổi sang nội dung tải từ API.
+/// Nội dung hiện hành. Không có mặc định: ContentGate (main.dart) override
+/// bằng bản đã tải từ API; test override bằng fixture từ content.json.
 final contentIndexProvider = Provider<Content>(
-  (ref) => Content(version: 'seed', themes: seedThemes),
+  (ref) => throw UnimplementedError('override contentIndexProvider'),
 );
 
 final contentRepositoryProvider = Provider<ContentRepository>(

@@ -7,13 +7,14 @@ Payload dựng từ đúng 7 query cố định (một query mỗi bảng), khô
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import get_session
+from app.db import SessionLocal, get_session
 from app.tables import Block, CodeFile, ContentMeta, Exercise, FileExercise, Theme, Topic
 
 router = APIRouter()
@@ -116,6 +117,23 @@ def read_judge(session: Session, exercise_id: str) -> Judge | None:
     if exercise is None:
         return None
     return Judge(function=exercise.function_name, cases=exercise.judge_cases)
+
+
+JudgeLookup = Callable[[str], "Judge | None"]
+
+
+def get_judge_lookup() -> JudgeLookup:
+    """Dependency cho `/run`: mỗi lần tra mở một session ngắn và trả kết nối NGAY sau khi đọc.
+
+    `/run` chờ máy chấm vài giây; giữ session suốt request sẽ chiếm kết nối pool trong lúc đó
+    (nhiều request đồng thời → cạn pool → `/content` cũng chết theo).
+    """
+
+    def lookup(exercise_id: str) -> Judge | None:
+        with SessionLocal() as session:
+            return read_judge(session, exercise_id)
+
+    return lookup
 
 
 @router.get("/content")

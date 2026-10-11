@@ -7,7 +7,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/content_providers.dart';
-import '../../data/seed.dart';
+import '../../data/demo_seed.dart';
+import '../../domain/content.dart';
 import '../../domain/models.dart';
 import '../stats/activity.dart';
 import 'session_providers.dart';
@@ -79,12 +80,22 @@ class ProgressController extends Notifier<Map<String, ExerciseProgress>> {
     final ids = {...seedPassedExercises, ...seedDrafts.keys};
     return {
       for (final id in ids)
-        id: ExerciseProgress(
-          passed: seedPassedExercises.contains(id),
-          totalBlocks: content.exerciseById(id).blocks.length,
-          drafts: Map.of(seedDrafts[id] ?? const {}),
-        ),
+        // Id demo không có trong nội dung server → bỏ qua (không crash).
+        if (_blockCount(content, id) case final total?)
+          id: ExerciseProgress(
+            passed: seedPassedExercises.contains(id),
+            totalBlocks: total,
+            drafts: Map.of(seedDrafts[id] ?? const {}),
+          ),
     };
+  }
+
+  static int? _blockCount(Content content, String id) {
+    try {
+      return content.exerciseById(id).blocks.length;
+    } on StateError {
+      return null;
+    }
   }
 
   ExerciseProgress _progressOf(String exerciseId) {

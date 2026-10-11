@@ -18,12 +18,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
 from app import harness
-from app.content_api import read_judge
+from app.content_api import JudgeLookup, get_judge_lookup
 from app.content_api import router as content_router
-from app.db import get_session
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
 
 logger = logging.getLogger("judge")
@@ -67,6 +66,13 @@ async def _invalid_request(request: Request, exc: RequestValidationError) -> JSO
     return JSONResponse(status_code=422, content={"detail": "invalid_request", "fields": fields})
 
 
+@app.exception_handler(OperationalError)
+async def _database_unavailable(request: Request, exc: OperationalError) -> JSONResponse:
+    # DB chết / không kết nối được: 503 có nghĩa thay vì 500, không lộ chi tiết kết nối.
+    logger.warning("database unavailable on %s: %s", request.url.path, type(exc.orig).__name__)
+    return JSONResponse(status_code=503, content={"detail": "database_unavailable"})
+
+
 class RunError(BaseModel):
     kind: Literal["syntax", "runtime"]
     line: int | None
@@ -96,10 +102,11 @@ def get_runner() -> CodeRunner:
 async def run(
     request: RunRequest,
     runner: CodeRunner = Depends(get_runner),
-    session: Session = Depends(get_session),
+    lookup_judge: JudgeLookup = Depends(get_judge_lookup),
 ) -> RunResponse:
-    # Session SQLAlchemy là sync: tra DB trong threadpool để không chặn event loop.
-    judge = await run_in_threadpool(read_judge, session, request.exercise_id)
+    # Tra DB (sync) trong threadpool để không chặn event loop; kết nối trả lại pool trước khi
+    # chờ máy chấm.
+    judge = await run_in_threadpool(lookup_judge, request.exercise_id)
     if judge is None:
         raise HTTPException(status_code=404, detail="exercise_not_found")
 

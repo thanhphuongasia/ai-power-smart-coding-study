@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from tests.conftest import CONTENT_PATH
 
+from app.content_api import get_judge_lookup, read_judge
 from app.db import get_session
 from app.main import app, get_runner
 from app.runner import Execution, Judge0Runner, RunnerUnavailable
@@ -56,6 +57,7 @@ def client_with(runner) -> TestClient:
 def _db_and_reset_overrides(loaded_session):
     """/run tra bài trong Postgres test đã nạp content.json."""
     app.dependency_overrides[get_session] = lambda: loaded_session
+    app.dependency_overrides[get_judge_lookup] = lambda: (lambda i: read_judge(loaded_session, i))
     yield
     app.dependency_overrides.clear()
 
