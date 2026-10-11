@@ -42,7 +42,7 @@ thì không ghi gì. Tiến độ học viên nằm ở bảng riêng, không b�
 
 ## Tài khoản
 
-`app.seed_users` tạo `test@gmail.com` (học viên) và `phuongtt.tech1508@gmail.com` (admin + học viên)
+`app.seed_users` tạo `test@gmail.com` (học viên + admin, tài khoản test) và `phuongtt.tech1508@gmail.com` (admin + học viên)
 nếu chưa có, mật khẩu ngẫu nhiên. Mật khẩu ban đầu **chỉ** nằm trong file root 600, không in ra log:
 
 ```bash
@@ -51,6 +51,12 @@ ssh vps sudo cat /etc/smart-coding-study/initial-passwords
 
 Nhiều dòng cùng một email (lần seed trước lỗi giữa chừng) thì dòng **cuối** là đúng. Đăng nhập rồi đổi mật khẩu (nút tài khoản → Đổi mật khẩu), sau đó nên xoá file:
 `ssh vps sudo rm /etc/smart-coding-study/initial-passwords`. User đã có thì seed không đổi mật khẩu.
+Đặt lại mật khẩu (gõ ở prompt ẩn, không nằm trong lịch sử shell; thu hồi mọi phiên cũ):
+
+```bash
+ssh -t vps 'sudo bash -c "cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.set_password test@gmail.com"'
+```
+
 Chưa có trang quản lý user: thêm user = thêm vào `SEED_USERS` trong `backend/app/seed_users.py` rồi deploy.
 
 Đổi IP/cổng: `PUBLIC_URL=http://<ip>:<cổng> deploy/deploy.sh` (cổng nginx sửa ở

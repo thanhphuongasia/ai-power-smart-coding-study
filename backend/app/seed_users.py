@@ -25,7 +25,7 @@ from app.auth import hash_password, normalize_email
 from app.tables import User
 
 SEED_USERS: list[tuple[str, tuple[str, ...]]] = [
-    ("test@gmail.com", ("learner",)),
+    ("test@gmail.com", ("learner", "admin")),  # tài khoản test: admin để thử trang quản trị
     ("phuongtt.tech1508@gmail.com", ("learner", "admin")),
 ]
 DEFAULT_FILE = Path(__file__).resolve().parent.parent / ".initial-passwords"

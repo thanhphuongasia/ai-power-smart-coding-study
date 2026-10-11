@@ -20,7 +20,7 @@ def test_creates_both_users_with_roles_and_private_file(db_session, tmp_path):
     path = tmp_path / "secret" / "initial-passwords"
     assert seed_users(db_session, path) == 2
     users = {u.email: u for u in db_session.scalars(select(User))}
-    assert users["test@gmail.com"].roles == ["learner"]
+    assert users["test@gmail.com"].roles == ["learner", "admin"]
     assert users["phuongtt.tech1508@gmail.com"].roles == ["learner", "admin"]
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
@@ -113,3 +113,25 @@ def test_symlinked_password_file_is_refused(db_session, tmp_path):
     with pytest.raises(OSError):
         seed_users(db_session, link)
     assert target.read_text() == ""
+
+
+def test_set_password_changes_hash_and_revokes_sessions(db_session, tmp_path):
+    from app.auth import create_session, user_for_token
+    from app.set_password import set_password
+
+    seed_users(db_session, tmp_path / "pw")
+    user = db_session.scalar(select(User).where(User.email == "test@gmail.com"))
+    token = create_session(db_session, user.id)
+    db_session.flush()
+    assert set_password(db_session, " Test@Gmail.com ", "new-pass-123") is True
+    db_session.flush()
+    assert verify_password(user.password_hash, "new-pass-123")
+    assert user_for_token(db_session, token) is None
+    assert set_password(db_session, "nobody@x.com", "x") is False
+
+
+def test_set_password_cli_never_takes_password_in_argv(capsys):
+    from app.set_password import main
+
+    assert main(["set_password"]) == 2
+    assert main(["set_password", "a@b.c", "secret"]) == 2
