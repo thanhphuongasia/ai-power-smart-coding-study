@@ -2,6 +2,8 @@
 vào đây (thay toàn bộ), `/content` và `/run` đọc ra. Sửa trực tiếp bảng sẽ bị lần nạp sau ghi đè.
 
 Thứ tự hiển thị lưu ở cột `position` (theme, topic, file, bài trong file, ô trong bài).
+Module lồng nhau = `topics.parent_id`; `topics.position` là thứ tự duyệt trước (preorder) trong theme,
+nên con luôn đứng sau cha và thứ tự anh em giữ đúng như `content.json`.
 """
 
 from __future__ import annotations
@@ -32,6 +34,10 @@ class Topic(Base):
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     theme_id: Mapped[str] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), index=True)
+    # NULL = module cấp 1 của theme; khác NULL = sub-module.
+    parent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("topics.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     position: Mapped[int] = mapped_column(Integer)
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
@@ -57,6 +63,8 @@ class Exercise(Base):
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     title: Mapped[str] = mapped_column(Text)
+    # NULL = hàm rời; khác NULL = bài là method `function_name` của class này.
+    class_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     function_name: Mapped[str] = mapped_column(String(100))
     params: Mapped[list[str]] = mapped_column(ARRAY(Text))
     template: Mapped[str] = mapped_column(Text)

@@ -11,9 +11,7 @@ import 'models.dart';
 
 Iterable<CodeFile> _allFiles(Content content) sync* {
   for (final theme in content.themes) {
-    for (final topic in theme.topics) {
-      yield* topic.files;
-    }
+    yield* theme.allFiles;
   }
 }
 

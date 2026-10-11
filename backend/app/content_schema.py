@@ -49,6 +49,7 @@ class Block(_Strict):
 class Exercise(_Strict):
     id: StrictStr
     title: StrictStr
+    class_name: StrictStr | None  # bắt buộc có key; null = hàm rời, khác null = method của class
     function_name: StrictStr
     params: list[StrictStr]
     template: StrictStr
@@ -63,10 +64,13 @@ class CodeFile(_Strict):
 
 
 class Topic(_Strict):
+    """Module; `modules` là sub-module (đệ quy, có thể rỗng)."""
+
     id: StrictStr
     name: StrictStr
     description: StrictStr
     files: list[CodeFile]
+    modules: list[Topic]
 
 
 class Theme(_Strict):

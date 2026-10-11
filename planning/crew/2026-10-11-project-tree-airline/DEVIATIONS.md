@@ -1,0 +1,3 @@
+# Deviations — append-only
+- Plan: content.json chỉ thuộc T-08 · Thực tế: Dart/pydantic parse nghiêm (key bắt buộc) nên content.json phải có `modules: []`/`class_name: null` ngay từ wave 1, nếu không mọi test đọc file thật đỏ · Quyết định: T-01 thêm 2 key một cách cơ học (không đổi nội dung), T-08 vẫn sở hữu phần seed airline · Duyệt: orchestrator (không đổi acceptance)
+- Plan: T-05 owned 4 file · Thực tế: autocomplete (`knownIdentifiersFor`, session_controller.dart) cần gợi ý `self`/thuộc tính cho bài method · Quyết định: thêm `mobile/lib/features/exercise/session_controller.dart` vào owned của T-05 (5 file) · Duyệt: orchestrator

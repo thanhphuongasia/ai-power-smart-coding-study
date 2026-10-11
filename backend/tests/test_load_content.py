@@ -36,7 +36,7 @@ def small() -> dict:
 
     def ex(i: str) -> dict:
         return {
-            "id": i, "title": i, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
+            "id": i, "title": i, "class_name": None, "function_name": "f", "params": ["a"], "template": "def f(a):\n    # TODO A",
             "challenge": {
                 "statement": "s", "motivation": "m",
                 "small": {"caption": "c", "input": "f(1)", "output": "1", "note": None},
@@ -49,7 +49,7 @@ def small() -> dict:
     return {
         "version": "source",
         "themes": [{"id": "th", "name": "T", "description": "d", "tags": ["x"], "topics": [
-            {"id": "tp", "name": "N", "description": "d", "files": [
+            {"id": "tp", "name": "N", "description": "d", "modules": [], "files": [
                 {"id": "f1", "name": "a.py", "exercise_ids": ["e1", "e2"]},
                 {"id": "f2", "name": "b.py", "exercise_ids": ["e2"]},
             ]}]}],
@@ -95,6 +95,48 @@ def test_position_order_kept(db_session):
     assert labels == ["A", "B"]
     files = db_session.scalars(select(FileExercise.exercise_id).where(FileExercise.file_id == "f1").order_by(FileExercise.position)).all()
     assert files == ["e1", "e2"]
+
+
+def nested() -> dict:
+    """small() + cây module 3 tầng: tp → sub → leaf, và tp2 anh em; e2 là method của class."""
+    d = small()
+    d["themes"][0]["topics"][0]["modules"] = [
+        {"id": "sub", "name": "S", "description": "d", "files": [
+            {"id": "f3", "name": "svc.py", "exercise_ids": ["e2"]},
+        ], "modules": [
+            {"id": "leaf", "name": "L", "description": "d", "files": [], "modules": []},
+        ]},
+    ]
+    d["themes"][0]["topics"].append({"id": "tp2", "name": "N2", "description": "d", "files": [], "modules": []})
+    d["exercises"]["e2"]["class_name"] = "Svc"
+    return d
+
+
+def test_nested_modules_stored_preorder_with_parent(db_session):
+    load_content(db_session, nested())
+    rows = db_session.execute(select(Topic.id, Topic.parent_id).order_by(Topic.position)).all()
+    assert [tuple(r) for r in rows] == [("tp", None), ("sub", "tp"), ("leaf", "sub"), ("tp2", None)]
+    assert db_session.get(CodeFile, "f3").topic_id == "sub"
+    assert db_session.get(Exercise, "e2").class_name == "Svc"
+    assert db_session.get(Exercise, "e1").class_name is None
+
+
+def test_duplicate_module_id_across_levels_rejected(db_session):
+    d = nested()
+    d["themes"][0]["topics"][0]["modules"][0]["modules"][0]["id"] = "tp"
+    with pytest.raises(ValueError, match="id topic trùng"):
+        load_content(db_session, d)
+
+
+@pytest.mark.parametrize("drop", ["modules", "class_name"])
+def test_new_keys_are_required(db_session, drop):
+    d = small()
+    if drop == "modules":
+        del d["themes"][0]["topics"][0]["modules"]
+    else:
+        del d["exercises"]["e1"]["class_name"]
+    with pytest.raises(ValueError, match=drop):
+        load_content(db_session, d)
 
 
 def test_removed_exercise_disappears(db_session, real_data):

@@ -220,3 +220,26 @@ def test_orphan_exercise_is_listed_once_at_end_and_runnable(db_session, content_
     assert ids[-1] == "zz-orphan"
     run = client.post("/run", json={"exercise_id": "zz-orphan", "code": orphan["judge"]["solution"]})
     assert run.json()["status"] == "passed"
+
+
+def test_nested_modules_and_class_name_round_trip(db_session, content_data, client_for):
+    """Sub-module 2 tầng và bài method: /content trả đúng cây như nguồn; /run nhận class_name."""
+    data = copy.deepcopy(content_data)
+    first = data["themes"][0]["topics"][0]
+    moved = first["files"].pop()  # chuyển 1 file xuống sub-module tầng 2
+    first["modules"].append(
+        {"id": "nested-a", "name": "A", "description": "d", "files": [], "modules": [
+            {"id": "nested-b", "name": "B", "description": "d", "files": [moved], "modules": []},
+        ]}
+    )
+    ex_id = moved["exercise_ids"][0]
+    data["exercises"][ex_id]["class_name"] = "Svc"
+    load_content(db_session, data)
+
+    body = client_for(db_session).get("/content").json()
+    assert {"themes": body["themes"], "exercises": body["exercises"]} == public_payload(data)
+    sub = body["themes"][0]["topics"][0]["modules"][-1]
+    assert sub["id"] == "nested-a" and sub["modules"][0]["files"] == [moved]
+    assert body["exercises"][ex_id]["class_name"] == "Svc"
+    assert read_judge(db_session, ex_id).class_name == "Svc"
+    assert read_judge(db_session, "split-chunks").class_name is None

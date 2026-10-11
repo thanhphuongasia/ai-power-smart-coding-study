@@ -58,6 +58,21 @@ class StudyTheme {
   final List<String> tags;
   final List<Topic> topics;
 
+  /// Mọi topic/module (kể cả lồng nhau), preorder: cha trước con.
+  Iterable<Topic> get allTopics sync* {
+    for (final t in topics) {
+      yield t;
+      yield* t.allModules;
+    }
+  }
+
+  /// Mọi file trong theme (kể cả trong module con), preorder.
+  Iterable<CodeFile> get allFiles sync* {
+    for (final t in allTopics) {
+      yield* t.files;
+    }
+  }
+
   /// [exercises]: bài đã dựng sẵn theo id (để bài dùng chung là một instance).
   factory StudyTheme.fromJson(
     Map<String, dynamic> json,
@@ -91,12 +106,32 @@ class Topic {
     required this.name,
     required this.description,
     required this.files,
+    this.modules = const [],
   });
 
   final String id;
   final String name;
   final String description;
   final List<CodeFile> files;
+
+  /// Module con (đệ quy), có thể rỗng.
+  final List<Topic> modules;
+
+  /// File của topic này, rồi file của từng module con (preorder).
+  Iterable<CodeFile> get allFiles sync* {
+    yield* files;
+    for (final m in modules) {
+      yield* m.allFiles;
+    }
+  }
+
+  /// Mọi module con ở mọi độ sâu, preorder (không gồm chính topic này).
+  Iterable<Topic> get allModules sync* {
+    for (final m in modules) {
+      yield m;
+      yield* m.allModules;
+    }
+  }
 
   factory Topic.fromJson(
     Map<String, dynamic> json,
@@ -111,6 +146,10 @@ class Topic {
         for (final f in jsonObjects(json, 'files', w))
           CodeFile.fromJson(f, exercises),
       ],
+      modules: [
+        for (final m in jsonObjects(json, 'modules', w))
+          Topic.fromJson(m, exercises),
+      ],
     );
   }
 
@@ -119,6 +158,7 @@ class Topic {
     'name': name,
     'description': description,
     'files': [for (final f in files) f.toJson()],
+    'modules': [for (final m in modules) m.toJson()],
   };
 }
 
@@ -261,6 +301,7 @@ class Exercise {
     required this.blocks,
     this.template = '',
     this.challenge = emptyChallenge,
+    this.className,
   });
 
   final String id;
@@ -270,6 +311,13 @@ class Exercise {
 
   /// Vd: 'split_chunks'.
   final String functionName;
+
+  /// Lớp chứa method, vd 'FlightService'; null nếu là hàm tự do.
+  final String? className;
+
+  /// 'FlightService.book' nếu có lớp, ngược lại chỉ tên hàm.
+  String get qualifiedName =>
+      className != null ? '$className.$functionName' : functionName;
 
   /// Vd: ['text', 'size'].
   final List<String> params;
@@ -281,10 +329,18 @@ class Exercise {
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
     const w = 'exercise';
+    if (!json.containsKey('class_name')) {
+      throw const FormatException('exercise: field "class_name" bị thiếu');
+    }
+    final className = json['class_name'];
+    if (className != null && className is! String) {
+      throw const FormatException('exercise: field "class_name" sai kiểu');
+    }
     return Exercise(
       id: jsonField<String>(json, 'id', w),
       title: jsonField<String>(json, 'title', w),
       functionName: jsonField<String>(json, 'function_name', w),
+      className: className as String?,
       params: jsonStrings(json, 'params', w),
       template: jsonField<String>(json, 'template', w),
       challenge: Challenge.fromJson(
@@ -300,6 +356,7 @@ class Exercise {
     'id': id,
     'title': title,
     'function_name': functionName,
+    'class_name': className,
     'params': params,
     'template': template,
     'challenge': challenge.toJson(),
