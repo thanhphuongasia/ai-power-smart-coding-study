@@ -18,46 +18,47 @@ echo "==> 1/4 build web (API_URL=$PUBLIC_URL)"
 (cd "$ROOT/mobile" && flutter build web --release --dart-define=API_URL="$PUBLIC_URL")
 
 echo "==> 2/4 đồng bộ code lên $HOST:$APP_DIR"
-# shellcheck disable=SC2029  # APP_DIR cố ý mở rộng ở máy local
-ssh "$HOST" "mkdir -p $APP_DIR/backend $APP_DIR/web /tmp/smart-coding-study-deploy"
+# Thư mục tạm của root (không dùng /tmp dùng chung: user khác có thể đặt sẵn file để root cài).
+STAGE=/root/.smart-coding-study-deploy
+# shellcheck disable=SC2029  # APP_DIR, STAGE cố ý mở rộng ở máy local
+ssh "$HOST" "mkdir -p $APP_DIR/backend $APP_DIR/web && rm -rf $STAGE && install -d -m 700 $STAGE"
 rsync -az --delete \
   --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude tests --exclude .env \
   "$ROOT/backend/" "$HOST:$APP_DIR/backend/"
 rsync -az --delete "$ROOT/mobile/build/web/" "$HOST:$APP_DIR/web/"
 scp -q "$ROOT/deploy/nginx/smart-coding-study.conf" "$ROOT/deploy/systemd/smart-coding-study-api.service" \
-  "$HOST:/tmp/smart-coding-study-deploy/"
+  "$HOST:$STAGE/"
 
 echo "==> 3/4 cài đặt trên server"
 # Heredoc nháy đơn: mọi $ bên trong là của server; APP_DIR truyền từ máy local qua môi trường.
 # shellcheck disable=SC2029
-ssh "$HOST" "APP_DIR=$APP_DIR bash -s" <<'REMOTE'
+ssh "$HOST" "APP_DIR=$APP_DIR TMP=$STAGE bash -s" <<'REMOTE'
 set -euo pipefail
 ENV_FILE=/etc/smart-coding-study.env
-TMP=/tmp/smart-coding-study-deploy
 
 # User hệ thống riêng, không shell.
 id smartcs >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin smartcs
 
-# Postgres: role + DB riêng. Mật khẩu sinh trên server, chỉ ghi vào ENV_FILE (không in ra).
+# Postgres: role + DB riêng. Mật khẩu sinh trên server, chỉ đi qua stdin của psql (không nằm
+# trong argv/log sudo) và chỉ ghi vào ENV_FILE. Env ghi ra file tạm rồi mới mv sau khi đặt mật khẩu.
+pg() { runuser -u postgres -- psql -Atq "$@"; }
 if [ ! -f "$ENV_FILE" ]; then
   PW="$(openssl rand -hex 24)"
-  if sudo -u postgres psql -Atqc "select 1 from pg_roles where rolname='smartcs'" | grep -q 1; then
-    printf "ALTER ROLE smartcs WITH LOGIN PASSWORD :'pw';\n" | sudo -u postgres psql -q -v pw="$PW"
+  ( umask 027
+    printf 'DATABASE_URL=postgresql+psycopg://smartcs:%s@127.0.0.1:5432/smart_coding_study\nCODE_RUNNER=judge0\nJUDGE0_URL=https://ce.judge0.com\n' "$PW" > "$ENV_FILE.new" )
+  chown root:smartcs "$ENV_FILE.new"
+  chmod 640 "$ENV_FILE.new"
+  if [ "$(pg -c "select count(*) from pg_roles where rolname='smartcs'")" = 1 ]; then
+    printf "ALTER ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
   else
-    printf "CREATE ROLE smartcs WITH LOGIN PASSWORD :'pw';\n" | sudo -u postgres psql -q -v pw="$PW"
+    printf "CREATE ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
   fi
-  umask 027
-  cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgresql+psycopg://smartcs:${PW}@127.0.0.1:5432/smart_coding_study
-CODE_RUNNER=judge0
-JUDGE0_URL=https://ce.judge0.com
-EOF
-  chown root:smartcs "$ENV_FILE"
-  chmod 640 "$ENV_FILE"
+  mv "$ENV_FILE.new" "$ENV_FILE"
   unset PW
 fi
-sudo -u postgres psql -Atqc "select 1 from pg_database where datname='smart_coding_study'" | grep -q 1 \
-  || sudo -u postgres createdb -O smartcs smart_coding_study
+if [ "$(pg -c "select count(*) from pg_database where datname='smart_coding_study'")" != 1 ]; then
+  runuser -u postgres -- createdb -O smartcs smart_coding_study
+fi
 
 # Python venv + thư viện.
 cd "$APP_DIR/backend"
