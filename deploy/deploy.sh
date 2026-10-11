@@ -49,9 +49,9 @@ if [ ! -f "$ENV_FILE" ]; then
   chown root:smartcs "$ENV_FILE.new"
   chmod 640 "$ENV_FILE.new"
   if [ "$(pg -c "select count(*) from pg_roles where rolname='smartcs'")" = 1 ]; then
-    printf "ALTER ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
+    printf "SET log_min_error_statement = panic;\nALTER ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
   else
-    printf "CREATE ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
+    printf "SET log_min_error_statement = panic;\nCREATE ROLE smartcs WITH LOGIN PASSWORD '%s';\n" "$PW" | pg
   fi
   mv "$ENV_FILE.new" "$ENV_FILE"
   unset PW
