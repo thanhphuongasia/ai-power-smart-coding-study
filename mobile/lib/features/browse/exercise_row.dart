@@ -1,16 +1,21 @@
-/// Một dòng exercise: tên hàm, trạng thái (Đã xong / Đang dở / Mới) và số
-/// block đã xong. Chạm để mở Block list.
+/// Một dòng exercise: tên hàm, trạng thái (Đã xong / Đang dở / Mới / Khoá) và
+/// số ô. Chạm để mở bài; bài khoá (INV-08) không điều hướng.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_controller.dart';
+import '../exercise/session_providers.dart';
 
-class ExerciseRow extends StatelessWidget {
+/// Trạng thái hiển thị: Khoá > Đã xong > Đang dở > Mới. Done = `passed`
+/// (INV-06), đang dở = `ExerciseProgress.inProgress` (INV-09), khoá theo
+/// [exerciseUnlockedProvider] (INV-08) — không tự viết lại điều kiện nào.
+class ExerciseRow extends ConsumerWidget {
   const ExerciseRow({
     super.key,
     required this.exercise,
@@ -25,16 +30,22 @@ class ExerciseRow extends StatelessWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) {
-    final completed = progress?.completedBlocks ?? 0;
+  Widget build(BuildContext context, WidgetRef ref) {
     final total = exercise.blocks.length;
-    final isDone = total > 0 && completed >= total;
-    final isStarted = completed > 0 && !isDone;
+    final isDone = progress?.passed ?? false;
+    final isStarted = progress?.inProgress ?? false;
+    // Bài đã passed luôn coi là mở (vd seed pass trước bài trước nó).
+    final isLocked =
+        !isDone && !ref.watch(exerciseUnlockedProvider(exercise.id));
 
     final String statusText;
     final IconData statusIcon;
     final Color statusColor;
-    if (isDone) {
+    if (isLocked) {
+      statusText = 'Khoá';
+      statusIcon = Icons.lock_outline;
+      statusColor = context.palette.inkMuted;
+    } else if (isDone) {
       statusText = 'Đã xong';
       statusIcon = Icons.check_circle;
       statusColor = context.palette.primary;
@@ -48,9 +59,9 @@ class ExerciseRow extends StatelessWidget {
       statusColor = context.palette.inkMuted;
     }
 
-    return SurfaceCard(
+    final card = SurfaceCard(
       key: Key('exercise-${exercise.id}'),
-      onTap: () => context.push('/exercise/${exercise.id}'),
+      onTap: isLocked ? null : () => context.push('/exercise/${exercise.id}'),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s4),
         child: Row(
@@ -85,7 +96,7 @@ class ExerciseRow extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpace.s1),
                 Text(
-                  '$completed/$total block',
+                  '$total ô',
                   style: AppText.caption.copyWith(
                     color: context.palette.inkMuted,
                   ),
@@ -96,5 +107,7 @@ class ExerciseRow extends StatelessWidget {
         ),
       ),
     );
+    if (!isLocked) return card;
+    return Tooltip(message: 'Hoàn thành bài trước để mở', child: card);
   }
 }

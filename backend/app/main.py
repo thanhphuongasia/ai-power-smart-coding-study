@@ -13,8 +13,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ValidationError
 
 from app import harness
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
@@ -34,6 +36,14 @@ app = FastAPI(title="Smart Coding Study judge")
 class RunRequest(BaseModel):
     exercise_id: str = Field(min_length=1, max_length=100)
     code: str = Field(min_length=1, max_length=MAX_CODE_CHARS)
+
+
+@app.exception_handler(RequestValidationError)
+async def _invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # Handler mặc định trả lại nguyên `input`: vừa lặp lại code học viên, vừa nổ 500 khi input
+    # chứa surrogate lẻ ("\ud800" là JSON hợp lệ nhưng không mã hoá UTF-8 được).
+    fields = sorted({".".join(str(part) for part in error["loc"][1:]) for error in exc.errors()})
+    return JSONResponse(status_code=422, content={"detail": "invalid_request", "fields": fields})
 
 
 class RunError(BaseModel):
@@ -86,7 +96,12 @@ async def run(request: RunRequest, runner: CodeRunner = Depends(get_runner)) -> 
 
     result = harness.parse_result(execution.stdout)
     if result is not None:
-        return RunResponse(**result, duration_ms=duration_ms)
+        # Code học viên chạy cùng tiến trình với harness nên có thể in một dòng kết quả
+        # sai dạng; dòng đó coi như không đọc được, không để thành 500.
+        try:
+            return RunResponse.model_validate({**result, "duration_ms": duration_ms})
+        except ValidationError:
+            logger.warning("harness result has wrong shape for %s", request.exercise_id)
     if execution.status == "error":
         # Harness bị dừng trước khi in kết quả (vd hết bộ nhớ): lỗi do code học viên.
         message = execution.message or (execution.stderr.strip().splitlines() or ["Chương trình bị dừng"])[-1]

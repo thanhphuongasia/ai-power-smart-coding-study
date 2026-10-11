@@ -1,9 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/seed.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/review/review_controller.dart';
 import 'package:smart_coding_study/features/stats/activity.dart';
+import 'package:smart_coding_study/features/stats/stats_screen.dart';
 
 void main() {
   final today = DateTime(2026, 3, 10);
@@ -83,34 +86,64 @@ void main() {
     });
     tearDown(() => c.dispose());
 
-    test('seed: 2 block split-chunks đến hạn, 2 block clean-text sắp tới', () {
-      final due = c.read(dueCardsProvider).map((s) => s.card.id).toList();
-      expect(due, ['split-chunks-b0', 'split-chunks-b1']);
+    test('seed: chỉ bài đã passed (clean-text) có thẻ, hẹn ngày mai', () {
+      expect(c.read(dueCardsProvider), isEmpty);
       final upcoming = c
           .read(upcomingCardsProvider)
           .map((s) => s.card.id)
           .toList();
-      expect(upcoming, ['clean-text-b0', 'clean-text-b1']);
+      expect(upcoming, ['clean-text-a']);
     });
 
-    test('rate chuyển thẻ khỏi hàng đến hạn và ghi hoạt động hôm nay', () {
-      c
-          .read(reviewScheduleProvider.notifier)
-          .rate('split-chunks-b0', ReviewRating.easy);
+    test('bài chỉ có draft (split-chunks) chưa sinh thẻ nào', () {
+      final ids = c.read(reviewCardsProvider).map((card) => card.id);
+      expect(ids.where((id) => id.startsWith('split-chunks')), isEmpty);
+    });
+
+    test('pass bài ⇒ mọi ô thành thẻ đến hạn và ghi hoạt động', () {
+      c.read(progressProvider.notifier).markPassed('split-chunks');
       expect(c.read(dueCardsProvider).map((s) => s.card.id), [
-        'split-chunks-b1',
+        'split-chunks-a',
+        'split-chunks-b',
+        'split-chunks-c',
       ]);
       expect(c.read(activityProvider)[DateTime(2026, 3, 10)], 1);
     });
 
-    test('block làm đúng thành thẻ mới và tăng hoạt động', () {
-      c.read(progressProvider.notifier).markBlockPassed('split-chunks', 2);
-      expect(
-        c.read(dueCardsProvider).map((s) => s.card.id),
-        contains('split-chunks-b2'),
-      );
-      expect(c.read(activityProvider)[DateTime(2026, 3, 10)], 1);
+    test('rate chuyển thẻ khỏi hàng đến hạn và ghi hoạt động hôm nay', () {
+      c.read(progressProvider.notifier).markPassed('split-chunks');
+      c
+          .read(reviewScheduleProvider.notifier)
+          .rate('split-chunks-a', ReviewRating.easy);
+      expect(c.read(dueCardsProvider).map((s) => s.card.id), [
+        'split-chunks-b',
+        'split-chunks-c',
+      ]);
+      // 1 lần từ markPassed + 1 lần từ rate, cùng ngày.
+      expect(c.read(activityProvider)[DateTime(2026, 3, 10)], 2);
     });
+
+    test(
+      'INV-07: ô đã xem lời giải bị kéo về lịch ôn gần nhất (≤ ngày mai)',
+      () {
+        final progress = c.read(progressProvider.notifier);
+        progress.markPassed('split-chunks');
+        progress.viewSolution('split-chunks', 'A');
+        c
+            .read(reviewScheduleProvider.notifier)
+            .rate('split-chunks-a', ReviewRating.easy); // Dễ ⇒ 3 ngày
+        c
+            .read(reviewScheduleProvider.notifier)
+            .rate('split-chunks-b', ReviewRating.easy); // ô sạch giữ 3 ngày
+
+        DateTime dueOf(String id) => c
+            .read(upcomingCardsProvider)
+            .firstWhere((s) => s.card.id == id)
+            .due;
+        expect(dueOf('split-chunks-a'), DateTime(2026, 3, 11));
+        expect(dueOf('split-chunks-b'), DateTime(2026, 3, 13));
+      },
+    );
 
     test('exercise dùng chung chỉ sinh thẻ một lần', () {
       final ids = c.read(reviewCardsProvider).map((card) => card.id).toList();
@@ -126,4 +159,44 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets(
+    'INV-07: Stats "không cần gợi ý" bỏ ô đã xem lời giải / dùng gợi ý',
+    (tester) async {
+      late ProviderContainer container;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: Builder(
+            builder: (context) {
+              container = ProviderScope.containerOf(context);
+              return MaterialApp(
+                theme: buildAppTheme(),
+                home: const StatsScreen(),
+              );
+            },
+          ),
+        ),
+      );
+      Finder tile(String key) => find.descendant(
+        of: find.byKey(Key(key)),
+        matching: find.byType(Text),
+      );
+      String noHint() => tester.widget<Text>(tile('stat-no-hint').first).data!;
+
+      // Seed: chỉ clean-text (1 ô sạch) đã passed.
+      expect(noHint(), '100%');
+
+      final progress = container.read(progressProvider.notifier);
+      // Bài chưa pass: gợi ý/lời giải của nó không ảnh hưởng.
+      progress.viewSolution('split-chunks', 'A');
+      await tester.pump();
+      expect(noHint(), '100%');
+
+      // Pass: 3 ô, A đã xem lời giải, B dùng gợi ý, C sạch ⇒ sạch 2/4 = 50%.
+      progress.useHint('split-chunks', 'B');
+      progress.markPassed('split-chunks');
+      await tester.pump();
+      expect(noHint(), '50%');
+    },
+  );
 }

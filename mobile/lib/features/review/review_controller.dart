@@ -104,34 +104,51 @@ final reviewScheduleProvider =
       ReviewController.new,
     );
 
-/// Mọi thẻ hiện có: các block đã xong của từng exercise.
+/// Mọi thẻ hiện có: mọi ô của bài đã `passed` (INV-06) — bài chưa pass chưa
+/// sinh thẻ nào, kể cả khi có draft.
 final reviewCardsProvider = Provider<List<ReviewCard>>((ref) {
   final progress = ref.watch(progressProvider);
   return [
     for (final exercise in uniqueExercises())
-      for (
-        var i = 0;
-        i <
-            (progress[exercise.id]?.completedBlocks ?? 0).clamp(
-              0,
-              exercise.blocks.length,
-            );
-        i++
-      )
-        ReviewCard(exercise: exercise, blockIndex: i),
+      if (progress[exercise.id]?.passed ?? false)
+        for (var i = 0; i < exercise.blocks.length; i++)
+          ReviewCard(exercise: exercise, blockIndex: i),
   ];
 });
 
 /// Thẻ kèm ngày đến hạn; thẻ chưa có lịch coi như đến hạn hôm nay.
 typedef ScheduledCard = ({ReviewCard card, DateTime due});
 
+DateTime _capDue(
+  DateTime due, {
+  required bool viewed,
+  required DateTime soonest,
+}) => viewed && due.isAfter(soonest) ? soonest : due;
+
+/// INV-07: ô mà người học đã xem lời giải (không tính điểm) được xếp như đã
+/// dùng tối đa gợi ý, tức lịch ôn gần nhất: ngày đến hạn không bao giờ xa hơn
+/// ngày mai (bằng khoảng cách của đánh giá "Khó"), dù người học chấm "Dễ".
+/// Thẻ chưa có lịch vốn đến hạn hôm nay nên giữ nguyên.
 List<ScheduledCard> _scheduled(Ref ref) {
   final cards = ref.watch(reviewCardsProvider);
   final schedule = ref.watch(reviewScheduleProvider);
+  final progress = ref.watch(progressProvider);
   final today = dayOf(ref.read(clockProvider)());
+  final soonest = addDays(today, 1);
   final list = [
     for (final card in cards)
-      (card: card, due: schedule[card.id]?.due ?? today),
+      (
+        card: card,
+        due: _capDue(
+          schedule[card.id]?.due ?? today,
+          viewed:
+              progress[card.exercise.id]?.solutionViewed.contains(
+                card.block.label,
+              ) ??
+              false,
+          soonest: soonest,
+        ),
+      ),
   ];
   list.sort((a, b) => a.due.compareTo(b.due));
   return list;

@@ -26,15 +26,17 @@ class StatsScreen extends ConsumerWidget {
 
     final exercises = uniqueExercises();
     final doneBlocks = completedBlocksIn(exercises, progress);
+    // INV-06/07: chỉ đếm ô của bài đã passed; ô sạch = không dùng gợi ý VÀ
+    // chưa xem lời giải. hintsUsed/solutionViewed key theo nhãn ô (A/B/C).
     var noHint = 0;
     for (final exercise in exercises) {
       final p = progress[exercise.id];
-      final completed = (p?.completedBlocks ?? 0).clamp(
-        0,
-        exercise.blocks.length,
-      );
-      for (var i = 0; i < completed; i++) {
-        if ((p?.hintsUsed[exercise.blocks[i].id] ?? 0) == 0) noHint++;
+      if (p == null || !p.passed) continue;
+      for (final block in exercise.blocks) {
+        final clean =
+            (p.hintsUsed[block.label] ?? 0) == 0 &&
+            !p.solutionViewed.contains(block.label);
+        if (clean) noHint++;
       }
     }
     final noHintPct = doneBlocks == 0 ? 0 : (noHint * 100 / doneBlocks).round();

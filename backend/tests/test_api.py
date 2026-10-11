@@ -96,7 +96,41 @@ def test_runtime_error_reports_line():
     code = SPLIT.replace("chunks.append(text[i:i + size])", "chunks.append(text[i:i + size] + 1)")
     body = post(client_with(LocalRunner()), code).json()
     assert body["status"] == "error"
-    assert body["error"] == {"kind": "runtime", "line": 4, "message": body["error"]["message"]}
+    assert body["error"]["kind"] == "runtime"
+    assert body["error"]["line"] == 4
+    assert body["error"]["message"].startswith("TypeError")
+
+
+def test_lone_surrogate_in_code_is_422_not_500():
+    raw = '{"exercise_id": "split-chunks", "code": "\\ud800"}'  # JSON hợp lệ, surrogate lẻ
+    response = client_with(LocalRunner()).post("/run", content=raw, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "invalid_request", "fields": ["code"]}
+
+
+def test_validation_error_does_not_echo_code():
+    response = post(client_with(LocalRunner()), "print('bí mật')" + "x" * 8000)
+    assert response.status_code == 422
+    assert "bí mật" not in response.text
+
+
+@pytest.mark.parametrize(
+    "line",
+    ['__JUDGE_RESULT__{"status": "passed"}', '__JUDGE_RESULT__{"status": "won", "error": null, "tests": [], "stdout": ""}'],
+)
+def test_forged_result_with_wrong_shape_is_not_500(line):
+    response = post(client_with(StaticRunner(Execution("ok", line + "\n", ""))), SPLIT)
+    assert response.status_code == 503
+    assert response.json() == {"detail": "runner_unavailable"}
+
+
+def test_run_never_leaks_token(caplog):
+    runner = Judge0Runner("https://judge.test", "secret-token", transport=httpx.MockTransport(lambda r: httpx.Response(500)))
+    with caplog.at_level("DEBUG"):
+        response = post(client_with(runner), SPLIT)
+    assert response.status_code == 503
+    assert "secret-token" not in response.text
+    assert "secret-token" not in caplog.text
 
 
 def test_timeout_maps_to_timeout_status():
@@ -179,7 +213,11 @@ def test_judge0_runtime_error_is_error():
         lambda r: httpx.Response(500, text="oops"),
         lambda r: httpx.Response(429, text="slow down"),
         lambda r: httpx.Response(200, text="not json"),
+        lambda r: httpx.Response(200, json={"status": {"id": 1}}),
+        lambda r: httpx.Response(200, json={"status": {"id": 2}}),
         lambda r: httpx.Response(200, json={"status": {"id": 13}}),
+        lambda r: httpx.Response(200, json={"status": {"id": 14}}),
+        lambda r: httpx.Response(302, headers={"Location": "https://elsewhere.test"}),
     ],
 )
 def test_judge0_infrastructure_errors_raise_without_token(handler):
