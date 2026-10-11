@@ -364,6 +364,13 @@
             "via": [
               "relay"
             ]
+          },
+          {
+            "from": "Broker",
+            "to": "Notifier",
+            "kind": "association",
+            "label": "giao sự kiện tới consumer (thiết kế; Notifier khử trùng theo id)",
+            "via": []
           }
         ]
       },
@@ -3144,6 +3151,21 @@
                 2
               ]
             }
+          },
+          {
+            "steps": [
+              "n = Notifier()",
+              "try:\n    n.notify({'id': 'e7', 'type': 'refunded', 'reservation': 'R1', 'amount': 0})\nexcept ValueError:\n    pass"
+            ],
+            "call": "[n.notify({'id': 'e7', 'type': 'cancelled', 'reservation': 'R1', 'amount': 3000000}), n.sent]",
+            "expect": {
+              "return": [
+                true,
+                [
+                  "Đặt chỗ R1 đã huỷ, hoàn 3000000đ"
+                ]
+              ]
+            }
           }
         ]
       }
@@ -3328,7 +3350,7 @@
       "template": "class Broker:\n    def __init__(self, fail_on=()):\n        self.fail_on = set(fail_on)  # id sự kiện sẽ làm broker \"sập\"\n        self.published = []\n\n    def publish(self, event):\n        if event[\"id\"] in self.fail_on:\n            raise RuntimeError(\"broker down\")\n        self.published.append(event)\n\n\nclass Outbox:\n    def __init__(self):\n        self.state = {}\n        self.pending = []\n\n    def save_with_event(self, key, value, event):\n        if \"id\" not in event or \"type\" not in event:\n            raise ValueError(\"Sự kiện thiếu id hoặc type\")\n        self.state[key] = value\n        self.pending.append(event)\n\n\nclass OutboxRelay:\n    def __init__(self, outbox, broker):\n        self.outbox = outbox\n        self.broker = broker\n\n    def relay(self):\n        count = 0\n        while self.outbox.pending:\n            try:\n                # TODO A\n                # TODO B\n            # TODO C\n                break\n            count += 1\n        return count",
       "challenge": {
         "statement": "Viết phần thân vòng lặp của relay(self): với mỗi sự kiện đầu hàng trong self.outbox.pending, publish lên self.broker, và CHỈ SAU KHI publish thành công mới bỏ nó khỏi pending. Nếu broker ném RuntimeError thì dừng (dòng break có sẵn), giữ nguyên sự kiện lỗi và mọi sự kiện sau nó theo đúng thứ tự. relay trả về số sự kiện đã publish.",
-        "motivation": "Relay là nửa còn lại của outbox: sau khi huỷ đặt chỗ (hoặc đăng bài, thích bài trên Twitter) đã ghi sự kiện vào pending, relay đọc và đẩy sang hệ thống thông báo/hoàn tiền. Broker có thể sập bất cứ lúc nào, nên relay phải xoá sự kiện sau khi publish xong, không phải trước; làm vậy sự kiện không bao giờ mất, đổi lại có thể bị giao lặp (nên phía nhận phải khử trùng lặp, như Notifier).",
+        "motivation": "Relay là nửa còn lại của outbox: sau khi huỷ đặt chỗ (hoặc đăng bài, thích bài trên Twitter) đã ghi sự kiện vào pending, relay đọc và đẩy sang hệ thống thông báo/hoàn tiền. Broker có thể sập bất cứ lúc nào, nên relay phải xoá sự kiện sau khi publish xong, không phải trước; làm vậy sự kiện không bao giờ mất, đổi lại có thể bị giao lặp (nên phía nhận phải khử trùng lặp, như consumer — Notifier ở Airline, dịch vụ báo follower ở Twitter).",
         "small": {
           "caption": "Broker sập ở sự kiện thứ hai",
           "input": "o = Outbox()\no.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'cancelled'}])\nb = Broker(fail_on=('e2',))\nprint(OutboxRelay(o, b).relay(), [e['id'] for e in o.pending])",
@@ -3337,9 +3359,9 @@
         },
         "project": {
           "caption": "Broker hồi phục, relay chạy lại và không mất tin",
-          "input": "r = OutboxRelay(o, b)\nr.relay()\nb.fail_on.clear()\nprint(r.relay(), [e['id'] for e in b.published])",
+          "input": "o = Outbox()\no.pending.extend([{'id': 'e1', 'type': 'cancelled'}, {'id': 'e2', 'type': 'cancelled'}, {'id': 'e3', 'type': 'cancelled'}])\nb = Broker(fail_on=('e2',))\nr = OutboxRelay(o, b)\nr.relay()\nb.fail_on.clear()\nprint(r.relay(), [e['id'] for e in b.published])",
           "output": "2 ['e1', 'e2', 'e3']",
-          "note": "Với 3 sự kiện e1..e3 và broker sập ở e2: lần relay đầu publish e1, lần sau publish e2 rồi e3; không mất, không lặp."
+          "note": "Broker sập ở e2: lần relay đầu chỉ publish e1; sau khi broker hồi phục, lần sau publish e2 rồi e3 (2 sự kiện). Không mất, không lặp."
         }
       },
       "blocks": [

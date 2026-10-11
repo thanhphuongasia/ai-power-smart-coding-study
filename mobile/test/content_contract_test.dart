@@ -102,6 +102,13 @@ void main() {
       }
       expect(testContent.exerciseById('split-chunks').blocks.length, 3);
       expect(testContent.locateFilesNamed('chunker.py').length, 2);
+      final outbox = testContent.locateFilesNamed('reliability/outbox.py');
+      expect(outbox.length, 2);
+      expect(outbox.map((u) => u.theme.id).toSet().length, 2);
+      expect(
+        outbox[0].file.exercises.map((e) => e.id).toList(),
+        outbox[1].file.exercises.map((e) => e.id).toList(),
+      );
     });
 
     test('theme airline đứng đầu, cây ≥ 2 cấp module, 17 bài method', () {
