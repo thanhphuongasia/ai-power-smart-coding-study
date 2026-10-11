@@ -95,7 +95,7 @@ systemctl reload nginx
 
 # Kiểm nhanh: API trả nội dung qua cả cổng nội bộ lẫn nginx.
 for i in $(seq 1 20); do
-  curl -fsS -o /dev/null http://127.0.0.1:8100/content && break
+  curl -fs -o /dev/null http://127.0.0.1:8100/content && break
   sleep 1
 done
 curl -fsS -o /dev/null http://127.0.0.1:8100/content
