@@ -1,0 +1,101 @@
+"""API chấm bài: `POST /run` ghép harness + test case của bài rồi gửi cho máy chấm.
+
+Chạy: `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000` (xem README.md).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from fastapi import Depends, FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from app import harness
+from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
+
+logger = logging.getLogger("judge")
+
+APP_DIR = Path(__file__).parent
+HARNESS_SOURCE = (APP_DIR / "harness.py").read_text(encoding="utf-8")
+EXERCISES: dict[str, dict] = json.loads((APP_DIR / "exercises.json").read_text(encoding="utf-8"))
+MAX_CODE_CHARS = 8000
+# Máy chấm công khai giới hạn theo IP: không bắn quá 4 bài cùng lúc từ một backend.
+_RUN_SLOTS = asyncio.Semaphore(4)
+
+app = FastAPI(title="Smart Coding Study judge")
+
+
+class RunRequest(BaseModel):
+    exercise_id: str = Field(min_length=1, max_length=100)
+    code: str = Field(min_length=1, max_length=MAX_CODE_CHARS)
+
+
+class RunError(BaseModel):
+    kind: Literal["syntax", "runtime"]
+    line: int | None
+    message: str
+
+
+class RunTest(BaseModel):
+    call: str
+    expected: str
+    actual: str | None
+    passed: bool
+
+
+class RunResponse(BaseModel):
+    status: Literal["passed", "failed", "error", "timeout"]
+    error: RunError | None
+    tests: list[RunTest]
+    stdout: str
+    duration_ms: int
+
+
+@lru_cache
+def get_runner() -> CodeRunner:
+    return runner_from_env()
+
+
+@app.post("/run", response_model=RunResponse)
+async def run(request: RunRequest, runner: CodeRunner = Depends(get_runner)) -> RunResponse:
+    exercise = EXERCISES.get(request.exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="exercise_not_found")
+
+    payload = json.dumps(
+        {"code": request.code, "function": exercise["function"], "cases": exercise["cases"]},
+        ensure_ascii=False,
+    )
+    started = time.monotonic()
+    try:
+        async with _RUN_SLOTS:
+            execution = await runner.run(HARNESS_SOURCE, payload)
+    except RunnerUnavailable as exc:
+        logger.warning("runner unavailable for %s: %s", request.exercise_id, exc)
+        raise HTTPException(status_code=503, detail="runner_unavailable") from None
+    duration_ms = int((time.monotonic() - started) * 1000)
+
+    if execution.status == "timeout":
+        return RunResponse(status="timeout", error=None, tests=[], stdout="", duration_ms=duration_ms)
+
+    result = harness.parse_result(execution.stdout)
+    if result is not None:
+        return RunResponse(**result, duration_ms=duration_ms)
+    if execution.status == "error":
+        # Harness bị dừng trước khi in kết quả (vd hết bộ nhớ): lỗi do code học viên.
+        message = execution.message or (execution.stderr.strip().splitlines() or ["Chương trình bị dừng"])[-1]
+        return RunResponse(
+            status="error",
+            error=RunError(kind="runtime", line=None, message=message),
+            tests=[],
+            stdout="",
+            duration_ms=duration_ms,
+        )
+    logger.warning("harness output not understood for %s", request.exercise_id)
+    raise HTTPException(status_code=503, detail="runner_unavailable")
