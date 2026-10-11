@@ -2,7 +2,7 @@ Worktree: (không dùng — thẳng trên main)
 Branch:   main
 Issue:    (không tạo)
 
-# Status: open
+# Status: done
 
 | Task | Trạng thái |
 |---|---|
@@ -18,4 +18,6 @@ Kiểm: pytest (DB sạch scs_progressive_verify_test) 360 passed, 2 skipped · 
 - Nhãn ô A/B/C bank-init/bank-properties đổi nghĩa: draft cũ trên thiết bị có thể hiện vào ô mới cùng nhãn (VPS không có draft).
 - DB test mặc định bị phiên mcp-content nâng lên 0005 — pytest mặc định lỗi môi trường tới khi merge 0005.
 
-Next action: đồng bộ git — local main có commit 501547c chưa push; origin/main đi trước 8 commit (mcp-content). merge bị chặn vì mobile/ios/ci_scripts/ci_post_clone.sh sửa dở (nội dung == origin/main). Chờ user quyết.
+Đồng bộ git: user duyệt — ci_post_clone.sh local (== 09e6041 của Codex) sao lưu rồi bỏ, merge origin/main (8 commit mcp-content), conflict _index.md giữ cả hai dòng; pytest sau merge 460 passed, 2 skipped.
+
+Next action: không còn — distill đã dispatch.

@@ -108,6 +108,9 @@ chmod -R u=rwX,go=rX "$APP_DIR"
 case "$AUTH_OPEN_AS" in *[!A-Za-z0-9._%+@-]*) echo "AUTH_OPEN_AS không hợp lệ" >&2; exit 1 ;; esac
 sed -i '/^AUTH_OPEN_AS=/d' "$ENV_FILE"
 if [ -n "$AUTH_OPEN_AS" ]; then printf 'AUTH_OPEN_AS=%s\n' "$AUTH_OPEN_AS" >> "$ENV_FILE"; fi
+# MCP (claude.ai): cùng cơ chế xoá-rồi-ghi-lại để chạy lại không nhân đôi dòng; không đụng biến khác.
+sed -i '/^PUBLIC_BASE_URL=/d;/^IDENTITY_ISSUER=/d' "$ENV_FILE"
+printf 'PUBLIC_BASE_URL=https://%s\nIDENTITY_ISSUER=https://identity.jacons-corp.com\n' "$DOMAIN" >> "$ENV_FILE"
 
 # systemd.
 install -m 644 "$TMP/smart-coding-study-api.service" /etc/systemd/system/smart-coding-study-api.service
@@ -153,6 +156,12 @@ curl -fsS -m 10 $R -o /dev/null "https://$DOMAIN/" || rollback_site
 want=401; [ -n "$AUTH_OPEN_AS" ] && want=200
 [ "$(curl -s -m 10 $R -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/me")" = "$want" ] \
   || { echo "/api/me qua nginx không trả $want — kiểm location /api/ và AUTH_OPEN_AS" >&2; rollback_site; }
+# MCP qua nginx: discovery trỏ đúng resource (INV-06) và /mcp không token trả 401 có resource_metadata.
+curl -fsS -m 10 $R "https://$DOMAIN/.well-known/oauth-protected-resource/mcp" | grep -q "\"https://$DOMAIN/mcp\"" \
+  || { echo "discovery MCP qua nginx sai — kiểm location và PUBLIC_BASE_URL" >&2; rollback_site; }
+curl -s -m 10 $R -o /dev/null -D - -X POST -H 'Content-Type: application/json' -d '{}' "https://$DOMAIN/mcp" \
+  | grep -qi '^www-authenticate: Bearer.*resource_metadata' \
+  || { echo "/mcp qua nginx không trả 401 + resource_metadata" >&2; rollback_site; }
 # Link cũ :8090 chuyển sang domain HTTPS.
 [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/)" = 308 ] \
   || { echo ":8090 không chuyển hướng 308" >&2; rollback_site; }

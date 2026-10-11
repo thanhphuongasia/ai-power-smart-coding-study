@@ -636,3 +636,15 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: client rất cũ không hiểu 308 có thể không theo chuyển hướng (không đo); domain hardcode trong hai `return`.
 
 **Nguồn**: deploy/nginx/smart-coding-study.conf:7-20; deploy/deploy.sh:156-158; planning/crew/2026-10-11-testflight-prep/DEVIATIONS.md, STATUS.md.
+
+### MCP: đăng nhập OAuth qua identity-service, backend chỉ là resource server
+
+**Quyết định** (run 2026-10-11-mcp-content): claude.ai kết nối `https://codewithphuong.jacons-corp.com/mcp` bằng OAuth 2.1 + PKCE với identity-service (đăng nhập GitHub). Backend này chỉ verify JWT RS256 qua JWKS (`iss`, `aud == <PUBLIC_BASE_URL>/mcp`, `exp`), không phát token, không giữ secret. Được sửa nội dung hay không do bảng `mcp_access` (`sub` → user admin) quyết, kiểm lại ở MỖI tool call; cấp/thu hồi bằng CLI `python -m app.mcp_access` hoặc `/api/admin/mcp-access`. Bên identity-service chỉ thêm resource vào `OAuth2:AllowedResources`.
+
+**Vì sao**: docs Anthropic cấm đặt token trong URL, và tính năng request headers cho connector còn ở dạng beta, nên app key tĩnh hay key trong URL không phải đường được hỗ trợ ổn định. identity-service đã có sẵn DCR (đăng ký client động) + PKCE chạy thật cho connector của app khác (expense-tracker), nên dùng lại rẻ hơn dựng mới. Ai có GitHub cũng lấy được token cho resource này, và JWT sống 60 phút không thu hồi được, nên thêm allowlist `mcp_access` (fail-closed: bảng rỗng thì không ai ghi được) kiểm mỗi request.
+
+**Phương án đã bỏ**: (1) app key tĩnh trong header — phụ thuộc tính năng beta; (2) key trong URL — docs Anthropic cấm; (3) tự viết authorization server trong backend này — thêm bề mặt bảo mật (phát token, lưu secret) khi đã có dịch vụ chạy thật. Lý do này lấy từ yêu cầu của user trong run và Context của PLAN.md.
+
+**Đánh đổi đã chấp nhận**: backend phụ thuộc identity-service sống (JWKS chết thì `/mcp` trả 503, có grace 1 giờ cho khoá đã cache); chuỗi resource phải khớp ở ba nơi (PRM, `aud`, `AllowedResources`) và đổi domain là sửa cả hai repo; redeploy identity-service chạm các app khác (chỉ đổi config); đổi mật khẩu app không thu hồi quyền MCP vì quyền gắn tài khoản identity, cắt bằng `revoke`.
+
+**Nguồn**: backend/app/mcp_auth.py:1-13,169-218; backend/app/mcp_server.py:246-274; backend/app/tables.py:187-201; planning/crew/2026-10-11-mcp-content/PLAN.md (Context, Thiết kế, INV-03, INV-04, INV-06), DEVIATIONS.md.

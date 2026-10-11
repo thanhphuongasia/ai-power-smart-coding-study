@@ -182,3 +182,19 @@ class UserState(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class McpAccess(Base):
+    """Tài khoản identity-service (`sub` của JWT) được phép sửa nội dung qua `/mcp`, thay mặt `user_id`.
+
+    Không có dòng (hoặc `revoked_at` khác null, hoặc user đích không còn admin) = không có quyền —
+    kiểm ở mỗi tool call, nên thu hồi có hiệu lực ngay dù JWT còn hạn.
+    """
+
+    __tablename__ = "mcp_access"
+
+    sub: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
