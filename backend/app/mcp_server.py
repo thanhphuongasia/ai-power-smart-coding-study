@@ -30,6 +30,7 @@ from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
 from app import content_ops, review
+from app.sd import attempts as sd_attempts
 from app.content_ops import ContentOpError
 from app.db import SessionLocal
 from app.export_content import admin_version
@@ -53,7 +54,9 @@ _claims: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_claim
 INSTRUCTIONS = (
     "Công cụ soạn nội dung cho app học lập trình Smart Coding Study. Cây nội dung: project → module "
     "(lồng được) → file → lesson. Mọi thay đổi chỉ vào HÀNG CHỜ DUYỆT: admin phải duyệt trong app thì học viên mới thấy — hãy nói rõ điều này với người dùng sau khi ghi. Các lần đọc thấy cả mục đang chờ duyệt. Trước khi tạo/sửa bài, gọi "
-    "get_authoring_guide để biết luật; thử với dry_run=true trước, sửa hết lỗi rồi mới ghi thật."
+    "get_authoring_guide để biết luật; thử với dry_run=true trước, sửa hết lỗi rồi mới ghi thật. "
+    "Ngoài ra có 3 tool chấm bài thực chiến System Design (sd_list_attempts, sd_get_attempt, sd_submit_feedback): "
+    "feedback ghi bằng sd_submit_feedback hiện cho học viên NGAY trong app, không qua hàng chờ duyệt."
 )
 
 mcp = MCPServer(name="smart-coding-study", instructions=INSTRUCTIONS)
@@ -241,6 +244,52 @@ async def create_lesson(file_id: str, lesson: dict[str, Any], dry_run: bool = Fa
 async def update_lesson(lesson_id: str, changes: dict[str, Any], dry_run: bool = False) -> dict:
     """Sửa bài: thay nguyên các field top-level được truyền (không đổi id). Vào hàng chờ duyệt: báo người dùng là admin cần duyệt."""
     return await _writer("update_lesson", lambda c: content_ops.update_lesson(c, lesson_id, changes), dry_run)
+
+
+# --- Chấm bài thực chiến System Design ----------------------------------------------------------
+# Dữ liệu của học viên, không phải nội dung học: không qua hàng chờ duyệt. Vẫn `authorize_sub` mỗi lần gọi
+# (chỉ admin đã được cấp quyền), không có tool xoá. Hàm nghiệp vụ nằm ở app/sd/attempts.py.
+
+
+def _sd(tool: str, fn: Callable[[Session, str], Any], *, write: bool = False) -> Any:
+    with open_session() as session:
+        _, sub = _authorized(session)
+        try:
+            result = fn(session, sub)
+        except sd_attempts.SdError as exc:
+            session.rollback()
+            raise ToolError(str(exc)) from None
+        if write:
+            session.commit()
+    logger.info("mcp %s (sub=%s)", tool, sub)
+    return result
+
+
+@mcp.tool(annotations=_READ)
+async def sd_list_attempts(
+    doc_id: str | None = None, task_id: str | None = None, status: str | None = "auto", limit: int = 20
+) -> list[dict]:
+    """Hàng đợi bài thực chiến System Design cần chấm, cũ nhất trước. Mặc định status='auto' (mới chỉ có điểm từ khoá); 'reviewed' xem bài đã chấm; None xem tất cả. Mỗi mục có attempt_id để gọi sd_get_attempt."""
+    return await run_in_threadpool(
+        _sd, "sd_list_attempts", lambda s, _: sd_attempts.review_queue(s, doc_id=doc_id, task_id=task_id, status=status, limit=limit)
+    )
+
+
+@mcp.tool(annotations=_READ)
+async def sd_get_attempt(attempt_id: int) -> dict:
+    """Một lần thử đầy đủ: câu trả lời của học viên, đề, các ý rubric (rubric_items, theo thứ tự), điểm từ khoá (auto_hits) và đáp án mẫu (reference). Đọc cái này rồi chấm bằng sd_submit_feedback."""
+    return await run_in_threadpool(_sd, "sd_get_attempt", lambda s, _: sd_attempts.review_detail(s, attempt_id))
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_submit_feedback(attempt_id: int, verdicts: list[dict[str, Any]], feedback: str) -> dict:
+    """Ghi bản chấm sâu của một lần thử: verdicts có ĐÚNG số phần tử bằng rubric_items, theo thứ tự, mỗi phần tử {ok: true|false, note: 'ghi chú ngắn'}; feedback là nhận xét chung (≤4000 ký tự). Học viên thấy ngay trong app và bản này thay điểm từ khoá. Gọi lại cho cùng attempt_id sẽ thay bản trước."""
+    return await run_in_threadpool(
+        _sd,
+        "sd_submit_feedback",
+        lambda s, sub: sd_attempts.submit_feedback(s, attempt_id, feedback=feedback, verdicts=verdicts, reviewer=f"mcp:{sub}"),
+        write=True,
+    )
 
 
 def _json(status: int, body: dict, headers: dict[str, str] | None = None) -> JSONResponse:

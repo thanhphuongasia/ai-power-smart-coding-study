@@ -25,7 +25,7 @@ from app.db import get_session
 from app.progress import _bad_text
 from app.sd.evaluator import Evaluator, get_evaluator
 from app.sd.learner import _load, _published, _sections_state, _tasks_state
-from app.tables import SdAttempt, SdTask
+from app.tables import SdAttempt, SdSection, SdTask
 
 router = APIRouter(prefix="/api/sd")
 
@@ -154,3 +154,126 @@ def list_attempts(
     ).all()
     texts = [r["text"] for r in task.rubric]
     return {"items": [attempt_view(a, texts) for a in rows]}
+
+
+# --- Chấm sâu qua MCP (Claude) --------------------------------------------------------------
+# Các hàm dưới đây chỉ được gọi từ tool MCP (`app/mcp_server.py`), sau `authorize_sub`: MCP là đường của
+# admin đã được cấp quyền, KHÔNG phải đường của học viên. Học viên chỉ đi qua các route ở trên (luôn lọc
+# theo `user.id` của mình), nên không có đường nào cho học viên A đọc bài của học viên B.
+
+MAX_FEEDBACK_CHARS = 4000
+MAX_NOTE_CHARS = 500
+MAX_QUEUE = 50
+PREVIEW_CHARS = 200
+MAX_REFERENCE_CARDS = 30
+MAX_REFERENCE_CHARS = 2000
+
+
+class SdError(Exception):
+    """Lỗi nghiệp vụ của tool chấm; MCP đổi thành ToolError để Claude đọc được."""
+
+
+def review_queue(
+    session: Session, *, doc_id: str | None, task_id: str | None, status: str | None, limit: int
+) -> list[dict]:
+    """Lần thử cần chấm, CŨ NHẤT TRƯỚC (hàng đợi): mặc định chỉ bản `auto` chưa ai chấm sâu."""
+    if status not in (None, "auto", "reviewed"):
+        raise SdError("status chỉ nhận 'auto' (chưa chấm sâu), 'reviewed' hoặc bỏ trống (tất cả)")
+    q = select(SdAttempt).order_by(SdAttempt.created_at, SdAttempt.id).limit(max(1, min(limit, MAX_QUEUE)))
+    if doc_id:
+        q = q.where(SdAttempt.doc_id == doc_id)
+    if task_id:
+        q = q.where(SdAttempt.task_id == task_id)
+    if status:
+        q = q.where(SdAttempt.status == status)
+    rows = session.scalars(q).all()
+    names = {
+        (t.doc_id, t.id): t.name
+        for t in session.scalars(select(SdTask).where(SdTask.doc_id.in_({r.doc_id for r in rows})))
+    }
+    return [
+        {
+            "attempt_id": a.id,
+            "doc_id": a.doc_id,
+            "task_id": a.task_id,
+            "task_name": names.get((a.doc_id, a.task_id), ""),
+            "learner_id": a.user_id,
+            "n": a.n,
+            "status": a.status,
+            "auto_score": (a.auto_result or {}).get("score", 0),
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "answer_preview": a.answer[:PREVIEW_CHARS],
+        }
+        for a in rows
+    ]
+
+
+def review_detail(session: Session, attempt_id: int) -> dict:
+    """Mọi thứ Claude cần để chấm: câu trả lời, đề, các ý rubric (CHỈ nội dung, không từ khoá), đáp án mẫu."""
+    a = session.get(SdAttempt, attempt_id)
+    if a is None:
+        raise SdError(f"không có lần thử id={attempt_id}")
+    task = session.get(SdTask, (a.doc_id, a.task_id))
+    ref = session.get(SdSection, (a.doc_id, task.ref_section_id)) if task and task.ref_section_id else None
+    out = {
+        "attempt_id": a.id,
+        "doc_id": a.doc_id,
+        "task_id": a.task_id,
+        "learner_id": a.user_id,
+        "n": a.n,
+        "status": a.status,
+        "answer": a.answer,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+        "task": None,
+        "reference": None,
+        "feedback": a.feedback,
+        "verdicts": a.verdicts,
+    }
+    if task:
+        hits = (a.auto_result or {}).get("hits", [])
+        out["task"] = {
+            "name": task.name,
+            "prompt": task.prompt,
+            "rubric_items": [r["text"] for r in task.rubric],
+            "auto_hits": [bool(hits[i]) if i < len(hits) else False for i in range(len(task.rubric))],
+        }
+    if ref:
+        out["reference"] = {
+            "section_id": ref.id,
+            "title": ref.title,
+            "cards": [
+                {"kind": c["kind"], "title": c.get("title", ""), "body": c["body"][:MAX_REFERENCE_CHARS]}
+                for c in ref.cards[:MAX_REFERENCE_CARDS]
+            ],
+        }
+    return out
+
+
+def submit_feedback(session: Session, attempt_id: int, *, feedback: str, verdicts: list, reviewer: str) -> dict:
+    """Ghi bản chấm sâu: `status=reviewed`. Gọi lại thì thay bản trước. Từng ý rubric được nối theo THỨ TỰ
+    và lấy chữ từ rubric của server (Claude chỉ quyết đúng/sai và ghi chú), nên không đổi được nội dung rubric."""
+    feedback = (feedback or "").strip()
+    if not feedback or len(feedback) > MAX_FEEDBACK_CHARS:
+        raise SdError(f"feedback cần 1..{MAX_FEEDBACK_CHARS} ký tự")
+    if _bad_text(feedback):
+        raise SdError("feedback chứa ký tự NUL hoặc ký tự không hợp lệ")
+    a = session.scalar(select(SdAttempt).where(SdAttempt.id == attempt_id).with_for_update())
+    if a is None:
+        raise SdError(f"không có lần thử id={attempt_id}")
+    task = session.get(SdTask, (a.doc_id, a.task_id))
+    if task is None:
+        raise SdError("task của lần thử này đã bị xoá khi nhập lại tài liệu, không chấm được")
+    if not isinstance(verdicts, list) or len(verdicts) != len(task.rubric):
+        raise SdError(f"verdicts cần đúng {len(task.rubric)} phần tử, mỗi ý rubric một phần tử theo thứ tự")
+    out = []
+    for item, rub in zip(verdicts, task.rubric):
+        if not isinstance(item, dict) or not isinstance(item.get("ok"), bool):
+            raise SdError("mỗi verdict cần dạng {ok: true|false, note: '...'} (ok phải là boolean)")
+        note = item.get("note", "")
+        if not isinstance(note, str) or len(note) > MAX_NOTE_CHARS or _bad_text(note):
+            raise SdError(f"note là chuỗi ≤{MAX_NOTE_CHARS} ký tự, không chứa NUL")
+        out.append({"text": rub["text"], "ok": item["ok"], "note": note.strip()})
+    a.status, a.feedback, a.verdicts = "reviewed", feedback, out
+    a.reviewed_by, a.reviewed_at = reviewer, datetime.now(timezone.utc)
+    session.flush()
+    return {"attempt_id": a.id, "status": a.status, "score": round(100 * sum(v["ok"] for v in out) / len(out)) if out else 0}

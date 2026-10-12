@@ -160,6 +160,7 @@ def test_initialize_and_list_tools(mcp, signer):
         "list_projects", "get_project", "get_lesson", "get_authoring_guide",
         "create_project", "update_project", "create_module", "update_module",
         "create_file", "update_file", "create_lesson", "update_lesson",
+        "sd_list_attempts", "sd_get_attempt", "sd_submit_feedback",
     }
     assert tools["list_projects"]["annotations"]["readOnlyHint"] is True
     assert "dry_run" in tools["create_lesson"]["inputSchema"]["properties"]
