@@ -28,9 +28,9 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | backend/harness | chương trình chạy trên máy chấm: compile code học viên, chạy từng test case (kể cả case kịch bản gọi method), in một dòng JSON — backend/app/harness.py:48 | docs/modules/judge-backend.md:1 |
 | domain | model bất biến, ghép ô (mobile/lib/domain/merge.dart:80), khoá bài (mobile/lib/domain/progression.dart:22), hàm so chuỗi cũ (mobile/lib/domain/answer_checker.dart:68) | docs/ARCHITECTURE.md:1 |
 | data | tải nội dung + cache (mobile/lib/data/content_repository.dart:40), provider nội dung (mobile/lib/data/content_providers.dart:11), client gọi `/run` (mobile/lib/data/judge_client.dart:59), đăng nhập (mobile/lib/data/auth_repository.dart:61), client gắn Bearer (mobile/lib/data/api_client.dart:59), tiến độ server (mobile/lib/data/progress_api.dart:116), admin (mobile/lib/data/admin_repository.dart:1) | docs/ARCHITECTURE.md:1 |
-| features/exercise | màn bài 3 tab (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
+| features/exercise | màn bài 3 tab (<900px) hoặc chia đôi đề | editor (≥900px) (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
-| features/review, stats, practice, shell | ôn tập, thống kê, luyện, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
+| features/review, stats, practice, shell | ôn tập, thống kê, luyện, shell (bottom nav <700px; ≥700px top bar + ☰ mở drawer — mobile/lib/features/shell/app_shell.dart:22, mobile/lib/features/shell/app_drawer.dart:25); đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
 | features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài (mobile/lib/features/admin/exercise_editor.dart:380), màn Chờ duyệt + chi tiết diff + xem thử như học viên (mobile/lib/features/admin/review_screen.dart:1, mobile/lib/features/admin/review_detail_screen.dart:1, mobile/lib/features/exercise/exercise_screen.dart:51), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
 | deploy | triển khai lên VPS dùng chung: nginx cổng 443 (HTTPS, domain `codewithphuong.jacons-corp.com`, cert Let's Encrypt; :80 và :8090 trả 308) phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:87-97, deploy/nginx/smart-coding-study.conf:8-27 | docs/modules/deploy.md:1 |
@@ -264,6 +264,12 @@ if (result.status == JudgeStatus.passed) {
 Ô còn rỗng thì Run không gọi backend mà đánh dấu ô rỗng (mobile/lib/features/exercise/code_tab.dart:100-111).
 Bài chưa mở khoá hiện `_LockedView` thay vì 3 tab (mobile/lib/features/exercise/exercise_screen.dart:38-39).
 
+Từ bề rộng 900px (`AppBreakpoint.split`) màn luyện đổi bố cục: ẩn `TabBar`, chia cột trái Đề/Lời giải (42%)
+và cột phải `CodeTab(inlineEditor: true)` (58%); dưới 900px giữ đúng ba tab và mở ô bằng route `CellEditorPage`
+(mobile/lib/features/exercise/exercise_screen.dart:292-298,448-458). Ở chế độ inline, ô đang mở là editor ngay trong notebook và có dải
+bước A/B/C; hai layout dùng chung `_isDone`/`_onCellChanged`/`_run` của `CodeTab`, nên "ô đúng" chỉ có một nơi quyết định
+(mobile/lib/features/exercise/code_tab.dart:37-47,77,156,197).
+
 ### Ranh giới
 
 Tiến độ vẫn nằm trong bộ nhớ Riverpod (`ProgressController` không `autoDispose`), mất khi kill app.
@@ -302,26 +308,39 @@ tổng số ô, chưa xong thì 0), không còn nói "đã gõ đúng bao nhiêu
 ### Là gì
 
 Tầng `app/` giữ hai thứ chạm tới toàn bộ ứng dụng: bảng màu/kiểu chữ/khoảng cách dùng chung
-(`theme.dart`) và bảng route (`router.dart`). Mọi màn hình đọc màu qua `AppColors`/
-`Theme.of(context).colorScheme`, không tự định nghĩa `Color(0x...)` riêng — quy tắc này được
-kiểm bằng `grep` (INV-04 trong sổ bất biến của run, xem `reviews/SEAM.md`).
+(`theme.dart`) và bảng route (`router.dart`). Giao diện theo bộ "The Coach": nền sáng là mặc định
+(mobile/lib/app/theme_mode.dart:9), tối vẫn chọn được qua nút đổi giao diện. Widget không đọc thẳng
+màu hằng mà đọc qua `context.palette` (một `ThemeExtension` đổi theo sáng/tối), nên một vai trò màu
+chỉ có một tên và hai giá trị.
 
 ### Cách hoạt động
 
-```dart
-abstract final class AppColors {
-  static const Color surface = Color(0xFF111418);
-  static const Color primary = Color(0xFF5ccfb0);   // teal — màu chính
-  static const Color accent = Color(0xFFf5b94a);     // amber — CHỈ dùng cho hint
-  static const Color danger = Color(0xFFff7b72);
-  // ...
-}
-```
-(mobile/lib/app/theme.dart:6-17)
+| Thứ | Cách làm | Nguồn |
+|---|---|---|
+| Palette | `AppColors` (tối) và `AppLightColors` (sáng) cùng vai trò token; `AppPalette` gom lại, có đủ `copyWith`/`lerp` | mobile/lib/app/theme.dart:8-30,92-232 (docs/ARCHITECTURE.md:1) |
+| Khối code | `codeSurface`/`codeInk` luôn tối ở cả hai theme, để khối code đọc giống nhau dù trang sáng | mobile/lib/app/theme.dart:24-25,45-46 (docs/ARCHITECTURE.md:1) |
+| Ngưỡng bề rộng | `AppBreakpoint.nav = 700`, `AppBreakpoint.split = 900` — nơi duy nhất định nghĩa | mobile/lib/app/theme.dart:84-87 (docs/ARCHITECTURE.md:1) |
+| Font | Nunito (variable, một file) + JetBrains Mono, bundle trong `assets/fonts/` | mobile/pubspec.yaml:64-76 (docs/ARCHITECTURE.md:1) |
+| Chế độ sáng/tối | mặc định `ThemeMode.light`, vòng sáng → tối → hệ thống | mobile/lib/app/theme_mode.dart:9-18 (docs/ARCHITECTURE.md:1) |
 
-Font không tải qua mạng (không dùng gói `google_fonts`) — hai font family (IBM Plex Sans,
-JetBrains Mono) được bundle sẵn dạng file `.ttf` trong `mobile/assets/fonts/` và khai trong
-`pubspec.yaml` (mobile/pubspec.yaml:64-76).
+Font không tải qua mạng (không dùng gói `google_fonts`). Nunito chỉ có bản *variable font* (một
+file chứa mọi độ đậm, chọn bằng trục `wght`), nên mỗi kiểu chữ vừa đặt `fontWeight` vừa đặt
+`FontVariation('wght', n)` để engine thật sự áp trục đó:
+
+```dart
+static const TextStyle title = TextStyle(
+  fontFamily: kSansFamily,
+  fontSize: 20,
+  fontWeight: FontWeight.w800,
+  fontVariations: [FontVariation('wght', 800)],
+);
+```
+(mobile/lib/app/theme.dart:3,272-278)
+
+Ngưỡng 700/900 nằm ở một chỗ để các nơi dùng không lệch nhau: shell, `ScreenHeader`, màn luyện, Home
+đều so với `AppBreakpoint`, không có số 700/900 cứng nào khác trong `lib/` (planning/crew/2026-10-12-issue29-reskin/reviews/SEAM.md, INV-03).
+Sáng là mặc định nên `main.dart`, cổng nội dung và cổng đăng nhập đều đọc cùng `themeModeProvider`;
+nếu một trong ba đọc nguồn khác, màn chờ sẽ tối trong khi app sáng (INV-07 cùng file).
 
 ### Ranh giới
 
@@ -340,15 +359,17 @@ Tồn tại để tránh mỗi màn tự viết lại card/nút/progress bar the
 
 ### Cách hoạt động
 
-Tất cả đọc token từ `AppColors`/`AppSpace`/`AppRadius`/`AppText`, không hardcode giá trị —
-`elevation` mặc định 0 (không đổ bóng), bo góc theo 3 mức cố định (`sm`=6, `md`=12,
-`pill`=999) (mobile/lib/app/theme.dart:26-29).
+Tất cả đọc màu từ `context.palette` và kích thước từ `AppSpace`/`AppRadius`/`AppText`, không hardcode
+giá trị. Nút `PrimaryButton`/`GhostButton` kiểu "nổi khối" (bóng cứng bên dưới) nhưng vẫn là
+`ElevatedButton`/`OutlinedButton` bên trong (mobile/lib/shared/widgets.dart:310,351), vì test của màn
+Soạn bài tập tìm đúng hai widget đó. `ScreenHeader` tự thêm nút ☰ khi bề rộng ≥ 700px và widget không
+nằm trong `AppShell` (mobile/lib/shared/widgets.dart:208-211).
 
 ### Ranh giới
 
-`PrimaryButton`/`HintButton` bọc `ElevatedButton` của Material — còn giữ elevation mặc định của
-Material thay vì elevation 0 tường minh ở hai chỗ này (mobile/lib/shared/widgets.dart:266,335);
-đã ghi Minor trong Backlog, chưa sửa tại thời điểm run này kết thúc.
+Nút bóng cứng chỉ là trang trí ngoài `ElevatedButton`/`OutlinedButton`, nên nút vô hiệu vẫn là `onPressed == null`
+(mobile/lib/shared/widgets.dart:310,351). `shared/widgets.dart` import ngược `features/shell` để biết có đang nằm trong shell hay không
+(mobile/lib/shared/widgets.dart:3) — lớp dưới biết lớp trên, chưa tách.
 
 
 ## Tài khoản + tiến độ — đăng nhập, token Bearer, tiến độ theo user trên server

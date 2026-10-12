@@ -87,9 +87,10 @@ mobile/lib/domain/answer_checker.dart:11-90.
 
 ### Bundle font thay vì dùng gói `google_fonts`
 
-**Quyết định**: hai font family (IBM Plex Sans, JetBrains Mono) được bundle sẵn dạng `.ttf`
-trong `mobile/assets/fonts/` và khai trực tiếp trong `pubspec.yaml`, thay vì dùng gói
-`google_fonts` như PLAN.md ban đầu định.
+**Quyết định**: hai font family (nay là Nunito và JetBrains Mono; Nunito thay IBM Plex Sans từ
+commit 4643ceb, run 2026-10-12-issue29-reskin) được bundle sẵn dạng `.ttf` trong
+`mobile/assets/fonts/` và khai trực tiếp trong `pubspec.yaml`, thay vì dùng gói `google_fonts`
+như PLAN.md ban đầu định.
 
 **Vì sao**: `google_fonts` tải font qua mạng lúc chạy lần đầu — test chạy trong môi trường
 không có mạng (CI, sandbox) dễ fail, và đi ngược hướng "app hoạt động không cần mạng" mà phase 1
@@ -662,3 +663,22 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: CLI `load_content --force` khi có mục chờ cùng thùng chứa thì approve áp lại thứ tự draft; duyệt xoá module có bài đã được admin xoá giờ thành công; hàng chờ chưa phân trang; học viên đang mở app chỉ thấy bản mới khi tự refresh. Vận hành: test backend cần `TEST_DATABASE_URL` DB riêng, vì process fuzz của reviewer trên DB test dùng chung giữ khoá làm suite chậm.
 
 **Nguồn**: backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/mcp_server.py:91-125; backend/app/tables.py:203-232; backend/app/main.py:219-236; mobile/lib/features/exercise/exercise_screen.dart:51-75; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
+
+### Thay áo "The Coach": breakpoint một nguồn, drawer không phải Scaffold.drawer, khối code luôn tối
+
+**Quyết định** (run 2026-10-12-issue29-reskin, issue #29): app đổi giao diện và thêm bố cục web rộng, không đổi backend/domain.
+(1) **Sáng là mặc định**, tối vẫn chọn được; lựa chọn chưa được lưu (mở lại app về sáng).
+(2) **Ngưỡng bề rộng một nguồn**: `AppBreakpoint.nav = 700` (bỏ bottom nav, dùng top bar + ☰ + drawer) và `split = 900` (màn luyện chia đôi); mọi so sánh bề rộng dùng nó.
+(3) **Drawer mở bằng `showGeneralDialog` trên root navigator**, không phải `Scaffold.drawer`, kèm marker `InAppShell` để `ScreenHeader` biết đã có ☰ của shell mà không thêm ☰ thứ hai.
+(4) **`codeSurface`/`codeInk` luôn tối** ở cả hai theme; mọi khối code (editor, xem trước ô, lời giải, "Code đã ghép") dùng cặp này.
+(5) **Nunito là font variable** (một file 277KB), trọng số chọn bằng `fontWeight` + `FontVariation('wght', n)`; chữ nút in đậm w900 + giãn chữ, không `toUpperCase`.
+(6) **Ghost text (chữ mờ gợi ý) chỉ phủ hiển thị trong `buildTextSpan`** của controller, không bao giờ ghi vào `controller.text`; nhận bằng Tab hoặc chạm chip.
+(7) **`CodeTab(inlineEditor: bool)`**: ≥900px ô đang mở là editor ngay trong notebook và có dải bước A/B/C; mặc định false giữ hành vi cũ (route `CellEditorPage`). Dải bước và editor inline sống trong `CodeTab`, không lộ state sang `exercise_screen`.
+
+**Vì sao**: (2) lúc đầu không có breakpoint nào; nav đổi ở 700 mà màn luyện đổi ở nơi khác thì ở bề rộng giữa không có cách điều hướng hoặc hiện cả hai. (3) màn chi tiết (theme/topic/exercise) mở trên root navigator nên không có `AppShell` quanh chúng, ☰ không thể chỉ đặt trong shell; dialog cũng không để widget nào trong cây khi chưa mở, tránh `find.text` trùng ở test 800x600. (4) khối code nền theo theme làm theme sáng có hai khối code lệch màu nhau; reviewer mối nối bắt được ở "Code đã ghép" (T-07). (6) nếu ghost ghi vào text thì draft lưu chữ gợi ý và ô báo "đúng" khi chưa gõ gì. (7) hai layout cùng đi qua `_isDone`/`_onCellChanged`/`_run` để "ô đúng" có một nơi quyết định.
+
+**Phương án đã bỏ / lệch plan**: plan định bundle 4 TTF static Nunito, thực tế google/fonts chỉ có bản variable, dùng `FontVariation` (chạy được nên không phải quay lại IBM Plex); lưu lựa chọn sáng/tối qua `shared_preferences`, màn Cài đặt riêng, vẽ lại `_LessonPath`, nút micro — hoãn.
+
+**Đánh đổi đã chấp nhận**: đổi bề rộng qua 900 giữa chừng dựng lại `CodeTab` nên mất focus và kết quả Run đang hiện (draft còn); ghost bị ẩn khi IME đang composing (Android); các khối code còn nền theo theme (`example-box` ở challenge_tab, `_CodeBox` ở review_screen) và tương phản vài cặp màu dưới AA 4.5:1 chưa sửa; chưa xem bằng mắt Nunito variable, bóng nút, animation drawer, ghost/IME trên thiết bị thật.
+
+**Nguồn**: mobile/lib/app/theme.dart:3,24-25,45-46,84-87; mobile/lib/app/theme_mode.dart:9; mobile/lib/features/shell/app_drawer.dart:25-54; mobile/lib/features/shell/app_shell.dart:22; mobile/lib/features/exercise/code_input.dart:725-746; mobile/lib/features/exercise/code_tab.dart:37-47,77; mobile/lib/features/exercise/exercise_screen.dart:292-298,448-458; mobile/pubspec.yaml:64-76; planning/crew/2026-10-12-issue29-reskin/PLAN.md (Quyết định thiết kế, INV-01..10), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
