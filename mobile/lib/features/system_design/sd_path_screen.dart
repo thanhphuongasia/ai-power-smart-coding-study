@@ -71,6 +71,8 @@ List<_PathGroup> _buildGroups(SdDoc doc) {
       'PHASE 2 · THỰC CHIẾN · $tasksDone/${doc.tasks.length} TASK',
       'Thiết kế thật',
       [
+        // Server không có trường "đã đọc bối cảnh" riêng, nên done suy từ
+        // `tasks.any(done)` (dữ liệu của server, client không tự tính khoá).
         DuoNode(
           id: _kContextId,
           label: 'Bối cảnh',
@@ -223,7 +225,8 @@ class _PathBodyState extends ConsumerState<_PathBody> {
       return;
     }
     _open(
-      '/design/${widget.docId}/read?section=${Uri.encodeQueryComponent(n.id)}',
+      '/design/${Uri.encodeComponent(widget.docId)}/read'
+      '?section=${Uri.encodeQueryComponent(n.id)}',
     );
   }
 
@@ -238,30 +241,36 @@ class _PathBodyState extends ConsumerState<_PathBody> {
     }
     _open(
       n.id == _kContextId
-          ? '/design/${widget.docId}/context'
-          : '/design/${widget.docId}/tasks/${Uri.encodeComponent(n.id)}',
+          ? '/design/${Uri.encodeComponent(widget.docId)}/context'
+          : '/design/${Uri.encodeComponent(widget.docId)}'
+                '/tasks/${Uri.encodeComponent(n.id)}',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final groups = _buildGroups(widget.doc);
-    return ListView(
+    // Dựng TOÀN BỘ (không dùng ListView lười): tài liệu tối đa 200 section nên
+    // chấp nhận được, và node current ở rất xa vẫn có element để cuộn tới.
+    return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(AppSpace.s4),
-      children: [
-        for (var i = 0; i < groups.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpace.s6),
-          DuoBanner(eyebrow: groups[i].eyebrow, title: groups[i].title),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < groups.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppSpace.s6),
+            DuoBanner(eyebrow: groups[i].eyebrow, title: groups[i].title),
+            const SizedBox(height: AppSpace.s6),
+            // Nhóm cuối là Phase 2, các nhóm trước là chapter của Phase 1.
+            DuoPath(
+              nodes: groups[i].nodes,
+              onTap: i == groups.length - 1 ? _onPhase2 : _onSection,
+            ),
+          ],
           const SizedBox(height: AppSpace.s6),
-          // Nhóm cuối là Phase 2, các nhóm trước là chapter của Phase 1.
-          DuoPath(
-            nodes: groups[i].nodes,
-            onTap: i == groups.length - 1 ? _onPhase2 : _onSection,
-          ),
         ],
-        const SizedBox(height: AppSpace.s6),
-      ],
+      ),
     );
   }
 }

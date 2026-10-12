@@ -25,6 +25,13 @@ const Color _kProgressGreen = Color(0xFF58CC02);
 /// Gom nhiều lần lướt thành một PUT cho mỗi section.
 const Duration kSdProgressDebounce = Duration(milliseconds: 800);
 
+/// Lỗi tạm thời (5xx/mạng): chờ 2s, 4s, 8s... tối đa 30s rồi mới gửi lại.
+const Duration kSdBackoffBase = Duration(seconds: 2);
+const Duration kSdBackoffMax = Duration(seconds: 30);
+
+/// Quá số lần lỗi liên tiếp này thì dừng gửi section đó đến khi mở lại màn.
+const int kSdMaxFailures = 5;
+
 class SdReaderScreen extends ConsumerStatefulWidget {
   const SdReaderScreen({super.key, required this.docId, this.sectionId});
 
@@ -126,9 +133,13 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
   final _blocked = <String>{}; // server trả 409: dừng gửi
   final _doneNotified = <String>{};
   final _timers = <String, Timer>{};
+  final _fails = <String, int>{}; // số lần PUT lỗi liên tiếp theo section
+  final _backoff = <String>{}; // đang chờ backoff: cuộn không được lên lịch
 
-  // Repo lấy một lần: dispose không được dùng `ref`.
+  // Repo + container lấy một lần: dispose không được dùng `ref`, còn
+  // container thì vẫn gọi được sau khi widget đã unmount.
   late final SdRepository _repo;
+  late final ProviderContainer _container;
 
   /// Thẻ trước chỉ số này không được đánh dấu bằng cú nhảy mở màn.
   int _startIndex = 0;
@@ -140,6 +151,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
   void initState() {
     super.initState();
     _repo = ref.read(sdRepositoryProvider);
+    _container = ProviderScope.containerOf(context, listen: false);
     var i = 0;
     for (final s in widget.doc.sections) {
       final ids = {for (final c in s.cards) c.id};
@@ -172,13 +184,21 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
       unawaited(
         _repo
             .putProgress(widget.doc.id, sid, _readList(sid))
-            .then<void>((_) {}, onError: (Object _) {}),
+            .then<void>((_) => _invalidateProgress(), onError: (Object _) {}),
       );
     }
     _scroll.dispose();
     _readCount.dispose();
     _currentTitle.dispose();
     super.dispose();
+  }
+
+  /// PUT xong mà màn đã đóng: lộ trình có thể đã GET trước PUT này (back nhanh
+  /// hơn animation) → làm mới tiến độ. Khi còn mounted thì KHÔNG làm: màn đọc
+  /// đang theo dõi sdDocProvider, invalidate sẽ dựng lại màn và mất vị trí cuộn.
+  void _invalidateProgress() {
+    _container.invalidate(sdDocProvider(widget.doc.id));
+    _container.invalidate(sdDocsProvider);
   }
 
   List<String> _readList(String sid) {
@@ -235,9 +255,8 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
                 .key
                 .currentContext
           : _headerKeys[s.id]?.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(ctx, alignment: 0, duration: Duration.zero);
-      }
+      // Đặt TRƯỚC khi nhảy: cú nhảy kích hoạt listener `_evaluate` ngay, lúc đó
+      // thẻ phía trên điểm mở màn không được bị đánh dấu.
       _startIndex = _flat
           .firstWhere(
             (f) =>
@@ -245,6 +264,9 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
                 (target == null || f.card.id == target.id),
           )
           .index;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, alignment: 0, duration: Duration.zero);
+      }
     }
     _evaluate();
   }
@@ -300,6 +322,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
 
   void _schedule(String sid, {bool restart = false}) {
     if (_blocked.contains(sid) || _unlocked[sid] != true) return;
+    if (_backoff.contains(sid)) return; // timer backoff tự gửi lại
     if (_inflight.contains(sid) && !restart) return;
     if (!restart && _timers.containsKey(sid)) return;
     _timers[sid]?.cancel();
@@ -320,22 +343,55 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
     _inflight.add(sid);
     _dirty.remove(sid);
     SdProgressResult? res;
+    var failed = false;
+    int? failStatus;
     try {
       res = await _repo.putProgress(widget.doc.id, sid, _readList(sid));
     } on SdApiException catch (e) {
-      if (e.statusCode == 409) {
-        _blocked.add(sid); // section_locked: dừng, không báo lỗi
-      } else {
-        _dirty.add(sid);
-      }
+      failed = true;
+      failStatus = e.statusCode;
     } catch (_) {
-      _dirty.add(sid); // giữ phần chưa gửi, thử lại khi cuộn tiếp
+      failed = true; // lỗi mạng/định dạng: coi như tạm thời
     } finally {
       _inflight.remove(sid);
     }
-    if (!mounted) return;
+    if (!mounted) {
+      // Màn đã đóng trong lúc chờ phản hồi: lộ trình cần tải lại tiến độ.
+      if (res != null) _invalidateProgress();
+      return;
+    }
+
+    if (failed) {
+      if (failStatus == 409) {
+        _blocked.add(sid); // section_locked: dừng, không báo lỗi
+      } else if (failStatus != null && failStatus >= 400 && failStatus < 500) {
+        _blocked.add(sid); // lỗi phía client: gửi lại cũng vô ích
+      } else {
+        _dirty.add(sid); // giữ phần chưa gửi
+        final n = (_fails[sid] ?? 0) + 1;
+        _fails[sid] = n;
+        if (n >= kSdMaxFailures) {
+          _blocked.add(sid);
+        } else {
+          // Backoff luỹ thừa; trong lúc chờ, cuộn không lên lịch thêm PUT.
+          final ms = (kSdBackoffBase.inMilliseconds * (1 << (n - 1))).clamp(
+            0,
+            kSdBackoffMax.inMilliseconds,
+          );
+          _backoff.add(sid);
+          _timers[sid]?.cancel();
+          _timers[sid] = Timer(Duration(milliseconds: ms), () {
+            _timers.remove(sid);
+            _backoff.remove(sid);
+            unawaited(_send(sid));
+          });
+        }
+      }
+      return;
+    }
 
     if (res != null) {
+      _fails.remove(sid);
       final r = res;
       // Server lấy hợp: nhận lại các thẻ nó đã biết.
       final s = widget.doc.sections.firstWhere((s) => s.id == sid);

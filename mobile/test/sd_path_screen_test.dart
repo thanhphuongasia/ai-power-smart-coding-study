@@ -148,8 +148,9 @@ Future<ProviderContainer> _pump(
   WidgetTester tester,
   _Server server, {
   String initial = '/design',
+  double height = 2400,
 }) async {
-  tester.view.physicalSize = const Size(400, 2400);
+  tester.view.physicalSize = Size(400, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   _router = _testRouter(initial: initial);
@@ -282,6 +283,115 @@ void main() {
         lessThanOrEqualTo(tester.getTopLeft(_node('s2')).dy),
       );
       expect(tester.getTopLeft(_node('s2')).dy - bubbleBottom, lessThan(30));
+    });
+
+    testWidgets('F7a: hai node open → toàn màn đúng MỘT bóng BẮT ĐẦU, ở node '
+        'đầu tiên', (tester) async {
+      await _pump(
+        tester,
+        _Server()
+          ..doc = _doc(
+            sections: [
+              _section('s1', pos: 1, chapter: 'A', chapterPos: 1),
+              _section('s2', pos: 2, chapter: 'A', chapterPos: 1),
+              // Chapter khác = DuoPath khác: chỉ bước nâng current duy nhất
+              // của màn (không phải DuoPath) mới giữ được "một bóng".
+              _section('s3', pos: 3, chapter: 'B', chapterPos: 2),
+            ],
+          ),
+        initial: '/design/sd1',
+      );
+      final bubble = find.byKey(const Key('duo-start-bubble'));
+      expect(bubble, findsOneWidget);
+      final bottom = tester.getBottomLeft(bubble).dy;
+      expect(
+        tester.getTopLeft(_node('s1')).dy - bottom,
+        inInclusiveRange(0, 30),
+      );
+      expect(tester.getTopLeft(_node('s2')).dy, greaterThan(bottom + 60));
+    });
+
+    testWidgets('F2: tài liệu dài, node current ở chương cuối → cuộn tới và '
+        'nằm trong viewport', (tester) async {
+      final secs = [
+        for (var c = 1; c <= 12; c++)
+          for (var j = 1; j <= 4; j++)
+            _section(
+              's$c-$j',
+              pos: (c - 1) * 4 + j,
+              chapter: 'Chương $c',
+              chapterPos: c,
+              done: !(c == 12 && j == 4),
+              unlocked: true,
+              read: 2,
+            ),
+      ];
+      await _pump(
+        tester,
+        _Server()..doc = _doc(sections: secs),
+        initial: '/design/sd1',
+        height: 800,
+      );
+      final node = _node('s12-4');
+      expect(node, findsOneWidget);
+      final r = tester.getRect(node);
+      expect(r.top, greaterThanOrEqualTo(0));
+      expect(r.bottom, lessThanOrEqualTo(800));
+      expect(find.byKey(const Key('duo-start-bubble')), findsOneWidget);
+    });
+
+    testWidgets('F6: docId có ký tự đặc biệt được mã hoá ở mọi route con', (
+      tester,
+    ) async {
+      const id = 'a b/c';
+      final s = _Server()
+        ..docs = [
+          const SdDocSummary(
+            id: id,
+            title: 'Lạ',
+            sections: 1,
+            sectionsDone: 0,
+            cards: 2,
+            cardsRead: 0,
+            phase2Unlocked: true,
+            tasks: 1,
+            tasksDone: 0,
+          ),
+        ]
+        ..doc = _doc(
+          phase2: true,
+          sections: [
+            _section(
+              's 1',
+              pos: 1,
+              chapter: 'A',
+              chapterPos: 1,
+              done: true,
+              read: 2,
+            ),
+          ],
+          tasks: [_task('t/1', 1, unlocked: true)],
+        );
+      await _pump(tester, s);
+      String uri() => _loc();
+      final enc = Uri.encodeComponent(id);
+      await tester.tap(find.byKey(const Key('sd-doc-a b/c')));
+      await tester.pumpAndSettle();
+      expect(uri(), '/design/$enc');
+
+      await _tapNode(tester, 'context');
+      expect(uri(), '/design/$enc/context');
+      _router.pop();
+      await tester.pumpAndSettle();
+
+      await _tapNode(tester, 't/1');
+      expect(uri(), '/design/$enc/tasks/${Uri.encodeComponent('t/1')}');
+      _router.pop();
+      await tester.pumpAndSettle();
+
+      await _tapNode(tester, 's 1');
+      expect(uri(), '/design/$enc/read');
+      expect(find.byKey(const Key('page-read-s 1')), findsOneWidget);
     });
 
     testWidgets('chạm node locked: SnackBar, KHÔNG đổi location', (

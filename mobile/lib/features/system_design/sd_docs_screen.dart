@@ -147,8 +147,9 @@ class _DocCard extends ConsumerWidget {
     return SurfaceCard(
       key: Key('sd-doc-${doc.id}'),
       onTap: () async {
-        await context.push('/design/${doc.id}');
+        await context.push('/design/${Uri.encodeComponent(doc.id)}');
         // Quay lại: tiến độ có thể đã đổi ở màn đọc/làm task → tải lại.
+        if (!context.mounted) return;
         ref.invalidate(sdDocsProvider);
         ref.invalidate(sdDocProvider(doc.id));
       },

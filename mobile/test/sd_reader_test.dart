@@ -7,12 +7,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/sd_repository.dart';
 import 'package:smart_coding_study/features/system_design/block_renderer.dart';
 import 'package:smart_coding_study/features/system_design/reader_screen.dart';
+import 'package:smart_coding_study/features/system_design/sd_path_screen.dart';
 
 http.Response _json(Object body, [int status = 200]) => http.Response(
   jsonEncode(body),
@@ -358,7 +360,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('(f) lỗi mạng giữ phần chưa gửi, gửi lại ở lần cuộn sau', (
+  testWidgets('(f) lỗi mạng: giữ phần chưa gửi, tự gửi lại sau backoff 2s', (
     tester,
   ) async {
     await _size(tester, 400);
@@ -370,15 +372,116 @@ void main() {
     await _open(tester, server);
     await _debounce(tester);
     expect(server.puts.length, 1);
-    // Không cuộn → không tự thử lại liên tục.
-    await _debounce(tester);
+    // Đang backoff: chưa gửi lại.
+    await tester.pump(const Duration(seconds: 1));
     expect(server.puts.length, 1);
-    await _reveal(tester, 's1-a3');
-    await _debounce(tester);
+    // Hết backoff 2s: gửi lại đúng phần chưa gửi, không mất thẻ nào.
+    await tester.pump(const Duration(seconds: 2));
     expect(server.puts.length, 2);
     expect(server.puts[1].cards, containsAll(server.puts[0].cards));
-    expect(server.puts[1].cards, ['a1', 'a2', 'a3']);
+    // Thành công thì cuộn tiếp lại gửi bình thường (bộ đếm lỗi đã reset).
+    await _reveal(tester, 's1-a3');
+    await _debounce(tester);
+    expect(server.puts.last.cards, ['a1', 'a2', 'a3']);
     expect(tester.takeException(), isNull);
+  });
+
+  /// Doc một section 3 thẻ cao: đủ cuộn nhiều lần.
+  Map<String, dynamic> oneSection() => _doc([
+    _section('s1', 1, [_card('a1'), _card('a2'), _card('a3'), _card('a4')]),
+  ]);
+
+  Future<void> scrollALot(WidgetTester tester, Duration total) async {
+    final p = _pos(tester);
+    var waited = Duration.zero;
+    var up = false;
+    while (waited < total) {
+      p.jumpTo(up ? 0 : p.maxScrollExtent);
+      up = !up;
+      await tester.pump(const Duration(milliseconds: 250));
+      waited += const Duration(milliseconds: 250);
+    }
+  }
+
+  testWidgets(
+    '(f4) PUT 500 liên tục: giãn 2s/4s/8s/16s, tối đa 5 lần rồi dừng, '
+    'cuộn không đẻ thêm PUT',
+    (tester) async {
+      await _size(tester, 400);
+      final server = _Server(oneSection())
+        ..onPut = (s, c, n) async => _json({'detail': 'boom'}, 500);
+      await _open(tester, server);
+      await tester.pump(const Duration(milliseconds: 900)); // PUT #1 lỗi
+      expect(server.puts.length, 1);
+      // 1.6s kế tiếp (đang backoff 2s) cuộn liên tục vẫn không có PUT mới.
+      await scrollALot(tester, const Duration(milliseconds: 1500));
+      expect(server.puts.length, 1);
+      await scrollALot(tester, const Duration(milliseconds: 750)); // qua mốc 2s
+      expect(server.puts.length, 2);
+      // Backoff kế tiếp 4s: sau 3s vẫn chưa có PUT #3.
+      await scrollALot(tester, const Duration(seconds: 3));
+      expect(server.puts.length, 2);
+      await scrollALot(tester, const Duration(seconds: 2));
+      expect(server.puts.length, 3);
+      // Chạy rất lâu: đúng 5 PUT rồi dừng hẳn, dù vẫn cuộn.
+      await scrollALot(tester, const Duration(seconds: 120));
+      expect(server.puts.length, kSdMaxFailures);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('(f4) PUT 400: đúng 1 lần rồi dừng, cuộn không gửi lại', (
+    tester,
+  ) async {
+    await _size(tester, 400);
+    final server = _Server(oneSection())
+      ..onPut = (s, c, n) async => _json({'detail': 'bad'}, 400);
+    await _open(tester, server);
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(server.puts.length, 1);
+    await scrollALot(tester, const Duration(seconds: 60));
+    expect(server.puts.length, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('(f7b) server đã có read {a4}, người dùng chỉ cuộn tới a2 → PUT '
+      'gộp cả a4 (không bỏ read của server)', (tester) async {
+    await _size(tester, 400);
+    final server = _Server(
+      _doc([
+        _section(
+          's1',
+          1,
+          [_card('a1'), _card('a2'), _card('a3'), _card('a4')],
+          read: ['a4'],
+        ),
+      ]),
+    );
+    await _open(tester, server);
+    await _reveal(tester, 's1-a2');
+    await _debounce(tester);
+    expect(server.puts, isNotEmpty);
+    final last = server.puts.last.cards;
+    expect(last, containsAll(['a2', 'a4']));
+    expect(last, isNot(contains('a3'))); // chưa cuộn tới a3
+  });
+
+  testWidgets('(f7c) mở sectionId=s2: card s1 phía trên KHÔNG bị đánh dấu, '
+      'chỉ khi cuộn ngược lên mới gửi', (tester) async {
+    await _size(tester, 400);
+    final server = _Server(_twoSections());
+    await _open(tester, server, sectionId: 's2');
+    expect(_pos(tester).pixels, greaterThan(0));
+    await _debounce(tester);
+    await _debounce(tester);
+    expect(server.puts.where((e) => e.section == 's1'), isEmpty);
+    // Cuộn ngược lên đầu: lúc này người dùng thật sự thấy s1.
+    _pos(tester).jumpTo(0);
+    await tester.pump();
+    await _debounce(tester);
+    final s1 = server.puts.where((e) => e.section == 's1').toList();
+    expect(s1, isNotEmpty);
+    expect(s1.last.cards, isNotEmpty);
   });
 
   testWidgets('(g) mở với sectionId=s2: cuộn tới card chưa đọc đầu tiên', (
@@ -566,4 +669,101 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
   }
+
+  testWidgets('(F1) lướt hết rồi back trong ~100ms: lộ trình GET SAU PUT, '
+      'hiện tiến độ mới và mở section kế', (tester) async {
+    await _size(tester, 400);
+    // Server có trạng thái: GET phản ánh đúng các PUT đã nhận.
+    final read = <String>{};
+    final log = <String>[];
+    Map<String, dynamic> snapshot() {
+      final s1Done = read.length == 3;
+      return _doc([
+        _section(
+          's1',
+          1,
+          [_card('a1'), _card('a2'), _card('a3')],
+          read: read.toList(),
+          done: s1Done,
+        ),
+        _section(
+          's2',
+          2,
+          [_card('b1'), _card('b2'), _card('b3')],
+          unlocked: s1Done,
+          chapter: 'Nâng cao',
+          chapterPos: 2,
+        ),
+      ]);
+    }
+
+    Future<http.Response> handle(http.Request r) async {
+      if (r.method == 'GET') {
+        log.add('GET');
+        return _json(snapshot());
+      }
+      final cards = ((jsonDecode(r.body) as Map)['read_cards'] as List)
+          .cast<String>();
+      log.add('PUT');
+      read.addAll(cards);
+      final done = read.length == 3;
+      return _json({
+        'section_id': 's1',
+        'read': read.toList(),
+        'done': done,
+        'next_section_id': done ? 's2' : null,
+        'phase2_unlocked': false,
+      });
+    }
+
+    final router = GoRouter(
+      initialLocation: '/design/doc1',
+      routes: [
+        GoRoute(
+          path: '/design/:docId',
+          builder: (_, st) => SdPathScreen(docId: st.pathParameters['docId']!),
+        ),
+        GoRoute(
+          path: '/design/:docId/read',
+          builder: (_, st) => SdReaderScreen(
+            docId: st.pathParameters['docId']!,
+            sectionId: st.uri.queryParameters['section'],
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sdRepositoryProvider.overrideWithValue(
+            SdRepository(MockClient(handle), baseUrl: Uri.parse('http://t')),
+          ),
+        ],
+        child: MaterialApp.router(theme: buildAppTheme(), routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0/3 card'), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('duo-node-s1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sd-reader')), findsOneWidget);
+    await _reveal(tester, 's1-a3');
+    await tester.pump(const Duration(milliseconds: 100)); // chưa hết debounce
+    expect(log.where((e) => e == 'PUT'), isEmpty);
+    await tester.tap(find.byKey(const Key('sd-reader-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sd-reader')), findsNothing);
+    expect(log.contains('PUT'), isTrue);
+    // Request cuối cùng phải là GET đến SAU PUT cuối.
+    expect(log.last, 'GET');
+    expect(log.lastIndexOf('GET'), greaterThan(log.lastIndexOf('PUT')));
+    // Lộ trình hiện tiến độ MỚI, section kế đã mở (chạm không bị toast khoá).
+    expect(find.text('3/3 card'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('duo-node-s2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hoàn thành section trước để mở khoá'), findsNothing);
+    expect(find.byKey(const Key('sd-reader')), findsOneWidget);
+  });
 }
