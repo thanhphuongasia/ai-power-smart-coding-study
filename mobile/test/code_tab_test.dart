@@ -273,6 +273,27 @@ void main() {
     expect(find.text('NEXT overlap-chunks'), findsOneWidget);
   });
 
+  for (final (brightness, palette) in [
+    (Brightness.light, AppPalette.light),
+    (Brightness.dark, AppPalette.dark),
+  ]) {
+    testWidgets('code đã ghép dùng nền codeSurface ($brightness)', (t) async {
+      final judge = FakeJudge((_) async => _passed);
+      await _pump(t, judge, drafts: _solution(), brightness: brightness);
+      await _run(t);
+      final boxes = t.widgetList<Container>(
+        find.descendant(
+          of: find.byKey(const Key('merged-code')),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(
+        boxes.map((c) => (c.decoration as BoxDecoration?)?.color),
+        contains(palette.codeSurface),
+      );
+    });
+  }
+
   testWidgets('lỗi cú pháp ở dòng của ô B ⇒ viền đỏ đúng ô B (INV-05)', (
     t,
   ) async {

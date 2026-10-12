@@ -3,3 +3,4 @@ T-05a · plan: owned không có code_input.dart · thực tế: thêm code_input
 T-01 · mockup chữ nút IN HOA · thực tế chỉ w900 + letterSpacing (toUpperCase làm vỡ find.text test cũ) · chấp nhận · orchestrator
 T-03 · plan: ScreenHeader thêm ☰ · thêm: sửa Minor-1 của review T-01 (bóng nút vô hiệu theme sáng trùng màu nền, widgets.dart ~282,374-376 → Color.lerp(p.outline, Colors.black, 0.3)) vì T-03 sở hữu widgets.dart · orchestrator
 T-06 · acceptance: không overflow ở 400 · thực tế: Topic detail tràn 71px (400) / 59px (412) SẴN CÓ trên main (probe orchestrator, font Ahem) · bỏ test 400 của topic detail, ghi Backlog; theme_detail không sửa file (đã dùng SurfaceCard); exercise_row không dùng successSoft/primarySoft (cần bọc icon, đổi hình học) · orchestrator
+T-07 · plan không có task này · correction sau SEAM INV-08 (run_result_view.dart: khối 'Code đã ghép' dùng nền theo theme) · đổi sang codeSurface/codeInk, thêm test ở code_tab_test.dart · orchestrator
