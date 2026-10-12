@@ -14,6 +14,7 @@ import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/sd_repository.dart';
 import 'package:smart_coding_study/domain/sd_models.dart';
 import 'package:smart_coding_study/features/system_design/block_renderer.dart';
+import 'package:smart_coding_study/features/system_design/card_snap_physics.dart';
 import 'package:smart_coding_study/features/system_design/reader_screen.dart';
 import 'package:smart_coding_study/features/system_design/sd_path_screen.dart';
 
@@ -907,5 +908,294 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Hoàn thành section trước để mở khoá'), findsNothing);
     expect(find.byKey(const Key('sd-reader')), findsOneWidget);
+  });
+
+  group('(S) vuốt từng card (snap)', () {
+    /// Doc một section [n] card, mỗi card [lines] dòng (cao ~lines*~20px).
+    Map<String, dynamic> snapDoc(int n, {int lines = 5}) => _doc([
+      _section('s1', 1, [
+        for (var i = 0; i < n; i++) _card('c$i', body: _lines('c$i', lines)),
+      ]),
+    ]);
+
+    Finder card(String id, [String sec = 's1']) =>
+        find.byKey(Key('sd-card-$sec-$id'));
+
+    /// Khoảng cách từ đỉnh card tới đỉnh tờ giấy.
+    double topOf(WidgetTester tester, String id, [String sec = 's1']) =>
+        tester.getTopLeft(card(id, sec)).dy - tester.getTopLeft(_paper).dy;
+
+    double viewportOf(WidgetTester tester) => tester.getSize(_paper).height;
+
+    /// Vuốt ngón lên (nội dung đi tới) / xuống (đi lùi) rồi thả với [speed] px/s.
+    Future<void> flingFwd(WidgetTester tester, [double speed = 2500]) async {
+      await tester.fling(_paper, const Offset(0, -150), speed);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> flingBack(WidgetTester tester, [double speed = 2500]) async {
+      await tester.fling(_paper, const Offset(0, 150), speed);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      '(a) fling tiến: dừng đúng đỉnh card kế, lặp 3 lần → từng card',
+      (tester) async {
+        await _size(tester, 400);
+        final server = _Server(
+          _doc([
+            _section('s1', 1, [
+              for (var i = 0; i < 20; i++) _card('c$i', body: _lines('c$i', 5)),
+            ]),
+          ]),
+        );
+        await _open(tester, server);
+        final h = tester.getSize(card('c1')).height;
+        expect(h, inInclusiveRange(150, 260)); // cỡ ~200px như đề bài
+        for (final id in ['c1', 'c2', 'c3']) {
+          await flingFwd(tester);
+          expect(topOf(tester, id), closeTo(0, 1.5), reason: 'dừng ở $id');
+        }
+      },
+    );
+
+    testWidgets('(b) fling lùi: về đỉnh card trước', (tester) async {
+      await _size(tester, 400);
+      final server = _Server(snapDoc(20));
+      await _open(tester, server);
+      for (var i = 0; i < 4; i++) {
+        await flingFwd(tester);
+      }
+      expect(topOf(tester, 'c4'), closeTo(0, 1.5));
+      await flingBack(tester);
+      expect(topOf(tester, 'c3'), closeTo(0, 1.5));
+      await flingBack(tester);
+      expect(topOf(tester, 'c2'), closeTo(0, 1.5));
+    });
+
+    testWidgets('(c) PUT sau MỘT fling chỉ chứa card đã hiện ra', (
+      tester,
+    ) async {
+      await _size(tester, 400);
+      final server = _Server(snapDoc(20));
+      await _open(tester, server);
+      await _debounce(tester);
+      final before = server.puts.last.cards.length;
+      await flingFwd(tester);
+      await _debounce(tester);
+      final bottom = tester.getRect(_paper).bottom;
+      final shown = <String>{
+        for (var i = 0; i < 20; i++)
+          if (card('c$i').evaluate().isNotEmpty &&
+              tester.getRect(card('c$i')).bottom <= bottom + 0.5)
+            'c$i',
+      };
+      final sent = server.puts.last.cards;
+      expect(sent.toSet(), shown);
+      // Trôi tự do sẽ đánh dấu cả chục card; một fling chỉ thêm vài card
+      // (viewport ~3 card), toàn bộ đều đã hiện ra.
+      expect(sent.length, inInclusiveRange(before + 1, before + 3));
+      expect(sent, isNot(contains('c10')));
+    });
+
+    testWidgets(
+      '(d) card cao hơn viewport: vuốt lặp lại, không nhảy qua nội dung',
+      (tester) async {
+        await _size(tester, 400);
+        final server = _Server(
+          _doc([
+            _section('s1', 1, [
+              _card('a', body: _lines('a', 5)),
+              _card('big', body: _lines('big', 90)),
+              _card('z', body: _lines('z', 5)),
+            ]),
+          ]),
+        );
+        await _open(tester, server);
+        final vh = viewportOf(tester);
+        expect(tester.getSize(card('big')).height, greaterThan(vh * 1.8));
+        var prev = _pos(tester).pixels;
+        var steps = 0;
+        // Cứ vuốt cho tới khi card cuối hiện đỉnh hoặc hết nội dung.
+        while (steps < 30 && topOf(tester, 'z') > 0.5) {
+          final p = _pos(tester);
+          if (p.pixels >= p.maxScrollExtent - 0.5) break;
+          await flingFwd(tester);
+          final moved = _pos(tester).pixels - prev;
+          // Mỗi lần thả tay đi tối đa 0,9 viewport (+150px vừa kéo theo tay).
+          expect(moved, lessThanOrEqualTo(vh * 0.9 + 150 + 1.5));
+          expect(moved, greaterThan(0));
+          prev = _pos(tester).pixels;
+          steps++;
+        }
+        expect(steps, greaterThan(3)); // phải mất nhiều lần vuốt
+        // Mọi dòng của card cao từng hiện ra: không card nào bị đánh dấu sớm.
+        await _debounce(tester);
+        expect(server.puts.last.cards, contains('big'));
+      },
+    );
+
+    testWidgets(
+      '(e) kéo chậm đi theo ngón tay, không snap; vận tốc nhỏ không snap',
+      (tester) async {
+        await _size(tester, 400);
+        final server = _Server(snapDoc(20));
+        await _open(tester, server);
+        await tester.timedDrag(
+          _paper,
+          const Offset(0, -100),
+          const Duration(seconds: 3),
+        );
+        await tester.pumpAndSettle();
+        final p = _pos(tester).pixels;
+        expect(p, inInclusiveRange(80, 140));
+        expect(topOf(tester, 'c1'), greaterThan(30)); // không bị hút vào mốc
+        // Fling dưới ngưỡng 300px/s → cuộn tự do, không ép tới mốc.
+        await tester.fling(_paper, const Offset(0, -150), 150);
+        await tester.pumpAndSettle();
+        final q = _pos(tester).pixels;
+        expect(q, lessThan(p + 40 + 120));
+        expect(topOf(tester, 'c1'), isNot(closeTo(0, 1.5)));
+      },
+    );
+
+    testWidgets('(f) biên đầu/cuối: không lỗi, không vượt extent', (
+      tester,
+    ) async {
+      await _size(tester, 400);
+      final server = _Server(snapDoc(4));
+      await _open(tester, server);
+      await flingBack(tester);
+      expect(_pos(tester).pixels, 0);
+      for (var i = 0; i < 8; i++) {
+        await flingFwd(tester);
+        expect(
+          _pos(tester).pixels,
+          inInclusiveRange(0, _pos(tester).maxScrollExtent),
+        );
+      }
+      expect(_pos(tester).pixels, _pos(tester).maxScrollExtent);
+      await flingFwd(tester);
+      expect(_pos(tester).pixels, _pos(tester).maxScrollExtent);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      '(g) mở sectionId=s2 rồi fling một lần → card kế của chỗ đã nhảy',
+      (tester) async {
+        await _size(tester, 400);
+        final server = _Server(
+          _doc([
+            _section(
+              's1',
+              1,
+              [
+                for (var i = 0; i < 4; i++)
+                  _card('a$i', body: _lines('a$i', 5)),
+              ],
+              done: true,
+              read: ['a0', 'a1', 'a2', 'a3'],
+            ),
+            _section(
+              's2',
+              2,
+              [
+                for (var i = 0; i < 8; i++)
+                  _card('b$i', body: _lines('b$i', 5)),
+              ],
+              read: ['b0', 'b1'],
+              chapter: 'Nâng cao',
+              chapterPos: 2,
+            ),
+          ]),
+        );
+        await _open(tester, server, sectionId: 's2');
+        expect(topOf(tester, 'b2', 's2'), closeTo(0, 1.5));
+        await flingFwd(tester);
+        expect(topOf(tester, 'b3', 's2'), closeTo(0, 1.5));
+        await flingBack(tester);
+        expect(topOf(tester, 'b2', 's2'), closeTo(0, 1.5));
+        await flingBack(tester);
+        expect(topOf(tester, 'b1', 's2'), closeTo(0, 1.5));
+      },
+    );
+
+    testWidgets('(h) layout đổi (viewport, cỡ chữ): bảng mốc tính lại', (
+      tester,
+    ) async {
+      await _size(tester, 400);
+      addTearDown(tester.platformDispatcher.clearAllTestValues);
+      final server = _Server(snapDoc(20));
+      await _open(tester, server);
+      await flingFwd(tester);
+      expect(topOf(tester, 'c1'), closeTo(0, 1.5));
+      // Đổi chiều cao viewport.
+      tester.view.physicalSize = const Size(400, 560);
+      await tester.pumpAndSettle();
+      await flingFwd(tester);
+      var k = 2;
+      expect(topOf(tester, 'c$k'), closeTo(0, 1.5));
+      // Đổi cỡ chữ: chiều cao card đổi, mốc cũ sai hết. Vị trí cuộn đang lửng
+      // giữa card → một fling phải đáp đúng đỉnh một card, rồi từng card kế.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+      await tester.pumpAndSettle();
+      int aligned() =>
+          [
+            for (var i = 0; i < 20; i++)
+              if (topOf(tester, 'c$i').abs() < 1.5) i,
+          ].singleOrNull ??
+          -1;
+      await flingFwd(tester);
+      final first = aligned();
+      expect(first, greaterThanOrEqualTo(0), reason: 'phải đáp đúng đỉnh card');
+      for (var k = first + 1; k <= first + 3; k++) {
+        await flingFwd(tester);
+        expect(topOf(tester, 'c$k'), closeTo(0, 1.5), reason: 'c$k');
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('(i) bảng mốc: O(số card), 1000 card < 50ms mỗi lần tính', (
+      tester,
+    ) async {
+      await _size(tester, 400);
+      final server = _Server(snapDoc(1000, lines: 1));
+      await _open(tester, server);
+      final physics = _pos(tester).physics as SdCardSnapPhysics;
+      final widgetsBefore = find.byType(SdBlockView).evaluate().length;
+      final sw = Stopwatch()..start();
+      late List<double> a;
+      for (var i = 0; i < 5; i++) {
+        a = physics.anchors();
+      }
+      sw.stop();
+      expect(a.length, 1000);
+      expect(a.first, 0);
+      for (var i = 1; i < a.length; i++) {
+        expect(a[i], greaterThan(a[i - 1])); // sắp tăng dần
+      }
+      expect(sw.elapsedMilliseconds / 5, lessThan(50));
+      expect(find.byType(SdBlockView).evaluate().length, widgetsBefore);
+    });
+
+    test('snapTarget: danh sách mốc rỗng hoặc 1 card', () {
+      double t(double p, double v, List<double> a) =>
+          SdCardSnapPhysics.snapTarget(
+            pixels: p,
+            velocity: v,
+            viewport: 700,
+            minExtent: 0,
+            maxExtent: 2000,
+            anchors: a,
+          );
+      expect(t(0, 1000, const []), 630); // 0,9 viewport
+      expect(t(100, -1000, const []), 0);
+      expect(t(1900, 1000, const []), 2000); // kẹp ở cuối
+      expect(t(0, 1000, const [0]), 630);
+      expect(t(300, -1000, const [0]), 0);
+      expect(t(0, 1000, const [0, 400]), 400);
+      expect(t(0, 1000, const [0, 900]), 630); // mốc xa hơn 0,9 viewport
+      expect(t(900, -1000, const [0, 100, 800]), 800);
+    });
   });
 }
