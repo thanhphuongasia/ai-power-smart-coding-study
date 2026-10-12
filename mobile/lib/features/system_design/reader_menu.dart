@@ -216,6 +216,8 @@ class _MenuSheetState extends State<_MenuSheet> {
                   child: Text(
                     'CHAPTER ${r.chapterIndex} · ${r.chapterName}'
                         .toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontFamily: kSansFamily,
                       fontSize: 12,
