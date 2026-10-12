@@ -175,6 +175,7 @@ class _DuoNodeView extends StatelessWidget {
           ),
           // Mặt trên (kèm quầng sáng nếu là node current).
           Container(
+            key: Key('duo-face-${node.id}'),
             width: _kDiscSize,
             height: _kDiscSize,
             decoration: BoxDecoration(
@@ -200,7 +201,12 @@ class _DuoNodeView extends StatelessWidget {
       button: true,
       container: true,
       excludeSemantics: true,
-      label: '${node.label}, ${_stateText(state)}',
+      // Gồm cả sublabel (tiến độ) vì excludeSemantics nuốt Text con.
+      label: [
+        node.label,
+        if (node.sublabel != null) node.sublabel!,
+        _stateText(state),
+      ].join(', '),
       onTap: onTap,
       child: SizedBox(
         width: _kNodeWidth,

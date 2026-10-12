@@ -386,6 +386,116 @@ void main() {
     expect(doc.tasks.single.name, 'Thiết kế khoá');
     expect(attempt.items, hasLength(2));
   });
+
+  group('id trong path', () {
+    for (final bad in ['..', '.', '']) {
+      test(
+        "id '$bad' bị từ chối bằng ArgumentError, không gửi request",
+        () async {
+          final (repo, seen) = _repo((_) => _json(_docJson()));
+          await expectLater(repo.getDoc(bad), throwsArgumentError);
+          await expectLater(
+            repo.putProgress(bad, 's1', []),
+            throwsArgumentError,
+          );
+          await expectLater(
+            repo.putProgress('d1', bad, []),
+            throwsArgumentError,
+          );
+          await expectLater(
+            repo.submitAttempt(bad, 't1', 'x'),
+            throwsArgumentError,
+          );
+          await expectLater(
+            repo.submitAttempt('d1', bad, 'x'),
+            throwsArgumentError,
+          );
+          await expectLater(repo.listAttempts(bad, 't1'), throwsArgumentError);
+          await expectLater(repo.listAttempts('d1', bad), throwsArgumentError);
+          expect(seen, isEmpty);
+        },
+      );
+    }
+
+    test('id bình thường có ký tự đặc biệt vẫn được mã hoá đúng', () async {
+      final (repo, seen) = _repo((_) => _json({'items': <Object>[]}));
+      await repo.listAttempts('a b', 't/1?x#y');
+      expect(
+        seen.single.url.path,
+        '/api/sd/docs/a%20b/tasks/t%2F1%3Fx%23y/attempts',
+      );
+      // '..' nằm trong id dài hơn thì hợp lệ và được giữ nguyên trong 1 segment.
+      await repo.listAttempts('a..b', 't1');
+      expect(seen.last.url.path, '/api/sd/docs/a..b/tasks/t1/attempts');
+    });
+  });
+
+  group('JSON sai hình dạng → FormatException (không phải TypeError)', () {
+    test('listDocs: items không phải list', () async {
+      final (repo, _) = _repo((_) => _json({'items': 'x'}));
+      await expectLater(
+        repo.listDocs(),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('items'),
+          ),
+        ),
+      );
+    });
+
+    test('listDocs: phần tử trong items không phải map', () async {
+      final (repo, _) = _repo(
+        (_) => _json({
+          'items': [1],
+        }),
+      );
+      await expectLater(
+        repo.listDocs(),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('items[0]'),
+          ),
+        ),
+      );
+    });
+
+    test(
+      'listAttempts: items không phải list / phần tử không phải map',
+      () async {
+        final (r1, _) = _repo((_) => _json({'items': {}}));
+        await expectLater(r1.listAttempts('d1', 't1'), throwsFormatException);
+        final (r2, _) = _repo(
+          (_) => _json({
+            'items': [_attemptJson(), 'x'],
+          }),
+        );
+        await expectLater(r2.listAttempts('d1', 't1'), throwsFormatException);
+      },
+    );
+
+    test('submitAttempt: attempt không phải object', () async {
+      final (repo, _) = _repo((_) => _json({'attempt': 'x'}, 201));
+      await expectLater(
+        repo.submitAttempt('d1', 't1', 'x'),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('attempt'),
+          ),
+        ),
+      );
+      final (r2, _) = _repo((_) => _json(<String, Object?>{}, 201));
+      await expectLater(
+        r2.submitAttempt('d1', 't1', 'x'),
+        throwsFormatException,
+      );
+    });
+  });
 }
 
 // --- retry của provider: lỗi HTTP từ server hiện ngay, không quay mãi ----------------------------

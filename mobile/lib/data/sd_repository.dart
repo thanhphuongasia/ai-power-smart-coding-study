@@ -22,6 +22,14 @@ class SdApiException implements Exception {
   String toString() => 'SdApiException($statusCode, $detail)';
 }
 
+/// Lỗi có thể ném ra từ MỌI hàm của lớp này (người gọi phải bắt rộng, cùng hợp
+/// đồng với ProgressApi):
+/// - [SdApiException]: server trả status không như mong đợi;
+/// - [FormatException]: JSON sai hình dạng (kể cả `items`/`attempt` sai kiểu);
+/// - lỗi mạng/timeout thô: `TimeoutException`, `SocketException`,
+///   `http.ClientException` — KHÔNG được bọc lại.
+/// Ngoài ra id (docId, sectionId, taskId) rỗng, '.' hoặc '..' bị từ chối ngay
+/// bằng [ArgumentError], không gửi request nào.
 class SdRepository {
   SdRepository(
     this._http, {
@@ -40,23 +48,42 @@ class SdRepository {
     return query == null ? u : u.replace(queryParameters: query);
   }
 
-  static String _e(String s) => Uri.encodeComponent(s);
+  /// Mã hoá id để ghép vào path. `Uri.encodeComponent` không mã hoá dấu chấm và
+  /// `Uri.resolve` chuẩn hoá '..' → path trượt lên cấp trên; nên chặn từ đầu.
+  static String _e(String name, String id) {
+    if (id.isEmpty || id == '.' || id == '..') {
+      throw ArgumentError.value(id, name, 'id không hợp lệ cho path');
+    }
+    return Uri.encodeComponent(id);
+  }
 
-  Future<List<SdDocSummary>> listDocs() async {
-    final root = await _send(
-      () => _http.get(_uri('/api/sd/docs')),
-      200,
-      'GET /api/sd/docs',
-    );
+  /// Đọc `items` thành list object. Thiếu/null → rỗng; sai kiểu → FormatException.
+  static List<Map<String, dynamic>> _items(
+    Map<String, dynamic> root,
+    String what,
+  ) {
+    final raw = root['items'];
+    if (raw == null) return const [];
+    if (raw is! List) throw FormatException('$what: "items" không phải list');
     return [
-      for (final e in (root['items'] as List? ?? const []))
-        SdDocSummary.fromJson(e as Map<String, dynamic>),
+      for (var i = 0; i < raw.length; i++)
+        switch (raw[i]) {
+          final Map<String, dynamic> m => m,
+          _ => throw FormatException('$what: items[$i] không phải object'),
+        },
     ];
   }
 
+  Future<List<SdDocSummary>> listDocs() async {
+    const what = 'GET /api/sd/docs';
+    final root = await _send(() => _http.get(_uri('/api/sd/docs')), 200, what);
+    return [for (final e in _items(root, what)) SdDocSummary.fromJson(e)];
+  }
+
   Future<SdDoc> getDoc(String id) async {
+    final doc = _e('docId', id);
     final root = await _send(
-      () => _http.get(_uri('/api/sd/docs/${_e(id)}')),
+      () => _http.get(_uri('/api/sd/docs/$doc')),
       200,
       'GET /api/sd/docs/$id',
     );
@@ -69,9 +96,11 @@ class SdRepository {
     String sectionId,
     List<String> readCards,
   ) async {
+    final doc = _e('docId', docId);
+    final section = _e('sectionId', sectionId);
     final root = await _send(
       () => _http.put(
-        _uri('/api/sd/docs/${_e(docId)}/sections/${_e(sectionId)}/progress'),
+        _uri('/api/sd/docs/$doc/sections/$section/progress'),
         headers: _json,
         body: jsonEncode({'read_cards': readCards}),
       ),
@@ -86,16 +115,22 @@ class SdRepository {
     String taskId,
     String answer,
   ) async {
+    final doc = _e('docId', docId);
+    final task = _e('taskId', taskId);
     final root = await _send(
       () => _http.post(
-        _uri('/api/sd/docs/${_e(docId)}/tasks/${_e(taskId)}/attempts'),
+        _uri('/api/sd/docs/$doc/tasks/$task/attempts'),
         headers: _json,
         body: jsonEncode({'answer': answer}),
       ),
       201,
       'POST attempts $docId/$taskId',
     );
-    return SdAttempt.fromJson(root['attempt'] as Map<String, dynamic>);
+    final attempt = root['attempt'];
+    if (attempt is! Map<String, dynamic>) {
+      throw const FormatException('POST attempts: "attempt" không phải object');
+    }
+    return SdAttempt.fromJson(attempt);
   }
 
   /// Mới nhất trước.
@@ -104,19 +139,17 @@ class SdRepository {
     String taskId, {
     int limit = 20,
   }) async {
+    final doc = _e('docId', docId);
+    final task = _e('taskId', taskId);
+    const what = 'GET attempts';
     final root = await _send(
       () => _http.get(
-        _uri('/api/sd/docs/${_e(docId)}/tasks/${_e(taskId)}/attempts', {
-          'limit': '$limit',
-        }),
+        _uri('/api/sd/docs/$doc/tasks/$task/attempts', {'limit': '$limit'}),
       ),
       200,
-      'GET attempts $docId/$taskId',
+      '$what $docId/$taskId',
     );
-    return [
-      for (final e in (root['items'] as List? ?? const []))
-        SdAttempt.fromJson(e as Map<String, dynamic>),
-    ];
+    return [for (final e in _items(root, what)) SdAttempt.fromJson(e)];
   }
 
   /// Gọi [call] với timeout, kiểm status, trả body JSON object. Body hỏng ở
