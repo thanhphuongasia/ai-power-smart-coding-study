@@ -170,7 +170,7 @@ def test_suffix_id_never_collides_with_an_existing_slug():
 def test_renaming_a_section_changes_its_id_but_editing_text_does_not():
     """Quy ước đã ghi ở docstring parser: id section theo TÊN. Test này giữ cho thay đổi sau có chủ đích."""
     base = parse_markdown(MINI)["sections"][0]
-    renamed = parse_markdown(MINI.replace("### Mục A", "### Mục B"))["sections"][0]
+    renamed = parse_markdown(MINI.replace("### Mục A", "### Mục B").replace("Đáp án mẫu: Mục A", "Đáp án mẫu: Mục B"))["sections"][0]
     edited = parse_markdown(MINI.replace("Đoạn một.", "Đoạn một sửa."))["sections"][0]
     assert base["id"] != renamed["id"] and base["id"] == edited["id"]
 
