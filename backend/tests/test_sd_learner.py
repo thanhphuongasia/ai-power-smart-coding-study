@@ -7,7 +7,7 @@ import os
 import pytest
 from sqlalchemy import select
 
-from app.tables import SdAttempt, SdProgress
+from app.tables import SdAttempt, SdProgress, User
 from tests.conftest import BACKEND_DIR
 from tests.test_auth import add_user, bearer, client_for, fresh_throttle, login  # noqa: F401
 
@@ -105,7 +105,7 @@ def test_fresh_doc_unlocks_only_first_section_and_hides_phase2(world):
     assert [s["unlocked"] for s in d["sections"]] == [True] + [False] * 8
     assert not any(s["done"] or s["read"] for s in d["sections"])
     assert d["phase2_unlocked"] is False and d["context"] == []
-    assert all(not t["unlocked"] and t["prompt"] is None and t["hints"] == [] for t in d["tasks"])
+    assert all(not t["unlocked"] and t["prompt"] is None and t["hints"] == [] and t["ref_section_id"] is None for t in d["tasks"])
 
 
 # --- INV-02: không lộ rubric/từ khoá -------------------------------------------------------
@@ -207,3 +207,20 @@ def test_reimport_keeps_other_cards_read_but_edited_card_is_unread_again(world, 
     assert req["done"] is False and len(req["read"]) == len(req["cards"]) - 1
     assert sum(s["done"] for s in d["sections"]) == 8
     assert d["phase2_unlocked"] is False
+
+
+def test_phase2_flag_in_put_response_flips_only_on_last_section(world):
+    flags = [world.read_section(s)["phase2_unlocked"] for s in world.doc()["sections"]]
+    assert flags == [False] * 8 + [True]
+
+
+def test_attempt_counts_are_per_user(world):
+    world.read_all("ann")
+    world.read_all("bob")
+    ann = world.session.scalars(select(User.id).where(User.email == "ann@example.com")).one()
+    world.session.add(SdAttempt(user_id=ann, doc_id=DOC, task_id="api-design", n=1, answer="a", auto_result={}))
+    world.session.flush()
+    assert world.doc("ann")["tasks"][0]["attempts"] == 1
+    bob = world.doc("bob")
+    assert bob["tasks"][0]["attempts"] == 0 and not bob["tasks"][0]["done"] and not bob["tasks"][1]["unlocked"]
+    assert world.client.get("/api/sd/docs", headers=world.hdr["bob"]).json()["items"][0]["tasks_done"] == 0
