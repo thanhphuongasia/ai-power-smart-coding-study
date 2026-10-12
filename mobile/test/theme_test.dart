@@ -6,35 +6,35 @@ import 'package:smart_coding_study/shared/widgets.dart';
 void main() {
   group('AppColors', () {
     test('surface color is correct', () {
-      expect(AppColors.surface, const Color(0xFF111418));
+      expect(AppColors.surface, const Color(0xFF0F1522));
     });
 
     test('surfaceRaised color is correct', () {
-      expect(AppColors.surfaceRaised, const Color(0xFF1b1f25));
+      expect(AppColors.surfaceRaised, const Color(0xFF171F31));
     });
 
     test('outline color is correct', () {
-      expect(AppColors.outline, const Color(0xFF626b78));
+      expect(AppColors.outline, const Color(0xFF27314A));
     });
 
     test('ink color is correct', () {
-      expect(AppColors.ink, const Color(0xFFe7e9ee));
+      expect(AppColors.ink, const Color(0xFFE8ECF4));
     });
 
     test('inkMuted color is correct', () {
-      expect(AppColors.inkMuted, const Color(0xFF9aa3b0));
+      expect(AppColors.inkMuted, const Color(0xFF9AA6BA));
     });
 
     test('primary color is correct', () {
-      expect(AppColors.primary, const Color(0xFF5ccfb0));
+      expect(AppColors.primary, const Color(0xFF6C9DF0));
     });
 
     test('onPrimary color is correct', () {
-      expect(AppColors.onPrimary, const Color(0xFF06231b));
+      expect(AppColors.onPrimary, const Color(0xFF0F1522));
     });
 
     test('accent color is correct', () {
-      expect(AppColors.accent, const Color(0xFFf5b94a));
+      expect(AppColors.accent, const Color(0xFFFF8A00));
     });
 
     test('onAccent color is correct', () {
@@ -42,7 +42,86 @@ void main() {
     });
 
     test('danger color is correct', () {
-      expect(AppColors.danger, const Color(0xFFff7b72));
+      expect(AppColors.danger, const Color(0xFFE5484D));
+    });
+  });
+
+  group('AppPalette', () {
+    test('light has The Coach tokens', () {
+      const p = AppPalette.light;
+      expect(p.primary, const Color(0xFF4A86E8));
+      expect(p.primaryDark, const Color(0xFF2F6BCB));
+      expect(p.primarySoft, const Color(0xFFE8F0FB));
+      expect(p.surface, const Color(0xFFF7F8FA));
+      expect(p.surfaceRaised, const Color(0xFFFFFFFF));
+      expect(p.outline, const Color(0xFFE5E7EB));
+      expect(p.ink, const Color(0xFF14213D));
+      expect(p.inkMuted, const Color(0xFF6B7280));
+      expect(p.accent, const Color(0xFFFF8A00));
+      expect(p.success, const Color(0xFF58A700));
+      expect(p.successDark, const Color(0xFF3F7D00));
+      expect(p.successSoft, const Color(0xFFE4F0D5));
+      expect(p.danger, const Color(0xFFE5484D));
+      expect(p.codeSurface, const Color(0xFF1E2230));
+      expect(p.codeInk, const Color(0xFFE6E9F2));
+    });
+
+    test('dark has The Coach tokens', () {
+      const p = AppPalette.dark;
+      expect(p.primary, const Color(0xFF6C9DF0));
+      expect(p.primaryDark, const Color(0xFF3E6FC8));
+      expect(p.primarySoft, const Color(0xFF1D2A47));
+      expect(p.successSoft, const Color(0xFF1C3314));
+      expect(p.codeSurface, const Color(0xFF0C111C));
+      expect(p.codeInk, const Color(0xFFE6E9F2));
+    });
+
+    test('copyWith and lerp cover every new field', () {
+      const a = AppPalette.dark;
+      const b = AppPalette.light;
+      final c = a.copyWith(
+        primaryDark: b.primaryDark,
+        primarySoft: b.primarySoft,
+        success: b.success,
+        successDark: b.successDark,
+        successSoft: b.successSoft,
+        codeSurface: b.codeSurface,
+        codeInk: b.codeInk,
+      );
+      expect(c.primaryDark, b.primaryDark);
+      expect(c.primarySoft, b.primarySoft);
+      expect(c.successSoft, b.successSoft);
+      expect(c.codeSurface, b.codeSurface);
+      expect(c.surface, a.surface);
+      final end = a.lerp(b, 1);
+      expect(end.primaryDark, b.primaryDark);
+      expect(end.primarySoft, b.primarySoft);
+      expect(end.success, b.success);
+      expect(end.successDark, b.successDark);
+      expect(end.successSoft, b.successSoft);
+      expect(end.codeSurface, b.codeSurface);
+      expect(end.codeInk, b.codeInk);
+      expect(a.lerp(b, 0).primarySoft, a.primarySoft);
+    });
+
+    test('light theme maps palette into buildAppTheme', () {
+      final theme = buildAppTheme(brightness: Brightness.light);
+      expect(theme.extension<AppPalette>(), AppPalette.light);
+      expect(theme.scaffoldBackgroundColor, AppPalette.light.surface);
+    });
+  });
+
+  group('AppBreakpoint / AppGradients', () {
+    test('breakpoints are 700 and 900', () {
+      expect(AppBreakpoint.nav, 700);
+      expect(AppBreakpoint.split, 900);
+    });
+
+    test('three gradient pairs', () {
+      expect(AppGradients.all.length, 3);
+      expect(AppGradients.g1.end, const Color(0xFF4A86E8));
+      expect(AppGradients.g2.start, const Color(0xFF0F5C5C));
+      expect(AppGradients.g3.end, const Color(0xFF8B5CC6));
     });
   });
 
@@ -75,6 +154,26 @@ void main() {
 
     test('display text style has correct font family', () {
       expect(AppText.display.fontFamily, kSansFamily);
+    });
+
+    test('kSansFamily is Nunito', () {
+      expect(kSansFamily, 'Nunito');
+    });
+
+    test('sans styles carry wght variation matching fontWeight', () {
+      final expected = {
+        AppText.display: 900,
+        AppText.title: 800,
+        AppText.body: 500,
+        AppText.label: 700,
+        AppText.caption: 600,
+      };
+      expected.forEach((style, w) {
+        expect(style.fontVariations, isNotNull);
+        expect(style.fontVariations!.single.axis, 'wght');
+        expect(style.fontVariations!.single.value, w.toDouble());
+        expect(style.fontWeight!.value, w);
+      });
     });
 
     test('code text style uses mono font', () {
@@ -310,6 +409,52 @@ void main() {
       expect(button.style?.elevation?.resolve({}), 0);
     });
 
+    testWidgets(
+      'PrimaryButton disabled has null onPressed and is ElevatedButton',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(),
+            home: const Scaffold(body: PrimaryButton(label: 'Test')),
+          ),
+        );
+        final button = tester.widget<ElevatedButton>(
+          find.byType(ElevatedButton),
+        );
+        expect(button.onPressed, isNull);
+      },
+    );
+
+    testWidgets('PrimaryButton enabled calls onPressed', (
+      WidgetTester tester,
+    ) async {
+      var n = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: PrimaryButton(label: 'Test', onPressed: () => n++),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(ElevatedButton));
+      expect(n, 1);
+    });
+
+    testWidgets('GhostButton is an OutlinedButton with 2px side', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: const Scaffold(body: GhostButton(label: 'Test')),
+        ),
+      );
+      final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
+      expect(button.onPressed, isNull);
+      expect(button.style?.side?.resolve({})?.width, 2);
+    });
+
     testWidgets('HintButton has elevation 0', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -362,7 +507,7 @@ void main() {
       );
       final shape = material.shape as RoundedRectangleBorder;
       expect(shape.side.color, AppColors.outline);
-      expect(shape.side.width, 1);
+      expect(shape.side.width, 2);
     });
 
     testWidgets('SurfaceCard highlighted has primary border', (
@@ -386,7 +531,7 @@ void main() {
       );
       final shape = material.shape as RoundedRectangleBorder;
       expect(shape.side.color, AppColors.primary);
-      expect(shape.side.width, 1);
+      expect(shape.side.width, 2);
     });
 
     testWidgets('SurfaceCard Material has elevation 0', (

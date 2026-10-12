@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:highlight/languages/python.dart';
@@ -720,5 +721,203 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
       tb.dispose();
     });
+  });
+
+  _ghostGroup();
+}
+
+Future<void> _pumpGhost(
+  WidgetTester tester,
+  _Harness h, {
+  bool ghost = true,
+  List<String> answers = const ['len(text)'],
+  String initialCode = '',
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData.dark(),
+      home: Scaffold(
+        body: CodeInput(
+          initialCode: initialCode,
+          knownIdentifiers: const ['text'],
+          vocab: const ['range', 'len', 'append'],
+          onChanged: h.changes.add,
+          focusNode: h.focus,
+          answers: answers,
+          ghost: ghost,
+        ),
+      ),
+    ),
+  );
+  await tester.showKeyboard(find.byKey(_field));
+  await tester.pump();
+}
+
+/// Chữ mờ nằm trong TextSpan hiển thị, không trong controller.text.
+String _spanText(WidgetTester tester) {
+  final c = tester.widget<EditableText>(find.byType(EditableText)).controller;
+  return c
+      .buildTextSpan(
+        context: tester.element(find.byType(EditableText)),
+        style: null,
+        withComposing: false,
+      )
+      .toPlainText();
+}
+
+void _ghostGroup() {
+  group('ghost text + dải vocab', () {
+    testWidgets('gõ tiền tố → phần còn lại hiện mờ, controller.text y nguyên', (
+      tester,
+    ) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h);
+      await _type(tester, 'len(');
+      final c = _ctrl(tester);
+      // Gõ "(" tự đóng ngoặc nên text là "len()" - không khớp tiền tố đáp án
+      // `len(text)`; xoá ")" thừa bằng cách đặt lại text thẳng.
+      c.value = const TextEditingValue(
+        text: 'len(te',
+        selection: TextSelection.collapsed(offset: 6),
+      );
+      await tester.pump();
+      expect(c.text, 'len(te');
+      expect(_spanText(tester), 'len(text)');
+      // INV-04: chữ mờ không lọt vào text hay onChanged.
+      expect(h.changes.any((t) => t.contains('xt)')), isFalse);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('ô trống → ghost là dòng đầu của đáp án, text vẫn rỗng', (
+      tester,
+    ) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h, answers: ['x = 1\ny = 2']);
+      expect(_ctrl(tester).text, '');
+      expect(_spanText(tester), 'x = 1');
+      expect(h.changes, isEmpty);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('Tab nhận ghost: chèn thật và gọi onChanged', (tester) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h);
+      _ctrl(tester).value = const TextEditingValue(
+        text: 'le',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+      await tester.pump();
+      h.changes.clear();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(_ctrl(tester).text, 'len(text)');
+      expect(h.changes.last, 'len(text)');
+      expect(_spanText(tester), 'len(text)');
+      await _teardown(tester, h);
+    });
+
+    testWidgets('chip ghost-accept chèn phần ghost', (tester) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h);
+      _ctrl(tester).value = const TextEditingValue(
+        text: 'len(',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      await tester.pump();
+      await _tap(tester, 'ghost-accept');
+      expect(_ctrl(tester).text, 'len(text)');
+      await _teardown(tester, h);
+    });
+
+    testWidgets('không có ghost thì Tab vẫn chèn 4 space như cũ', (
+      tester,
+    ) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h, answers: const ['zzz']);
+      await _type(tester, 'a');
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(_ctrl(tester).text, 'a    ');
+      await _teardown(tester, h);
+    });
+
+    testWidgets('chip vocab chèn từ tại con trỏ', (tester) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h);
+      expect(find.byKey(const Key('vocab-range')), findsOneWidget);
+      await _tap(tester, 'vocab-append');
+      expect(_ctrl(tester).text, 'append()');
+      expect(h.changes.last, 'append()');
+      await _teardown(tester, h);
+    });
+
+    testWidgets('ghost=false (mặc định): không ghost, không dải vocab', (
+      tester,
+    ) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h, ghost: false);
+      expect(_spanText(tester), '');
+      expect(find.byKey(const Key('vocab-range')), findsNothing);
+      expect(find.byKey(const Key('ghost-accept')), findsNothing);
+      expect(find.byKey(const Key('symbol-tab')), findsOneWidget);
+      // Placeholder cũ vẫn hiện.
+      expect(find.text('# viết code ở đây'), findsOneWidget);
+      await _teardown(tester, h);
+    });
+
+    testWidgets('answers rỗng dù ghost=true → không ghost', (tester) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h, answers: const []);
+      expect(_spanText(tester), '');
+      await _teardown(tester, h);
+    });
+
+    testWidgets(
+      'CodeToolbar(ghost: true) hiện dải vocab, chip chèn vào ô active',
+      (tester) async {
+        final tb = CodeToolbarController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: Column(
+                children: [
+                  SizedBox(
+                    height: 120,
+                    child: CodeInput(
+                      initialCode: '',
+                      knownIdentifiers: const [],
+                      vocab: const [],
+                      onChanged: (_) {},
+                      showBars: false,
+                      keyPrefix: 'cell-A',
+                      toolbar: tb,
+                      answers: const ['len(x)'],
+                      ghost: true,
+                    ),
+                  ),
+                  CodeToolbar(
+                    controller: tb,
+                    knownIdentifiers: const [],
+                    vocab: const ['len'],
+                    ghost: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        expect(find.byKey(const Key('vocab-len')), findsOneWidget);
+        await tester.showKeyboard(find.byKey(const Key('cell-A-field')));
+        await tester.pump();
+        expect(find.byKey(const Key('ghost-accept')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('vocab-len')));
+        await tester.pump();
+        expect(_ctrl(tester).text, 'len()');
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(seconds: 6));
+        tb.dispose();
+      },
+    );
   });
 }
