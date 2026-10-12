@@ -291,6 +291,21 @@ class _ListBlock extends StatelessWidget {
   }
 }
 
+/// Số cột tối đa để bảng được ép vừa bề rộng tờ giấy (chữ xuống dòng).
+const int _kFitMaxCols = 4;
+
+/// Bề rộng tối thiểu của một cột khi ép vừa (gồm cả lề ô).
+const double _kColMin = 72;
+
+/// Bề rộng tối đa của bảng ép vừa, để màn rộng không kéo dãn kỳ quặc.
+const double _kTableMaxWidth = 560;
+
+/// Lề ngang trong mỗi ô.
+const double _kCellPadH = 8;
+
+/// Bảng markdown. ≤4 cột và đủ chỗ → ép vừa bề rộng, chữ xuống dòng, cột chia
+/// theo độ dài nội dung. Còn lại (nhiều cột / hẹp quá) → cuộn ngang, mỗi cột
+/// có bề rộng tối thiểu hợp lý, mờ cạnh phải gợi ý còn nội dung.
 class _TableBlock extends StatelessWidget {
   const _TableBlock({required this.body});
   final String body;
@@ -301,44 +316,133 @@ class _TableBlock extends StatelessWidget {
     if (rows.isEmpty) return const SizedBox.shrink();
     final cols = rows.fold<int>(0, (m, r) => r.length > m ? r.length : m);
     final cell = _serif(size: 16);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Table(
-        defaultColumnWidth: const IntrinsicColumnWidth(),
-        border: const TableBorder(
-          horizontalInside: BorderSide(color: kPaperLine),
-        ),
-        children: [
-          for (var r = 0; r < rows.length; r++)
-            TableRow(
-              children: [
-                for (var c = 0; c < cols; c++)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 12,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
-                      child: Text.rich(
-                        inlineSpan(
-                          c < rows[r].length ? rows[r][c] : '',
-                          r == 0
-                              ? cell.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontVariations: const [
-                                    FontVariation('wght', 700),
-                                  ],
-                                )
-                              : cell,
-                        ),
-                      ),
+    final head = cell.copyWith(
+      fontWeight: FontWeight.w700,
+      fontVariations: const [FontVariation('wght', 700)],
+    );
+
+    // Độ dài chữ dài nhất mỗi cột (ô thiếu tính là rỗng).
+    final lens = <int>[
+      for (var c = 0; c < cols; c++)
+        rows.fold<int>(0, (m, r) {
+          final n = c < r.length ? r[c].length : 0;
+          return n > m ? n : m;
+        }),
+    ];
+
+    Widget table(Map<int, TableColumnWidth> widths) => Table(
+      columnWidths: widths,
+      border: const TableBorder(
+        horizontalInside: BorderSide(color: kPaperLine),
+      ),
+      children: [
+        for (var r = 0; r < rows.length; r++)
+          TableRow(
+            children: [
+              for (var c = 0; c < cols; c++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: _kCellPadH,
+                  ),
+                  child: Text.rich(
+                    inlineSpan(
+                      c < rows[r].length ? rows[r][c] : '',
+                      r == 0 ? head : cell,
                     ),
                   ),
-              ],
+                ),
+            ],
+          ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final avail = box.maxWidth.isFinite
+            ? box.maxWidth.clamp(0.0, _kTableMaxWidth)
+            : double.infinity;
+        if (cols <= _kFitMaxCols && cols * _kColMin <= avail) {
+          // Mỗi cột = mức tối thiểu + phần còn lại chia theo độ dài nội dung.
+          final weights = [for (final n in lens) n.clamp(6, 40).toDouble()];
+          final total = weights.fold<double>(0, (a, b) => a + b);
+          final spare = avail - cols * _kColMin;
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: table({
+              for (var c = 0; c < cols; c++)
+                c: FixedColumnWidth(_kColMin + spare * weights[c] / total),
+            }),
+          );
+        }
+        // Cuộn ngang: bề rộng cột theo nội dung, kẹp trong [96, 240] (nhân
+        // theo cỡ chữ hệ thống).
+        final scale = MediaQuery.textScalerOf(context).scale(1);
+        final widths = [
+          for (final n in lens)
+            (n * 9.0 * scale + 2 * _kCellPadH).clamp(96.0, 240.0 * scale),
+        ];
+        return _ScrollTable(
+          table: table({
+            for (var c = 0; c < cols; c++) c: FixedColumnWidth(widths[c]),
+          }),
+        );
+      },
+    );
+  }
+}
+
+/// Bảng cuộn ngang kèm hiệu ứng mờ ở cạnh phải khi còn nội dung chưa thấy.
+class _ScrollTable extends StatefulWidget {
+  const _ScrollTable({required this.table});
+  final Widget table;
+
+  @override
+  State<_ScrollTable> createState() => _ScrollTableState();
+}
+
+class _ScrollTableState extends State<_ScrollTable> {
+  // Vào chế độ này là do bảng rộng hơn khung, nên ban đầu còn nội dung bên phải.
+  bool _more = true;
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.metrics.axis != Axis.horizontal) return false;
+    final more = n.metrics.pixels < n.metrics.maxScrollExtent - 1;
+    if (more != _more) setState(() => _more = more);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        NotificationListener<ScrollNotification>(
+          onNotification: _onScroll,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: widget.table,
+          ),
+        ),
+        Positioned(
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: 28,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              opacity: _more ? 1 : 0,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0x00FFFFFF), kPaperColor],
+                  ),
+                ),
+              ),
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

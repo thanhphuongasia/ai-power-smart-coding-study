@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/sd_repository.dart';
+import 'package:smart_coding_study/domain/sd_models.dart';
 import 'package:smart_coding_study/features/system_design/block_renderer.dart';
 import 'package:smart_coding_study/features/system_design/reader_screen.dart';
 import 'package:smart_coding_study/features/system_design/sd_path_screen.dart';
@@ -669,6 +670,147 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
   }
+
+  group('(T) bảng trong tờ giấy', () {
+    const longRows =
+        '| Chức năng | Mô tả |\n|---|---|\n'
+        '| Tìm chuyến theo ngày, điểm đi/đến | Chịu tải đỉnh gấp 10 lần ngày thường |\n'
+        '| Đặt vé | Giữ chỗ trong 15 phút rồi thanh toán |';
+
+    // Dựng bảng đúng như màn đọc: lề tờ giấy 22px mỗi bên.
+    Future<void> pumpTable(
+      WidgetTester tester,
+      String body, {
+      double w = 390,
+      double scale = 1,
+    }) async {
+      await _size(tester, w);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(w, 800),
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: SdBlockView(
+                  card: SdCard(id: 't', kind: 'table', title: '', body: body),
+                  showTitle: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('(a) bảng 2 cột ô dài vừa khung 390, chữ xuống dòng', (
+      tester,
+    ) async {
+      await pumpTable(tester, longRows);
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(
+          of: find.byType(SdBlockView),
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsNothing,
+        reason: 'bảng ≤4 cột vừa khung thì không cần cuộn ngang',
+      );
+      for (final t in [
+        'Tìm chuyến theo ngày, điểm đi/đến',
+        'Chịu tải đỉnh gấp 10 lần ngày thường',
+        'Giữ chỗ trong 15 phút rồi thanh toán',
+      ]) {
+        final r = tester.getRect(find.text(t, findRichText: true));
+        expect(r.left, greaterThanOrEqualTo(22), reason: t);
+        expect(r.right, lessThanOrEqualTo(390 - 22), reason: t);
+      }
+      // Ô dài phải xuống nhiều hơn một dòng (cỡ chữ 16 × cao 1.7 ≈ 27px).
+      final h = tester
+          .getSize(
+            find.text(
+              'Chịu tải đỉnh gấp 10 lần ngày thường',
+              findRichText: true,
+            ),
+          )
+          .height;
+      expect(h, greaterThan(27 * 1.5));
+    });
+
+    testWidgets('(b) bảng 6 cột vẫn cuộn ngang được, không overflow', (
+      tester,
+    ) async {
+      const six =
+          '| A | B | C | D | E | F |\n|---|---|---|---|---|---|\n'
+          '| một | hai | ba | bốn | năm | sáu |';
+      await pumpTable(tester, six);
+      expect(tester.takeException(), isNull);
+      final scroll = find.descendant(
+        of: find.byType(SdBlockView),
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(scroll, findsOneWidget);
+      final pos = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)),
+      );
+      expect(pos.position.maxScrollExtent, greaterThan(0));
+      await tester.drag(scroll, const Offset(-200, 0));
+      await tester.pump();
+      expect(pos.position.pixels, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final c in [(320.0, 1.0), (390.0, 1.5), (320.0, 1.5), (800.0, 1.0)]) {
+      testWidgets('(c) không overflow ở ${c.$1.toInt()}px, chữ x${c.$2}', (
+        tester,
+      ) async {
+        await pumpTable(tester, longRows, w: c.$1, scale: c.$2);
+        expect(tester.takeException(), isNull);
+        await pumpTable(
+          tester,
+          '| A | B | C | D | E |\n|---|---|---|---|---|\n'
+          '| ${'dài ' * 30} | b | c | d | e |',
+          w: c.$1,
+          scale: c.$2,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('(c) ở 800px bảng không bị kéo dãn hết khung', (tester) async {
+      await pumpTable(tester, longRows, w: 800);
+      final r = tester.getRect(find.byType(Table));
+      expect(r.width, lessThanOrEqualTo(560));
+    });
+
+    testWidgets('(d) hàng đầu in đậm, hàng thân không', (tester) async {
+      await pumpTable(tester, longRows);
+      FontWeight? weight(String t) {
+        final w = tester.widget<RichText>(
+          find.text(t, findRichText: true).first,
+        );
+        // Text.rich bọc span của ta trong một span gốc mang style mặc định.
+        final root = w.text as TextSpan;
+        final inner = root.children?.first as TextSpan? ?? root;
+        return inner.style?.fontWeight;
+      }
+
+      expect(weight('Chức năng'), FontWeight.w700);
+      expect(weight('Đặt vé'), FontWeight.w400);
+    });
+
+    testWidgets('(e) bảng 1 cột và bảng thiếu ô không lỗi', (tester) async {
+      await pumpTable(tester, '| Chỉ một |\n|---|\n| ô |');
+      expect(tester.takeException(), isNull);
+      expect(find.text('Chỉ một', findRichText: true), findsOneWidget);
+      await pumpTable(tester, '| A | B | C |\n|---|---|---|\n| x |\n| y | z |');
+      expect(tester.takeException(), isNull);
+      expect(find.text('x', findRichText: true), findsOneWidget);
+    });
+  });
 
   testWidgets('(F1) lướt hết rồi back trong ~100ms: lộ trình GET SAU PUT, '
       'hiện tiến độ mới và mở section kế', (tester) async {
