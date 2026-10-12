@@ -13,3 +13,4 @@ Dựng: `e2e/web_e2e_setup.py` (DB, nội dung, user, tài liệu airline đã p
 7. Claude chấm sâu (gọi đúng hàm `review_queue/review_detail/submit_feedback` mà tool MCP dùng) → bấm "Làm mới" trong app → "Claude đã chấm" + ghi chú từng ý + khối nhận xét chung; bản reviewed thay bản từ khoá.  (screens/09)
 
 Phát hiện khi chạy thật (không bắt được ở widget test): bảng trong màn đọc rộng hơn màn hình điện thoại, cột phải bị cắt chữ → sửa ở block_renderer (bảng co theo bề rộng, chữ xuống dòng).
+8. Sau khi sửa bảng (block_renderer): bảng vừa khung 390px, chữ xuống dòng, không cắt cột.  (screens/10)

@@ -1,10 +1,12 @@
 Worktree: /Users/phuongmacbook/Developer/Personal/Projects/ai-power-coding-study.worktrees/crew-2026-10-12-system-design-mode
 Branch:   crew/2026-10-12-system-design-mode
 Issue:    #31 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/31
+PR:       (điền sau khi mở)
 
 # Run: system-design-mode
-Trạng thái: P3 — code xong cả 10 task; đang xử lý review Flutter T-08/T-09 (correction) và review T-10
-Backend: T-01..T-05 xong, 802 test pass; T-02 đã qua 3 vòng review (PASS với Minor), T-04/T-05 PASS với Minor (vòng 2), e2e HTTP 15/15 OK (e2e/backend_e2e.out)
-Flutter: T-06/T-06b/T-07 PASS với Minor (đã sửa), T-08/T-09 CẦN SỬA → đang correction (F1 mối nối back nhanh, F2 cuộn tới node current, F4 backoff PUT, F6, test), T-10 đang review; 714 test pass ở lần chạy đầy đủ gần nhất
-Next action: nhận correction T-08/T-09 + review T-10 → gate → commit → reviewer mối nối (SEAM.md, INV-01..06) + verify-seam + e2e Flutter (chụp màn) → P4 báo cáo, PR
-Backlog: F3 reader dựng cả tài liệu một lần (1000 card ≈ 12k element), id attempt toàn cục lộ ra học viên, hashtext 32-bit, chưa có màn admin trong app để nhập .md, rủi ro dư prompt injection (F4 MCP), mutant tương đương
+Trạng thái: P4 — xong code, review, cổng mối nối, e2e; chờ user merge PR (không tự merge)
+Base: origin/main @ 2f02d10 (không đổi trong run; một Alembic head 0007)
+Tests: backend 805 passed, 2 skipped · Flutter 741 passed · e2e HTTP backend 15/15 · e2e app web thật (Chrome 390px) xem e2e/web_e2e.md
+Review: T-01..T-05 (L4) mỗi task crew-review + review ngoài Codex (lần đầu hết giờ 360s, chạy lại 900s); T-02 qua 3 vòng; T-04/T-05 2 vòng; T-06..T-10 crew-review + correction; reviewer mối nối SEAM.md PASS với Minor (verify-seam exit 0)
+Next action: user xem PR, merge; sau merge chạy crew-distill (P5) và dọn worktree
+Backlog: F3 reader dựng cả tài liệu một lần (1000 card ≈ 12k element); BK-1 task.id là slug tên task; BK-2 Phase 2 khoá lại sau nhập lại báo sai lý do; BK-3 reader tăng tiến độ cục bộ sau 409; BK-4 node Bối cảnh khi không có task; id attempt toàn cục lộ ra học viên; hashtext 32-bit; rủi ro dư prompt injection (đã có answer_notice + replace); chưa có màn admin trong app để nhập .md; SRS card SD (chưa làm, issue #31 còn mở); mutant tương đương
