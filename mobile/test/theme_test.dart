@@ -635,7 +635,7 @@ void main() {
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: ScreenHeader(title: 'Test', onBack: () {}),
+            body: ScreenHeader(title: 'Test', onBack: () {}, showMenu: false),
           ),
         ),
       );
@@ -650,7 +650,7 @@ void main() {
         MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: ScreenHeader(title: 'Test', onBack: () {}),
+            body: ScreenHeader(title: 'Test', onBack: () {}, showMenu: false),
           ),
         ),
       );
@@ -663,6 +663,40 @@ void main() {
       final iconButton = tester.widget<IconButton>(find.byType(IconButton));
       expect(iconButton.tooltip, 'Quay lại');
     });
+
+    testWidgets(
+      'ScreenHeader menu-button: có ở 800px ngoài shell, showMenu:false thì không, 400px không có',
+      (WidgetTester tester) async {
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        Future<void> pumpAt(double width, {bool? showMenu}) async {
+          tester.view.physicalSize = Size(width, 600);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: buildAppTheme(),
+              home: Scaffold(
+                body: ScreenHeader(
+                  title: 'Test',
+                  onBack: () {},
+                  showMenu: showMenu,
+                ),
+              ),
+            ),
+          );
+        }
+
+        await pumpAt(800);
+        expect(find.byKey(const Key('menu-button')), findsOneWidget);
+
+        await pumpAt(800, showMenu: false);
+        expect(find.byKey(const Key('menu-button')), findsNothing);
+
+        await pumpAt(400);
+        expect(find.byKey(const Key('menu-button')), findsNothing);
+      },
+    );
 
     testWidgets('SurfaceCard without onTap still renders InkWell', (
       WidgetTester tester,

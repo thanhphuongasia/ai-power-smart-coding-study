@@ -384,11 +384,11 @@ class _PathNode extends StatelessWidget {
     final p = context.palette;
     final grey = Color.alphaBlend(p.ink.withValues(alpha: 0.10), p.surface);
     final (Color face, Color iconColor) = switch (state) {
-      _NodeState.done => (p.primary, Colors.white),
-      // Bài kế tiếp / đang làm: xám đậm, icon trắng (giống Coddy).
+      _NodeState.done => (p.primary, p.onPrimary),
+      // Bài kế tiếp / đang làm: xám đậm, icon sáng (giống Coddy).
       _ when isNext || state == _NodeState.started => (
         Color.alphaBlend(p.ink.withValues(alpha: 0.42), p.surface),
-        Colors.white,
+        p.surfaceRaised,
       ),
       _ => (grey, Color.alphaBlend(p.ink.withValues(alpha: 0.28), p.surface)),
     };
@@ -422,7 +422,11 @@ class _PathNode extends StatelessWidget {
               width: _LessonPath.hexW,
               height: _LessonPath.hexH,
               child: CustomPaint(
-                painter: _HexPainter(face: face),
+                painter: _HexPainter(
+                  face: face,
+                  shade: p.codeSurface,
+                  gloss: p.ink,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: _HexPainter.depth),
                   child: Icon(
@@ -595,9 +599,13 @@ class _TailPainter extends CustomPainter {
 /// Lục giác đỉnh nhọn bo góc, nổi khối: thành dưới tối, mặt trên, rồi một mặt
 /// trong nhỏ hơn có viền dưới tối — giống nút bài học của Coddy.
 class _HexPainter extends CustomPainter {
-  _HexPainter({required this.face});
+  _HexPainter({required this.face, required this.shade, required this.gloss});
 
   final Color face;
+
+  /// Bóng tối (mặt bên) và bóng sáng (mặt trong), lấy từ palette.
+  final Color shade;
+  final Color gloss;
 
   static const depth = 10.0;
 
@@ -629,7 +637,7 @@ class _HexPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final side = Color.lerp(face, Colors.black, 0.22)!;
+    final side = Color.lerp(face, shade, 0.22)!;
     final top = Rect.fromLTWH(0, 0, size.width, size.height - depth);
     canvas.drawPath(
       hex(top.shift(const Offset(0, depth)), 10),
@@ -644,12 +652,13 @@ class _HexPainter extends CustomPainter {
     );
     canvas.drawPath(
       hex(inner, 8),
-      Paint()..color = Color.lerp(face, Colors.white, 0.08)!,
+      Paint()..color = Color.lerp(face, gloss, 0.08)!,
     );
   }
 
   @override
-  bool shouldRepaint(_HexPainter old) => old.face != face;
+  bool shouldRepaint(_HexPainter old) =>
+      old.face != face || old.shade != shade || old.gloss != gloss;
 }
 
 /// Dải phân cách chặng: tên file ở giữa hai đường kẻ (kiểu Coddy). File còn

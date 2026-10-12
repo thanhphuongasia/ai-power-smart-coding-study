@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:smart_coding_study/app/theme.dart';
+import 'package:smart_coding_study/features/shell/app_drawer.dart';
+
+/// Bóng của nút vô hiệu: tối hơn nền nút (nền = outline) để vẫn thấy nổi khối.
+Color _disabledShadow(AppPalette p) =>
+    Color.lerp(p.outline, const Color(0xFF000000), 0.3)!;
 
 /// Bóng cứng (không blur) dưới thẻ/nút, tạo cảm giác nổi khối của The Coach.
 BoxShadow _hardShadow(Color color, double dy) =>
@@ -26,7 +31,14 @@ class SurfaceCard extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radius,
-          boxShadow: [_hardShadow(context.palette.outline, 4)],
+          boxShadow: [
+            _hardShadow(
+              highlighted
+                  ? context.palette.primaryDark
+                  : context.palette.outline,
+              4,
+            ),
+          ],
         ),
         child: Material(
           color: context.palette.surfaceRaised,
@@ -178,16 +190,25 @@ class ScreenHeader extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onBack;
 
+  /// null = tự động: hiện ☰ khi màn rộng (>= [AppBreakpoint.nav]) và màn này
+  /// không nằm trong AppShell (shell đã có ☰ ở top bar).
+  final bool? showMenu;
+
   const ScreenHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
     this.onBack,
+    this.showMenu,
   });
 
   @override
   Widget build(BuildContext context) {
+    final menu =
+        showMenu ??
+        (MediaQuery.sizeOf(context).width >= AppBreakpoint.nav &&
+            !InAppShell.of(context));
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpace.s4,
@@ -201,6 +222,7 @@ class ScreenHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (menu) const AppMenuButton(),
           if (onBack != null)
             IconButton(
               icon: const Icon(Icons.arrow_back),
@@ -279,7 +301,10 @@ class PrimaryButton extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: radius,
         boxShadow: [
-          _hardShadow(onPressed == null ? p.outline : p.primaryDark, 4),
+          _hardShadow(
+            onPressed == null ? _disabledShadow(p) : p.primaryDark,
+            4,
+          ),
         ],
       ),
       child: ElevatedButton.icon(
@@ -372,7 +397,7 @@ class HintButton extends StatelessWidget {
         boxShadow: [
           _hardShadow(
             onPressed == null
-                ? p.outline
+                ? _disabledShadow(p)
                 : Color.lerp(p.accent, const Color(0xFF000000), 0.25)!,
             4,
           ),

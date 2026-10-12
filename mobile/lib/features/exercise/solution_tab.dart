@@ -10,18 +10,28 @@ import '../../app/theme.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import 'challenge_tab.dart';
+import 'code_input.dart' show codeSyntaxStyles;
 import 'session_providers.dart';
 
 class SolutionTab extends ConsumerWidget {
-  const SolutionTab({super.key, required this.exercise});
+  const SolutionTab({
+    super.key,
+    required this.exercise,
+    this.showGoCode = true,
+  });
 
   final Exercise exercise;
+
+  /// `false` ở bố cục chia đôi: ẩn nút `back-to-code` (không có tab Code).
+  final bool showGoCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final viewed = ref.watch(
-      progressProvider.select((m) => m[exercise.id]?.solutionViewed ?? const <String>{}),
+      progressProvider.select(
+        (m) => m[exercise.id]?.solutionViewed ?? const <String>{},
+      ),
     );
 
     return ListView(
@@ -65,15 +75,16 @@ class SolutionTab extends ConsumerWidget {
               },
             ),
           ),
-        SizedBox(
-          width: double.infinity,
-          child: PrimaryButton(
-            key: const Key('back-to-code'),
-            label: 'Quay lại tab Code để gõ',
-            onPressed: () =>
-                DefaultTabController.of(context).animateTo(kCodeTabIndex),
+        if (showGoCode)
+          SizedBox(
+            width: double.infinity,
+            child: PrimaryButton(
+              key: const Key('back-to-code'),
+              label: 'Quay lại tab Code để gõ',
+              onPressed: () =>
+                  DefaultTabController.of(context).animateTo(kCodeTabIndex),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -160,8 +171,10 @@ class _DashedButton extends StatelessWidget {
               Icon(Icons.visibility_outlined, size: 18, color: p.inkMuted),
               const SizedBox(width: AppSpace.s2),
               Flexible(
-                child: Text(label,
-                    style: AppText.label.copyWith(color: p.inkMuted)),
+                child: Text(
+                  label,
+                  style: AppText.label.copyWith(color: p.inkMuted),
+                ),
               ),
             ],
           ),
@@ -179,10 +192,12 @@ class _DashedBorderPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Offset.zero & size,
-        const Radius.circular(AppRadius.md),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(AppRadius.md),
+        ),
+      );
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -207,22 +222,14 @@ class _CodeBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final styles = <String, TextStyle>{
-      'keyword': TextStyle(color: p.primary),
-      'built_in': TextStyle(color: p.primary),
-      'literal': TextStyle(color: p.primary),
-      'number': TextStyle(color: p.primary),
-      'string': TextStyle(color: p.inkMuted),
-      'comment': TextStyle(color: p.outline, fontStyle: FontStyle.italic),
-      'title': TextStyle(color: p.ink, fontWeight: FontWeight.w500),
-    };
-    final base = AppText.code.copyWith(color: p.ink);
+    final styles = codeSyntaxStyles(p);
+    final base = AppText.code.copyWith(color: p.codeInk);
     final nodes = highlight.parse(code, language: 'python').nodes ?? const [];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpace.s2),
       decoration: BoxDecoration(
-        color: p.surface,
+        color: p.codeSurface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: SingleChildScrollView(

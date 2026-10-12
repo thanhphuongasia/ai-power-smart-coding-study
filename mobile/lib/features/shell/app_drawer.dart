@@ -42,6 +42,18 @@ Future<void> showAppDrawer(BuildContext context) {
   );
 }
 
+/// Marker: widget con nằm trong [AppShell] (đã có top bar ☰ riêng), nên
+/// `ScreenHeader` không được thêm ☰ thứ hai.
+class InAppShell extends InheritedWidget {
+  const InAppShell({super.key, required super.child});
+
+  static bool of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<InAppShell>() != null;
+
+  @override
+  bool updateShouldNotify(InAppShell oldWidget) => false;
+}
+
 /// Nút ☰ mở [showAppDrawer].
 class AppMenuButton extends StatelessWidget {
   const AppMenuButton({super.key = const Key('menu-button')});

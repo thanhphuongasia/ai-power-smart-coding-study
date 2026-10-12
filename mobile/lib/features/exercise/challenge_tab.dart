@@ -16,9 +16,17 @@ import 'class_diagram.dart';
 const int kCodeTabIndex = 1;
 
 class ChallengeTab extends ConsumerStatefulWidget {
-  const ChallengeTab({super.key, required this.exercise});
+  const ChallengeTab({
+    super.key,
+    required this.exercise,
+    this.showGoCode = true,
+  });
 
   final Exercise exercise;
+
+  /// `false` ở bố cục chia đôi (không có tab Code để nhảy tới): ẩn nút
+  /// `start-coding` — editor đã nằm sẵn ở cột phải.
+  final bool showGoCode;
 
   @override
   ConsumerState<ChallengeTab> createState() => _ChallengeTabState();
@@ -120,18 +128,19 @@ class _ChallengeTabState extends ConsumerState<ChallengeTab> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(AppSpace.s4),
-          child: SizedBox(
-            width: double.infinity,
-            child: PrimaryButton(
-              key: const Key('start-coding'),
-              label: 'Bắt đầu code →',
-              onPressed: () =>
-                  DefaultTabController.of(context).animateTo(kCodeTabIndex),
+        if (widget.showGoCode)
+          Padding(
+            padding: const EdgeInsets.all(AppSpace.s4),
+            child: SizedBox(
+              width: double.infinity,
+              child: PrimaryButton(
+                key: const Key('start-coding'),
+                label: 'Bắt đầu code →',
+                onPressed: () =>
+                    DefaultTabController.of(context).animateTo(kCodeTabIndex),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
