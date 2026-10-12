@@ -18,6 +18,7 @@ import '../../data/progress_api.dart';
 import '../../domain/content.dart';
 import '../../domain/models.dart';
 import '../review/review_controller.dart';
+import '../shell/app_drawer.dart' show AppMenuButton;
 import '../stats/activity.dart';
 import '../../shared/widgets.dart';
 import 'challenge_tab.dart';
@@ -287,110 +288,175 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
     // lần dựng đầu (DefaultTabController giữ controller sau đó).
     final initialIndex = draftCount > 0 ? kCodeTabIndex : 0;
 
-    return DefaultTabController(
-      length: 3,
-      initialIndex: initialIndex,
-      // Mọi chạm/cuộn trên màn đều reset idle (kể cả chỉ đọc đề).
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) =>
-            ref.read(sessionProvider(widget.exerciseId).notifier).activity(),
-        child: Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                if (widget.preview)
-                  Container(
-                    key: const Key('preview-banner'),
-                    width: double.infinity,
-                    color: p.accent,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpace.s1,
-                      horizontal: AppSpace.s4,
-                    ),
-                    child: Text(
-                      'Xem trước — chưa duyệt',
-                      textAlign: TextAlign.center,
-                      style: AppText.label.copyWith(color: p.onAccent),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpace.s2,
-                    AppSpace.s2,
-                    AppSpace.s4,
-                    0,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        key: const Key('exercise-back'),
-                        icon: const Icon(Icons.arrow_back),
-                        tooltip: 'Quay lại',
-                        onPressed: () =>
-                            _leave(context, preview: widget.preview),
+    // Đo bề rộng cửa sổ: ≥ split chia đôi đề | editor, < split giữ ba tab.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final wide = width >= AppBreakpoint.split;
+        return DefaultTabController(
+          length: wide ? 2 : 3,
+          initialIndex: wide ? 0 : initialIndex,
+          // Mọi chạm/cuộn trên màn đều reset idle (kể cả chỉ đọc đề).
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => ref
+                .read(sessionProvider(widget.exerciseId).notifier)
+                .activity(),
+            child: Scaffold(
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    if (widget.preview)
+                      Container(
+                        key: const Key('preview-banner'),
+                        width: double.infinity,
+                        color: p.accent,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpace.s1,
+                          horizontal: AppSpace.s4,
+                        ),
+                        child: Text(
+                          'Xem trước — chưa duyệt',
+                          textAlign: TextAlign.center,
+                          style: AppText.label.copyWith(color: p.onAccent),
+                        ),
                       ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              exercise.title,
-                              key: const Key('exercise-title'),
-                              style: AppText.title.copyWith(fontSize: 18),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.s2,
+                        AppSpace.s2,
+                        AppSpace.s4,
+                        0,
+                      ),
+                      child: Row(
+                        children: [
+                          if (width >= AppBreakpoint.nav) const AppMenuButton(),
+                          IconButton(
+                            key: const Key('exercise-back'),
+                            icon: const Icon(Icons.arrow_back),
+                            tooltip: 'Quay lại',
+                            onPressed: () =>
+                                _leave(context, preview: widget.preview),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  exercise.title,
+                                  key: const Key('exercise-title'),
+                                  style: AppText.title.copyWith(fontSize: 18),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${located.file.name} · ${exercise.qualifiedName}',
+                                  key: const Key('exercise-subtitle'),
+                                  style: AppText.caption.copyWith(
+                                    fontFamily: kMonoFamily,
+                                    color: p.inkMuted,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            Text(
-                              '${located.file.name} · ${exercise.qualifiedName}',
-                              key: const Key('exercise-subtitle'),
-                              style: AppText.caption.copyWith(
-                                fontFamily: kMonoFamily,
-                                color: p.inkMuted,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: AppSpace.s2),
+                          TimerPill(
+                            session.elapsed,
+                            warning: session.phase != SessionPhase.active,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (wide)
+                      Expanded(child: _splitBody(p, exercise))
+                    else ...[
+                      Builder(
+                        builder: (context) => TabBar(
+                          key: const Key('exercise-tabs'),
+                          labelColor: p.primary,
+                          unselectedLabelColor: p.inkMuted,
+                          indicatorColor: p.primary,
+                          dividerColor: p.outline.withValues(alpha: 0.4),
+                          labelStyle: AppText.label,
+                          tabs: [
+                            const Tab(text: 'Challenge'),
+                            Tab(
+                              text:
+                                  'Code $draftCount/${exercise.blocks.length}',
                             ),
+                            const Tab(text: 'Solution'),
                           ],
                         ),
                       ),
-                      const SizedBox(width: AppSpace.s2),
-                      TimerPill(
-                        session.elapsed,
-                        warning: session.phase != SessionPhase.active,
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            ChallengeTab(exercise: exercise),
+                            CodeTab(
+                              exercise: exercise,
+                              preview: widget.preview,
+                            ),
+                            SolutionTab(exercise: exercise),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-                Builder(
-                  builder: (context) => TabBar(
-                    key: const Key('exercise-tabs'),
-                    labelColor: p.primary,
-                    unselectedLabelColor: p.inkMuted,
-                    indicatorColor: p.primary,
-                    dividerColor: p.outline.withValues(alpha: 0.4),
-                    labelStyle: AppText.label,
-                    tabs: [
-                      const Tab(text: 'Challenge'),
-                      Tab(text: 'Code $draftCount/${exercise.blocks.length}'),
-                      const Tab(text: 'Solution'),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      ChallengeTab(exercise: exercise),
-                      CodeTab(exercise: exercise, preview: widget.preview),
-                      SolutionTab(exercise: exercise),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  /// Bố cục ≥ [AppBreakpoint.split]: trái đề / lời giải (42%), phải editor
+  /// inline (58%). Không có tab Code nên hai tab trái ẩn nút nhảy sang Code.
+  Widget _splitBody(AppPalette p, Exercise exercise) {
+    return Row(
+      key: const Key('exercise-split'),
+      children: [
+        Expanded(
+          flex: 42,
+          child: Column(
+            children: [
+              TabBar(
+                key: const Key('exercise-split-tabs'),
+                labelColor: p.primary,
+                unselectedLabelColor: p.inkMuted,
+                indicatorColor: p.primary,
+                dividerColor: p.outline.withValues(alpha: 0.4),
+                labelStyle: AppText.label,
+                tabs: const [
+                  Tab(text: 'Đề'),
+                  Tab(text: 'Lời giải'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    ChallengeTab(exercise: exercise, showGoCode: false),
+                    SolutionTab(exercise: exercise, showGoCode: false),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+        VerticalDivider(width: 1, color: p.outline.withValues(alpha: 0.4)),
+        Expanded(
+          flex: 58,
+          child: CodeTab(
+            exercise: exercise,
+            preview: widget.preview,
+            inlineEditor: true,
+          ),
+        ),
+      ],
     );
   }
 }

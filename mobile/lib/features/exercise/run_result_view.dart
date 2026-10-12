@@ -194,10 +194,7 @@ class RunResultView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: AppSpace.s1),
             decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                p.ink.withValues(alpha: 0.06),
-                p.surfaceRaised,
-              ),
+              color: p.codeSurface,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Column(
@@ -213,21 +210,27 @@ class RunResultView extends StatelessWidget {
                         color:
                             i < merged.lineOrigin.length &&
                                 merged.lineOrigin[i] != null
-                            ? p.accent.withValues(alpha: 0.35)
+                            ? p.codeInk.withValues(alpha: 0.18)
                             : null,
                         child: Text(
                           i < merged.lineOrigin.length
                               ? (merged.lineOrigin[i] ?? '')
                               : '',
                           key: Key('merged-origin-$i'),
-                          style: AppText.code.copyWith(fontSize: 12),
+                          style: AppText.code.copyWith(
+                            fontSize: 12,
+                            color: p.codeInk,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpace.s2),
                       Expanded(
                         child: Text(
                           lines[i],
-                          style: AppText.code.copyWith(fontSize: 12),
+                          style: AppText.code.copyWith(
+                            fontSize: 12,
+                            color: p.codeInk,
+                          ),
                         ),
                       ),
                     ],

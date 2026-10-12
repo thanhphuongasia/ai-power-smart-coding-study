@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:highlight/languages/python.dart';
 
+import '../../app/theme.dart';
 import 'completion_engine.dart';
 
 const _mono = 'JetBrains Mono';
@@ -77,6 +78,8 @@ class CodeInput extends StatefulWidget {
     this.showBars = true,
     this.keyPrefix = 'code-input',
     this.toolbar,
+    this.answers = const [],
+    this.ghost = false,
   });
 
   final String initialCode;
@@ -95,6 +98,13 @@ class CodeInput extends StatefulWidget {
   /// Nơi ô này đăng ký khi được focus, để [CodeToolbar] chèn đúng ô.
   final CodeToolbarController? toolbar;
 
+  /// Đáp án chấp nhận của ô, để dựng chữ mờ gợi ý (cần [ghost] = true).
+  final List<String> answers;
+
+  /// `true` → chữ mờ gợi ý phần còn lại của đáp án (Tab để nhận) + dải từ
+  /// gợi ý luôn hiện. `false` (mặc định) → hành vi cũ y nguyên.
+  final bool ghost;
+
   @override
   State<CodeInput> createState() => _CodeInputState();
 }
@@ -110,12 +120,40 @@ class _CodeInputState extends State<CodeInput> {
   void initState() {
     super.initState();
     _controller = _PythonCodeController(text: widget.initialCode);
+    _controller.ghostProvider = () => _ghost;
+    _controller.onGhostTab = _acceptGhost;
     _last = _controller.value;
     _controller.addListener(_onControllerChanged);
     // CodeField gắn focusNode trong initState của nó, nên chốt một lần ở đây.
     _focus = widget.focusNode ?? (_ownFocus = FocusNode());
     _focus.addListener(_onFocusChanged);
     if (_focus.hasFocus) widget.toolbar?._attach(this);
+  }
+
+  /// Phần còn lại của đáp án để vẽ mờ; rỗng khi tắt, đang chọn đoạn, con trỏ
+  /// không ở cuối hay IME đang soạn dở. Chỉ đọc controller, không ghi (INV-04).
+  String get _ghost {
+    if (!widget.ghost || widget.answers.isEmpty) return '';
+    final v = _controller.value;
+    final sel = v.selection;
+    if (sel.isValid && (!sel.isCollapsed || sel.end != v.text.length)) {
+      return '';
+    }
+    if (v.composing.isValid && !v.composing.isCollapsed) return '';
+    return ghostFor(v.text, widget.answers);
+  }
+
+  /// Chèn thật phần mờ vào cuối text → từ đây mới đổi text và gọi onChanged.
+  void _acceptGhost() {
+    final g = _ghost;
+    if (g.isEmpty) return;
+    HapticFeedback.selectionClick();
+    final text = _controller.text;
+    _controller.value = TextEditingValue(
+      text: text + g,
+      selection: TextSelection.collapsed(offset: text.length + g.length),
+    );
+    _keepKeyboard();
   }
 
   void _onFocusChanged() {
@@ -259,12 +297,15 @@ class _CodeInputState extends State<CodeInput> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // Khối code luôn nền tối ở cả hai theme (INV-08) → chữ phụ lấy từ codeInk.
+    final palette = context.palette;
+    _controller.ghostColor = palette.codeInk.withValues(alpha: 0.4);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final bounded = constraints.maxHeight.isFinite;
         final codeField = CodeTheme(
-          data: CodeThemeData(styles: _codeStyles(scheme)),
+          data: CodeThemeData(styles: codeSyntaxStyles(palette)),
           child: CodeField(
             key: Key('${widget.keyPrefix}-field'),
             controller: _controller,
@@ -278,13 +319,11 @@ class _CodeInputState extends State<CodeInput> {
               showErrors: false,
               showFoldingHandles: false,
               textStyle: TextStyle(
-                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                color: palette.codeInk.withValues(alpha: 0.5),
               ),
             ),
-            background: Color.alphaBlend(
-              scheme.onSurface.withValues(alpha: 0.04),
-              scheme.surface,
-            ),
+            background: palette.codeSurface,
+            cursorColor: palette.codeInk,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             textStyle: const TextStyle(
               fontFamily: _mono,
@@ -296,7 +335,7 @@ class _CodeInputState extends State<CodeInput> {
 
         // Lớp hiển thị thuần tuý, không đụng controller (INV-04) — chỉ đọc
         // text để quyết định hiện/ẩn, không bao giờ ghi lại.
-        final showPlaceholder = _controller.text.isEmpty;
+        final showPlaceholder = _controller.text.isEmpty && _ghost.isEmpty;
         final stacked = Stack(
           children: [
             codeField,
@@ -316,7 +355,7 @@ class _CodeInputState extends State<CodeInput> {
                       fontSize: _fontSize,
                       height: _lineHeight,
                       fontStyle: FontStyle.italic,
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      color: palette.codeInk.withValues(alpha: 0.55),
                     ),
                   ),
                 ),
@@ -360,6 +399,10 @@ class _CodeInputState extends State<CodeInput> {
               ),
               onSuggestion: _applySuggestion,
               onSymbol: _insertSymbol,
+              showVocab: widget.ghost,
+              vocab: vocabStrip(widget.vocab),
+              ghostText: _ghost,
+              onGhost: _acceptGhost,
             ),
           ],
         );
@@ -377,11 +420,15 @@ class CodeToolbar extends StatelessWidget {
     required this.controller,
     required this.knownIdentifiers,
     required this.vocab,
+    this.ghost = false,
   });
 
   final CodeToolbarController controller;
   final List<String> knownIdentifiers;
   final List<String> vocab;
+
+  /// `true` → thêm hàng từ gợi ý luôn hiện + chip nhận chữ mờ của ô active.
+  final bool ghost;
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +441,10 @@ class CodeToolbar extends StatelessWidget {
               active?._suggestionsFor(knownIdentifiers, vocab) ?? const [],
           onSuggestion: active?._applySuggestion,
           onSymbol: active?._insertSymbol,
+          showVocab: ghost,
+          vocab: vocabStrip(vocab),
+          ghostText: active?._ghost ?? '',
+          onGhost: active?._acceptGhost,
         );
       },
     );
@@ -406,17 +457,34 @@ class _BarsPanel extends StatelessWidget {
     required this.suggestions,
     required this.onSuggestion,
     required this.onSymbol,
+    this.showVocab = false,
+    this.vocab = const [],
+    this.ghostText = '',
+    this.onGhost,
   });
 
   final List<Suggestion> suggestions;
   final ValueChanged<Suggestion>? onSuggestion;
   final ValueChanged<String>? onSymbol;
 
+  /// Hàng từ gợi ý luôn hiện (chỉ khi ghost bật).
+  final bool showVocab;
+  final List<Suggestion> vocab;
+  final String ghostText;
+  final VoidCallback? onGhost;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final onSuggestion = this.onSuggestion;
     final onSymbol = this.onSymbol;
+    final palette = context.palette;
+    // Ghost có thể bắt đầu bằng '\n' (đáp án nhiều dòng, vừa gõ xong dòng 1)
+    // → nhãn lấy dòng KHÔNG rỗng đầu tiên.
+    final ghostLabel = ghostText
+        .split('\n')
+        .map((l) => l.trim())
+        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
     // Chạm vào 2 hàng này được tính là "bên trong" ô nhập → không mất
     // focus, bàn phím không sụp.
     return TextFieldTapRegion(
@@ -429,6 +497,31 @@ class _BarsPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showVocab)
+              _Bar(
+                children: [
+                  if (ghostText.isNotEmpty)
+                    _Key(
+                      key: const Key('ghost-accept'),
+                      label: '⇥ $ghostLabel',
+                      color: palette.primary,
+                      borderColor: palette.primary,
+                      onTap: onGhost,
+                    ),
+                  for (final s in vocab)
+                    _Key(
+                      key: Key('vocab-${s.label}'),
+                      label: s.insertText.endsWith('(')
+                          ? '${s.label}()'
+                          : s.label,
+                      color: palette.ink,
+                      borderColor: palette.outline,
+                      onTap: onSuggestion == null
+                          ? null
+                          : () => onSuggestion(s),
+                    ),
+                ],
+              ),
             _Bar(
               children: [
                 for (final (i, s) in suggestions.indexed)
@@ -483,19 +576,24 @@ bool _isWordChar(String c) {
       u == 95; // _
 }
 
-Map<String, TextStyle> _codeStyles(ColorScheme scheme) => {
-  'root': TextStyle(
-    color: scheme.onSurface,
-    backgroundColor: scheme.surfaceContainer,
-  ),
-  'keyword': TextStyle(color: scheme.primary),
-  'built_in': TextStyle(color: scheme.primary),
-  'literal': TextStyle(color: scheme.primary),
-  'number': TextStyle(color: scheme.primary),
-  'string': TextStyle(color: scheme.onSurfaceVariant),
-  'comment': TextStyle(color: scheme.outline, fontStyle: FontStyle.italic),
-  'title': TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
-  'params': TextStyle(color: scheme.onSurface),
+// Màu tô cú pháp chọn cho nền TỐI của khối code (codeSurface), không đổi theo
+// theme sáng/tối của app (INV-08).
+const _synKeyword = Color(0xFF8AB4FF);
+const _synNumber = Color(0xFFF2B866);
+const _synString = Color(0xFF9BD6A8);
+const _synComment = Color(0xFF7D879E);
+
+/// Bảng tô cú pháp dùng chung cho editor và các khối code xem-chỉ-đọc.
+Map<String, TextStyle> codeSyntaxStyles(AppPalette p) => {
+  'root': TextStyle(color: p.codeInk, backgroundColor: p.codeSurface),
+  'keyword': const TextStyle(color: _synKeyword),
+  'built_in': const TextStyle(color: _synKeyword),
+  'literal': const TextStyle(color: _synKeyword),
+  'number': const TextStyle(color: _synNumber),
+  'string': const TextStyle(color: _synString),
+  'comment': const TextStyle(color: _synComment, fontStyle: FontStyle.italic),
+  'title': TextStyle(color: p.codeInk, fontWeight: FontWeight.w500),
+  'params': TextStyle(color: p.codeInk),
 };
 
 class _Bar extends StatelessWidget {
@@ -598,6 +696,55 @@ class _PythonCodeController extends CodeController {
 
   @override
   Future<void> generateSuggestions() async {}
+
+  /// Chữ mờ gợi ý: chỉ nối thêm vào TextSpan hiển thị, KHÔNG nằm trong
+  /// `text` (INV-04).
+  String Function()? ghostProvider;
+  VoidCallback? onGhostTab;
+  Color? ghostColor;
+
+  /// CodeField chuyển phím vào đây trước cả Shortcuts: Tab khi chữ mờ đang
+  /// hiện → nhận gợi ý thay vì chèn 4 space.
+  @override
+  KeyEventResult onKey(KeyEvent event) {
+    final kb = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.tab &&
+        !kb.isShiftPressed &&
+        !kb.isControlPressed &&
+        !kb.isAltPressed &&
+        !kb.isMetaPressed &&
+        (ghostProvider?.call() ?? '').isNotEmpty) {
+      onGhostTab?.call();
+      return KeyEventResult.handled;
+    }
+    return super.onKey(event);
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    bool? withComposing,
+  }) {
+    final base = super.buildTextSpan(
+      context: context,
+      style: style,
+      withComposing: withComposing,
+    );
+    final g = ghostProvider?.call() ?? '';
+    if (g.isEmpty) return base;
+    return TextSpan(
+      style: style,
+      children: [
+        base,
+        TextSpan(
+          text: g,
+          style: TextStyle(color: ghostColor, fontStyle: FontStyle.normal),
+        ),
+      ],
+    );
+  }
 
   @override
   set value(TextEditingValue newValue) {

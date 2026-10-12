@@ -1,4 +1,4 @@
-/// Chế độ sáng/tối của app: theo hệ thống → sáng → tối → theo hệ thống.
+/// Chế độ sáng/tối của app: mặc định sáng → tối → theo hệ thống → sáng.
 library;
 
 import 'package:flutter/material.dart';
@@ -6,14 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ThemeModeController extends Notifier<ThemeMode> {
   @override
-  ThemeMode build() => ThemeMode.system;
+  ThemeMode build() => ThemeMode.light;
 
-  /// Chuyển sang chế độ kế tiếp trong vòng system → light → dark.
+  /// Chuyển sang chế độ kế tiếp trong vòng light → dark → system.
   void cycle() {
     state = switch (state) {
-      ThemeMode.system => ThemeMode.light,
       ThemeMode.light => ThemeMode.dark,
       ThemeMode.dark => ThemeMode.system,
+      ThemeMode.system => ThemeMode.light,
     };
   }
 }

@@ -14,6 +14,7 @@ import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import '../exercise/session_controller.dart';
 import '../exercise/session_providers.dart';
+import '../review/review_controller.dart';
 import '../stats/activity.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -24,6 +25,7 @@ class HomeScreen extends ConsumerWidget {
     final content = ref.watch(contentIndexProvider);
     final progress = ref.watch(progressProvider);
     final inProgress = ref.watch(inProgressExerciseProvider);
+    final dueCount = ref.watch(dueCardsProvider).length;
 
     return Scaffold(
       body: SafeArea(
@@ -94,11 +96,12 @@ class HomeScreen extends ConsumerWidget {
               _ContinueCard(exercise: inProgress, progress: progress),
               const SizedBox(height: AppSpace.s6),
             ],
-            const SectionLabel('Chủ đề'),
-            for (final theme in content.themes) ...[
-              _ThemeCard(theme: theme, progress: progress),
-              const SizedBox(height: AppSpace.s4),
+            if (dueCount > 0) ...[
+              _DueCard(count: dueCount),
+              const SizedBox(height: AppSpace.s6),
             ],
+            const SectionLabel('Chủ đề'),
+            _ThemeGrid(themes: content.themes, progress: progress),
           ],
         ),
       ),
@@ -341,6 +344,72 @@ class _ContinueCard extends StatelessWidget {
   }
 }
 
+/// Thẻ ôn tập đến hạn: chạm để sang tab Ôn tập.
+class _DueCard extends StatelessWidget {
+  const _DueCard({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SurfaceCard(
+      key: const Key('due-card'),
+      onTap: () => context.go('/review'),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.s4),
+        child: Row(
+          children: [
+            Icon(Icons.style, color: p.accent),
+            const SizedBox(width: AppSpace.s2),
+            Expanded(child: Text('$count thẻ cần ôn', style: AppText.title)),
+            Icon(Icons.arrow_forward, color: p.ink),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Thẻ chủ đề: 1 cột dưới [AppBreakpoint.nav], 2 cột từ nav, 3 cột từ split.
+class _ThemeGrid extends StatelessWidget {
+  const _ThemeGrid({required this.themes, required this.progress});
+
+  final List<StudyTheme> themes;
+  final Map<String, ExerciseProgress> progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final cols = w >= AppBreakpoint.split
+            ? 3
+            : w >= AppBreakpoint.nav
+            ? 2
+            : 1;
+        const gap = AppSpace.s4;
+        final cardWidth = (w - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (var i = 0; i < themes.length; i++)
+              SizedBox(
+                width: cardWidth,
+                child: _ThemeCard(
+                  theme: themes[i],
+                  progress: progress,
+                  gradient: AppGradients.all[i % AppGradients.all.length],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Số block đã xong / tổng số block trong một tập exercise. Dùng chung cho
 /// tiến độ theme (Home) và tiến độ topic (Theme detail) — cùng đơn vị "block"
 /// để người dùng không nhầm với "n/m bài tập".
@@ -360,53 +429,77 @@ int totalBlocksIn(Iterable<Exercise> exercises) =>
     exercises.fold<int>(0, (sum, exercise) => sum + exercise.blocks.length);
 
 class _ThemeCard extends StatelessWidget {
-  const _ThemeCard({required this.theme, required this.progress});
+  const _ThemeCard({
+    required this.theme,
+    required this.progress,
+    required this.gradient,
+  });
 
   final StudyTheme theme;
   final Map<String, ExerciseProgress> progress;
+  final AppGradientPair gradient;
 
   @override
   Widget build(BuildContext context) {
     final exercises = [for (final file in theme.allFiles) ...file.exercises];
     final total = totalBlocksIn(exercises);
     final done = completedBlocksIn(exercises, progress);
+    final radius = BorderRadius.circular(AppRadius.xl);
+    const white = Colors.white;
+    const whiteMuted = Color(0xE6FFFFFF);
 
-    return SurfaceCard(
+    return DecoratedBox(
       key: Key('theme-${theme.id}'),
-      onTap: () => context.push('/theme/${theme.id}'),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(theme.name, style: AppText.title),
-            const SizedBox(height: AppSpace.s1),
-            Text(
-              theme.description,
-              style: AppText.body.copyWith(color: context.palette.inkMuted),
-            ),
-            const SizedBox(height: AppSpace.s2),
-            Wrap(
-              spacing: AppSpace.s2,
-              runSpacing: AppSpace.s2,
-              children: [for (final tag in theme.tags) TagChip(tag)],
-            ),
-            const SizedBox(height: AppSpace.s4),
-            Row(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: gradient.gradient,
+        boxShadow: [
+          BoxShadow(color: gradient.start, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push('/theme/${theme.id}'),
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.s4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: ThinProgressBar(value: total == 0 ? 0 : done / total),
-                ),
-                const SizedBox(width: AppSpace.s2),
+                Text(theme.name, style: AppText.title.copyWith(color: white)),
+                const SizedBox(height: AppSpace.s1),
                 Text(
-                  '$done/$total block',
-                  style: AppText.caption.copyWith(
-                    color: context.palette.inkMuted,
-                  ),
+                  theme.description,
+                  style: AppText.body.copyWith(color: whiteMuted),
+                ),
+                const SizedBox(height: AppSpace.s2),
+                Wrap(
+                  spacing: AppSpace.s2,
+                  runSpacing: AppSpace.s2,
+                  children: [for (final tag in theme.tags) TagChip(tag)],
+                ),
+                const SizedBox(height: AppSpace.s4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ThinProgressBar(
+                        value: total == 0 ? 0 : done / total,
+                        color: white,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.s2),
+                    Text(
+                      '$done/$total block',
+                      style: AppText.caption.copyWith(color: whiteMuted),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

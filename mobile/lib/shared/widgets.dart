@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:smart_coding_study/app/theme.dart';
+import 'package:smart_coding_study/features/shell/app_drawer.dart';
+
+/// Bóng của nút vô hiệu: tối hơn nền nút (nền = outline) để vẫn thấy nổi khối.
+Color _disabledShadow(AppPalette p) =>
+    Color.lerp(p.outline, const Color(0xFF000000), 0.3)!;
+
+/// Bóng cứng (không blur) dưới thẻ/nút, tạo cảm giác nổi khối của The Coach.
+BoxShadow _hardShadow(Color color, double dy) =>
+    BoxShadow(color: color, offset: Offset(0, dy), blurRadius: 0);
 
 class SurfaceCard extends StatelessWidget {
   final Widget child;
@@ -15,24 +24,36 @@ class SurfaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadius.xl);
     return Semantics(
       button: onTap != null,
       enabled: onTap != null,
-      child: Material(
-        color: context.palette.surfaceRaised,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          side: BorderSide(
-            color: highlighted ? context.palette.primary : context.palette.outline,
-            width: 1,
-          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            _hardShadow(
+              highlighted
+                  ? context.palette.primaryDark
+                  : context.palette.outline,
+              4,
+            ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: child,
+        child: Material(
+          color: context.palette.surfaceRaised,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(
+              color: highlighted
+                  ? context.palette.primary
+                  : context.palette.outline,
+              width: 2,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(onTap: onTap, borderRadius: radius, child: child),
         ),
       ),
     );
@@ -53,10 +74,7 @@ class TagChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: context.palette.surfaceRaised,
-        border: Border.all(
-          color: context.palette.outline,
-          width: 1,
-        ),
+        border: Border.all(color: context.palette.outline, width: 1),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
@@ -85,10 +103,7 @@ class ResultBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: context.palette.surfaceRaised,
-        border: Border.all(
-          color: color,
-          width: 1,
-        ),
+        border: Border.all(color: color, width: 1),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
@@ -96,10 +111,7 @@ class ResultBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: AppSpace.s1),
-          Text(
-            text,
-            style: AppText.label.copyWith(color: color),
-          ),
+          Text(text, style: AppText.label.copyWith(color: color)),
         ],
       ),
     );
@@ -110,17 +122,14 @@ class TimerPill extends StatelessWidget {
   final Duration elapsed;
   final bool warning;
 
-  const TimerPill(
-    this.elapsed, {
-    super.key,
-    this.warning = false,
-  });
+  const TimerPill(this.elapsed, {super.key, this.warning = false});
 
   @override
   Widget build(BuildContext context) {
     final minutes = elapsed.inMinutes;
     final seconds = elapsed.inSeconds % 60;
-    final text = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    final text =
+        '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -128,7 +137,9 @@ class TimerPill extends StatelessWidget {
         vertical: AppSpace.s2,
       ),
       decoration: BoxDecoration(
-        color: warning ? context.palette.danger.withValues(alpha: 0.2) : context.palette.surfaceRaised,
+        color: warning
+            ? context.palette.danger.withValues(alpha: 0.2)
+            : context.palette.surfaceRaised,
         border: Border.all(
           color: warning ? context.palette.danger : context.palette.outline,
           width: 1,
@@ -149,11 +160,7 @@ class ThinProgressBar extends StatelessWidget {
   final double value;
   final Color? color;
 
-  const ThinProgressBar({
-    super.key,
-    required this.value,
-    this.color,
-  });
+  const ThinProgressBar({super.key, required this.value, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -183,16 +190,25 @@ class ScreenHeader extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onBack;
 
+  /// null = tự động: hiện ☰ khi màn rộng (>= [AppBreakpoint.nav]) và màn này
+  /// không nằm trong AppShell (shell đã có ☰ ở top bar).
+  final bool? showMenu;
+
   const ScreenHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
     this.onBack,
+    this.showMenu,
   });
 
   @override
   Widget build(BuildContext context) {
+    final menu =
+        showMenu ??
+        (MediaQuery.sizeOf(context).width >= AppBreakpoint.nav &&
+            !InAppShell.of(context));
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpace.s4,
@@ -201,14 +217,12 @@ class ScreenHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.surface,
         border: Border(
-          bottom: BorderSide(
-            color: context.palette.outline,
-            width: 1,
-          ),
+          bottom: BorderSide(color: context.palette.outline, width: 1),
         ),
       ),
       child: Row(
         children: [
+          if (menu) const AppMenuButton(),
           if (onBack != null)
             IconButton(
               icon: const Icon(Icons.arrow_back),
@@ -230,7 +244,9 @@ class ScreenHeader extends StatelessWidget {
                   const SizedBox(height: AppSpace.s1),
                   Text(
                     subtitle!,
-                    style: AppText.body.copyWith(color: context.palette.inkMuted),
+                    style: AppText.body.copyWith(
+                      color: context.palette.inkMuted,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -279,20 +295,38 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        backgroundColor: context.palette.primary,
-        foregroundColor: context.palette.onPrimary,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.s4,
-          vertical: AppSpace.s2,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+    final p = context.palette;
+    final radius = BorderRadius.circular(14);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          _hardShadow(
+            onPressed == null ? _disabledShadow(p) : p.primaryDark,
+            4,
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: p.primary,
+          foregroundColor: p.onPrimary,
+          disabledBackgroundColor: p.outline,
+          disabledForegroundColor: p.inkMuted,
+          textStyle: AppText.label.copyWith(
+            fontWeight: FontWeight.w900,
+            fontVariations: const [FontVariation('wght', 900)],
+            letterSpacing: 0.4,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s4,
+            vertical: AppSpace.s2,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: radius),
         ),
       ),
     );
@@ -303,31 +337,37 @@ class GhostButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
 
-  const GhostButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-  });
+  const GhostButton({super.key, required this.label, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: context.palette.ink,
-        side: BorderSide(
-          color: context.palette.outline,
-          width: 1,
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.s4,
-          vertical: AppSpace.s2,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
+    final p = context.palette;
+    final radius = BorderRadius.circular(14);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [_hardShadow(p.outline, 3)],
       ),
-      child: Text(label),
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: p.surfaceRaised,
+          foregroundColor: p.primary,
+          disabledForegroundColor: p.inkMuted,
+          textStyle: AppText.label.copyWith(
+            fontWeight: FontWeight.w900,
+            fontVariations: const [FontVariation('wght', 900)],
+            letterSpacing: 0.4,
+          ),
+          side: BorderSide(color: p.outline, width: 2),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s4,
+            vertical: AppSpace.s2,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: radius),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }
@@ -346,23 +386,42 @@ class HintButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final remaining = (max - used).clamp(0, max);
     final label = 'Gợi ý ($remaining/$max)';
+    final radius = BorderRadius.circular(14);
 
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.lightbulb),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        backgroundColor: context.palette.accent,
-        foregroundColor: context.palette.onAccent,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.s4,
-          vertical: AppSpace.s2,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          _hardShadow(
+            onPressed == null
+                ? _disabledShadow(p)
+                : Color.lerp(p.accent, const Color(0xFF000000), 0.25)!,
+            4,
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.lightbulb),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: p.accent,
+          foregroundColor: p.onAccent,
+          disabledBackgroundColor: p.outline,
+          disabledForegroundColor: p.inkMuted,
+          textStyle: AppText.label.copyWith(
+            fontWeight: FontWeight.w900,
+            fontVariations: const [FontVariation('wght', 900)],
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s4,
+            vertical: AppSpace.s2,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: radius),
         ),
       ),
     );
