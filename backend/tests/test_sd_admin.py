@@ -485,3 +485,38 @@ def test_reimport_replaces_title_context_and_tasks(admin, db_session):
     assert _import(client, h, second, id="doc-a").status_code == 200
     doc = db_session.get(SdDoc, "doc-a")
     assert doc.title == "Tên mới" and [c["body"] for c in doc.context] == ["Mới."]
+
+
+# --- vòng 3 review: lỗ hổng test còn lại ---------------------------------------------------------
+
+
+def test_text_between_hints_label_and_first_bullet_is_an_error_not_dropped():
+    with pytest.raises(MdError) as e:
+        parse_markdown(TASK_HEAD + "Gợi ý:\nlời mở đầu\n- h1\n\nRubric:\n- ý :: k\n")
+    assert any("trước gạch đầu dòng đầu tiên" in m for m in e.value.errors)
+
+
+def test_bare_thematic_break_after_a_pipe_line_is_not_a_table():
+    cards = parse_markdown("# T\n\n## C\n\n### S\n\na | b\n---\n")["sections"][0]["cards"]
+    assert [(c["kind"], c["body"]) for c in cards] == [("text", "a | b\n---")]  # một đoạn văn, không phải bảng
+    cards = parse_markdown("# T\n\n## C\n\n### S\n\na | b\n--- | ---\n1 | 2\n")["sections"][0]["cards"]
+    assert [c["kind"] for c in cards] == ["table"]
+
+
+def test_callout_strips_quote_markers():
+    card = parse_markdown("# T\n\n## C\n\n### S\n\n> dòng một\n> dòng hai\n")["sections"][0]["cards"][0]
+    assert card["kind"] == "callout" and card["body"] == "dòng một\ndòng hai"
+
+
+def test_tasks_with_the_same_name_get_distinct_ids():
+    two = "".join(f"### Trùng tên\n\nĐề: a{i}\n\nRubric:\n- ý :: k\n\n" for i in range(2))
+    ids = [t["id"] for t in parse_markdown(BASE + "\n## Thực chiến\n\n" + two)["tasks"]]
+    assert ids == ["trung-ten", "trung-ten-2"]
+
+
+def test_reimport_with_explicit_status_changes_it_and_without_keeps_it(admin):
+    client, h = admin
+    assert _import(client, h, MINI, id="st", status="draft").json()["status"] == "draft"
+    assert _import(client, h, MINI, id="st", status="published").json()["status"] == "published"
+    assert _import(client, h, MINI, id="st").json()["status"] == "published"
+    assert _import(client, h, MINI, id="st", status="draft").json()["status"] == "draft"

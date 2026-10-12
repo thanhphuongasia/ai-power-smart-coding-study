@@ -157,6 +157,7 @@ def _starts_table(entries: list, i: int) -> bool:
         "|" in line
         and i + 1 < len(entries)
         and entries[i + 1][0] == "line"
+        and "|" in entries[i + 1][2]  # `a | b` + `---` trần là đoạn văn + dòng kẻ, không phải bảng
         and _is_table_sep(entries[i + 1][2])
     )
 
@@ -315,6 +316,8 @@ def _task(name: str, entries: list[Entry], errors: list[str]) -> dict:
                     errors.append(f"{where}: một gợi ý dài quá {MAX_HINT_CHARS} ký tự (dòng {lineno})")
                     break
                 hints[-1] += " " + s
+            else:  # chữ nằm giữa nhãn và gạch đầu dòng đầu tiên: báo lỗi thay vì nuốt im lặng
+                errors.append(f"{where}: dòng chữ trước gạch đầu dòng đầu tiên của «Gợi ý:» (dòng {lineno})")
         elif kind == "rubric":
             if not b:
                 if rubric and "::" not in s:
