@@ -352,7 +352,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
     if (!task.unlocked) {
       children.add(
         const Text(
-          'Task này chưa mở. Làm task trước để mở khoá.',
+          'Task này chưa mở. Đọc xong Phase 1 để mở Thực chiến.',
           key: Key('sd-task-locked'),
           style: TextStyle(
             fontFamily: kSerifFamily,

@@ -232,11 +232,8 @@ class _PathBodyState extends ConsumerState<_PathBody> {
 
   void _onPhase2(DuoNode n) {
     if (n.state == DuoNodeState.locked) {
-      _toast(
-        n.id != _kContextId && widget.doc.phase2Unlocked
-            ? 'Làm task trước để mở khoá'
-            : 'Đọc xong Phase 1 để mở Thực chiến',
-      );
+      // Task chỉ khoá khi Phase 2 chưa mở (server mở mọi task cùng lúc).
+      _toast('Đọc xong Phase 1 để mở Thực chiến');
       return;
     }
     _open(

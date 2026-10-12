@@ -1,5 +1,7 @@
 // Test màn danh sách tài liệu System Design + lộ trình Duolingo (T-08).
 // Phần (a)-(f) dùng GoRouter nhỏ với Placeholder; (g) dùng router THẬT của app.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -426,8 +428,8 @@ void main() {
       expect(s.docCalls, greaterThan(before));
     });
 
-    testWidgets('xong hết Phase 1: bóng sang "Bối cảnh", task 1 open, các '
-        'task sau locked; chạm task push /tasks/<id>', (tester) async {
+    testWidgets('xong hết Phase 1: bóng sang "Bối cảnh", mọi task open; '
+        'chạm task push /tasks/<id>', (tester) async {
       final s = _Server()
         ..doc = _doc(
           phase2: true,
@@ -451,8 +453,8 @@ void main() {
           ],
           tasks: [
             _task('t1', 1, unlocked: true),
-            _task('t2', 2),
-            _task('t3', 3),
+            _task('t2', 2, unlocked: true),
+            _task('t3', 3, unlocked: true),
           ],
         );
       await _pump(tester, s, initial: '/design/sd1');
@@ -463,11 +465,6 @@ void main() {
             tester.getBottomLeft(find.byKey(const Key('duo-start-bubble'))).dy,
         inInclusiveRange(0, 30),
       );
-
-      // Task khoá khi đã phase2: nhắc làm task trước.
-      await _tapNode(tester, 't2');
-      expect(find.text('Làm task trước để mở khoá'), findsOneWidget);
-      expect(_loc(), '/design/sd1');
 
       await _tapNode(tester, 't1');
       expect(_loc(), '/design/sd1/tasks/t1');
@@ -498,7 +495,7 @@ void main() {
           tasks: [
             _task('t1', 1, done: true, unlocked: true),
             _task('t2', 2, unlocked: true),
-            _task('t3', 3),
+            _task('t3', 3, unlocked: true),
           ],
         );
       await _pump(tester, s, initial: '/design/sd1');
@@ -509,6 +506,130 @@ void main() {
             tester.getBottomLeft(find.byKey(const Key('duo-start-bubble'))).dy,
         inInclusiveRange(0, 30),
       );
+    });
+
+    // --- Hotfix #35: Phase 2 mở thì MỌI task mở, không khoá tuần tự ---
+
+    SdDoc phase2Doc({bool unlocked = true, List<SdTask>? tasks}) => _doc(
+      phase2: unlocked,
+      sections: [
+        _section(
+          's1',
+          pos: 1,
+          chapter: 'A',
+          chapterPos: 1,
+          done: true,
+          read: 2,
+        ),
+      ],
+      tasks:
+          tasks ??
+          [
+            _task('t1', 1, unlocked: unlocked),
+            _task('t2', 2, unlocked: unlocked),
+            _task('t3', 3, unlocked: unlocked),
+          ],
+    );
+    final lockIcon = find.byIcon(Icons.lock_rounded);
+
+    testWidgets('Phase 2 mở, mọi task unlocked: không đĩa khoá, đúng một '
+        'bóng BẮT ĐẦU', (tester) async {
+      await _pump(tester, _Server()..doc = phase2Doc(), initial: '/design/sd1');
+      for (final id in ['context', 't1', 't2', 't3']) {
+        await tester.ensureVisible(_node(id));
+        expect(
+          find.descendant(of: _node(id), matching: lockIcon),
+          findsNothing,
+          reason: 'node $id không được khoá',
+        );
+      }
+      expect(lockIcon, findsNothing);
+      expect(find.byKey(const Key('duo-start-bubble')), findsOneWidget);
+      // Bối cảnh là node mở chưa xong đầu tiên → bóng ở đó.
+      expect(
+        tester.getTopLeft(_node('context')).dy -
+            tester.getBottomLeft(find.byKey(const Key('duo-start-bubble'))).dy,
+        inInclusiveRange(0, 30),
+      );
+    });
+
+    testWidgets('chạm task thứ 3 khi task 1, 2 chưa làm → mở đúng task 3', (
+      tester,
+    ) async {
+      await _pump(tester, _Server()..doc = phase2Doc(), initial: '/design/sd1');
+      await _tapNode(tester, 't3');
+      expect(_loc(), '/design/sd1/tasks/t3');
+      expect(find.byKey(const Key('page-task')), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('Phase 2 chưa mở: mọi task khoá, chạm hiện SnackBar và không '
+        'điều hướng', (tester) async {
+      await _pump(
+        tester,
+        _Server()..doc = phase2Doc(unlocked: false),
+        initial: '/design/sd1',
+      );
+      for (final id in ['context', 't1', 't2', 't3']) {
+        await tester.ensureVisible(_node(id));
+        expect(
+          find.descendant(of: _node(id), matching: lockIcon),
+          findsOneWidget,
+          reason: 'node $id phải khoá',
+        );
+      }
+      for (final id in ['t1', 't3']) {
+        await _tapNode(tester, id);
+        expect(find.text('Đọc xong Phase 1 để mở Thực chiến'), findsOneWidget);
+        expect(_loc(), '/design/sd1');
+      }
+    });
+
+    testWidgets('làm task 3 trước: task 3 done, task 1 vẫn open và là '
+        'current', (tester) async {
+      final s = _Server()..doc = phase2Doc();
+      await _pump(tester, s, initial: '/design/sd1');
+      // "Bối cảnh" done khi có task xong → current rơi vào task chưa xong
+      // đầu tiên theo thứ tự (t1), dù t3 đã xong.
+      s.doc = phase2Doc(
+        tasks: [
+          _task('t1', 1, unlocked: true),
+          _task('t2', 2, unlocked: true),
+          _task('t3', 3, done: true, unlocked: true),
+        ],
+      );
+      await _tapNode(tester, 't3'); // vào rồi quay lại → tải lại doc
+      _router.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('PHASE 2 · THỰC CHIẾN · 1/3 TASK'), findsOneWidget);
+      expect(lockIcon, findsNothing);
+      expect(find.byKey(const Key('duo-start-bubble')), findsOneWidget);
+      expect(
+        tester.getTopLeft(_node('t1')).dy -
+            tester.getBottomLeft(find.byKey(const Key('duo-start-bubble'))).dy,
+        inInclusiveRange(0, 30),
+      );
+      expect(
+        find.descendant(
+          of: _node('t3'),
+          matching: find.byIcon(Icons.check_rounded),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    test('chuỗi "Làm task trước để mở khoá" không còn trong '
+        'lib/features/system_design', () {
+      final hits = [
+        for (final f in Directory(
+          'lib/features/system_design',
+        ).listSync(recursive: true))
+          if (f is File &&
+              f.path.endsWith('.dart') &&
+              f.readAsStringSync().contains('Làm task trước'))
+            f.path,
+      ];
+      expect(hits, isEmpty);
     });
 
     testWidgets('INV-04: server nói locked thì locked dù đã đọc đủ thẻ', (
