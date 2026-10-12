@@ -16,4 +16,4 @@
 | 2026-10-11-mcp-content | MCP server cho claude.ai sửa nội dung, OAuth qua identity-service (#24) | done (main bbf751d + identity 85625e2, deploy) — chờ cấp quyền sub |
 | 2026-10-11-oop-bank-progressive | BankAccount: notebook tiến dần, không lộ đáp án | done (main 501547c) |
 | 2026-10-11-content-review-queue | Hàng chờ duyệt nội dung (preview, approve/reject từng mục) | done (main b702b91) |
-| 2026-10-12-exercise-editor-redesign | Thiết kế lại màn Soạn bài tập: code cell Jupyter, mục đóng/mở, responsive 3 cột (#25) | PR mở, chờ user merge |
+| 2026-10-12-exercise-editor-redesign | Thiết kế lại màn Soạn bài tập: code cell Jupyter, mục đóng/mở, responsive 3 cột (#25) | PR #26 mở, chờ user merge (done sau merge) |
