@@ -1,4 +1,4 @@
-/// Drawer điều hướng cho màn rộng (>= [AppBreakpoint.nav]): tìm bài, 4 mục
+/// Drawer điều hướng cho màn rộng (>= [AppBreakpoint.nav]): tìm bài, 5 mục
 /// chính, mục lục chủ đề → bài, đổi sáng/tối. Mở bằng [showAppDrawer] trên
 /// root navigator nên dùng được từ mọi màn (kể cả màn chi tiết không có
 /// AppShell); chưa mở thì không có widget nào của drawer trong cây.
@@ -83,6 +83,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     (Icons.code_outlined, 'Luyện', '/practice'),
     (Icons.style_outlined, 'Ôn tập', '/review'),
     (Icons.insights_outlined, 'Tiến độ', '/stats'),
+    (Icons.account_tree_outlined, 'Design', '/design'),
   ];
 
   /// Đóng drawer rồi chạy [go] bằng router lấy trước khi pop.

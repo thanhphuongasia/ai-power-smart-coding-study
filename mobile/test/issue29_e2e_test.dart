@@ -118,4 +118,41 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('400px: Home → tab Design → ngược lại 4 tab cũ (bất biến code '
+      'mode không đổi)', (tester) async {
+    await _pumpApp(tester, 400);
+    final nav = find.byKey(const Key('bottom-nav'));
+    Future<void> tapTab(String label) async {
+      await tester.tap(find.descendant(of: nav, matching: find.text(label)));
+      await tester.pumpAndSettle();
+    }
+
+    expect(_location(), '/');
+    await tapTab('Design');
+    expect(_location(), '/design');
+    expect(find.byKey(const Key('sd-docs-screen')), findsOneWidget);
+
+    // Từ Design bấm ngược từng tab cũ: đúng route, không còn màn Design.
+    for (final (label, route) in [
+      ('Home', '/'),
+      ('Luyện', '/practice'),
+      ('Ôn tập', '/review'),
+      ('Tiến độ', '/stats'),
+    ]) {
+      await tapTab('Design');
+      await tapTab(label);
+      expect(_location(), route, reason: label);
+      expect(find.byKey(const Key('sd-docs-screen')), findsNothing);
+    }
+
+    // Luồng code mode cũ vẫn chạy sau khi đi qua Design.
+    await tapTab('Home');
+    await tester.ensureVisible(find.byKey(const Key('continue-card')));
+    await tester.tap(find.byKey(const Key('continue-card')));
+    await tester.pumpAndSettle();
+    expect(_location(), '/exercise/$_id');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

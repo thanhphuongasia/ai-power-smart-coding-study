@@ -1,4 +1,4 @@
-/// Router của app: 4 tab trong shell (Home / Luyện / Ôn tập / Tiến độ); các
+/// Router của app: 5 tab trong shell (Home / Luyện / Ôn tập / Tiến độ / Design); các
 /// màn chi tiết Theme → Topic → Exercise, File cross-cut và Admin
 /// mở trên navigator gốc (toàn màn, không có bottom nav).
 library;
@@ -22,6 +22,7 @@ import '../features/practice/practice_screen.dart';
 import '../features/review/review_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/stats/stats_screen.dart';
+import '../features/system_design/sd_docs_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
@@ -58,6 +59,14 @@ final GoRouter appRouter = GoRouter(
             GoRoute(
               path: '/stats',
               builder: (context, state) => const StatsScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/design',
+              builder: (context, state) => const SdDocsScreen(),
             ),
           ],
         ),
