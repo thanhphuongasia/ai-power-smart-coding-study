@@ -16,4 +16,4 @@
 | 2026-10-11-mcp-content | MCP server cho claude.ai sửa nội dung, OAuth qua identity-service (#24) | done (main bbf751d + identity 85625e2, deploy) — chờ cấp quyền sub |
 | 2026-10-11-oop-bank-progressive | BankAccount: notebook tiến dần, không lộ đáp án | done (main 501547c) |
 | 2026-10-11-content-review-queue | Hàng chờ duyệt nội dung (preview, approve/reject từng mục) | done (main b702b91) |
-| 2026-10-12-issue29-reskin | Thay áo The Coach + responsive web (#29) | open — wave 1 |
+| 2026-10-12-issue29-reskin | Thay áo The Coach + responsive web (#29) | PR mở, chờ user merge |

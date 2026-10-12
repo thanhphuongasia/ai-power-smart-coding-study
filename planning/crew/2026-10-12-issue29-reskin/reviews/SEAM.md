@@ -36,3 +36,31 @@ Quan sát phụ (không phải bất biến vỡ):
 - Tên các test phủ từng INV: không đối chiếu (suite xanh, không soi từng test có thực sự vỡ khi cố ý làm sai).
 
 Kết luận: CẦN SỬA nhẹ — chỉ INV-08 (run_result_view.dart:197) vỡ, mức Minor/hiển thị; verdict VỠ chặn commit theo luật của sổ, orchestrator quyết định sửa nhanh (1 file, ~4 dòng) hay ghi DEVIATIONS và hoãn.
+
+## Vòng 2
+
+Bằng chứng (HEAD f9835da): `cd mobile && flutter analyze` → No issues found!; `flutter test` → +567: All tests passed!. T-07 chỉ chạm run_result_view.dart (màu) + code_tab_test.dart; không đổi Key/ngưỡng/nút/provider nên INV-01..07 không bị ảnh hưởng (key `merged-origin-$i` giữ nguyên, run_result_view.dart:222).
+
+INV-01: CÒN ĐÚNG — diff T-07 không đổi Key nào; run_result_view.dart:222 (`merged-origin-$i`), suite xanh
+INV-02: CÒN ĐÚNG — T-07 không chạm app_shell.dart:22 / widgets.dart:208-211 / exercise_screen.dart:333
+INV-03: CÒN ĐÚNG — T-07 không chạm theme.dart:84-86; không thêm số 700/900 mới
+INV-04: CÒN ĐÚNG — T-07 không chạm code_input.dart:135-157, 200-204
+INV-05: CÒN ĐÚNG — T-07 không chạm widgets.dart:310, 351
+INV-06: CÒN ĐÚNG — T-07 không chạm code_tab.dart:77/156/197
+INV-07: CÒN ĐÚNG — T-07 chỉ dùng p.codeSurface/p.codeInk, có ở cả dark+light (theme.dart:129-130, 149-150)
+INV-08: CÒN ĐÚNG — run_result_view.dart:197 (nền p.codeSurface), :222/:232 (chữ p.codeInk); cùng code_tab.dart:820/885, solution_tab.dart:226-232, code_input.dart:325. Phạm vi sổ (editor, preview, lời giải, ghép thử) đã đủ. Hàng _CollapsedCell (code_tab.dart:766) chỉ là dòng phụ đề mờ trên thẻ accordion, không phải khối code.
+INV-09: CÒN ĐÚNG — code_tab.dart:66 (`_open` là nguồn duy nhất), T-07 không chạm
+INV-10: CÒN ĐÚNG — ghi nhận cũ không đổi: exercise_screen.dart:58 + app_drawer.dart:25-27 (rủi ro nhỏ, không vỡ)
+
+Rà grep toàn lib/ (AppText.code / fontFamily mono), phân loại:
+- Khối code thật ĐÃ dùng codeSurface/codeInk: code_input.dart:325, code_tab.dart:820+885 (preview/ô khoá), solution_tab.dart:232, run_result_view.dart:197 ("Code đã ghép").
+- Khối code thật còn dùng nền/chữ THEO THEME (ngoài danh sách INV-08 nhưng cùng loại, lệch màu ở theme sáng — Minor, hiển thị, đọc vẫn được vì ink trên surface): challenge_tab.dart:182-198 (`example-box`, nền p.surface, chữ p.ink/p.primary); review_screen.dart:298-312 (`_CodeBox`, nền p.surface, dùng ở :186 và :226 để hiện code masked/đáp án); run_result_view.dart:85 stdout (Text trần, không có khối nền) và :263-290 dòng test `>>> call`/actual (chữ theo theme trên nền trang, không có khối nền).
+- Văn bản thường dùng font mono (đúng là theo theme, không phải khối code): code_tab.dart:594,617,812 / cell_editor_page.dart:222 (nhãn vị trí), exercise_screen.dart:356 (phụ đề), exercise_row.dart:77, topic_detail_screen.dart:492,692, widgets.dart:151 (chip), review_screen.dart:180, class_diagram.dart:60-94,241 (sơ đồ lớp: hộp riêng nền p.surfaceRaised, là sơ đồ chứ không phải khối code), challenge_tab.dart:164.
+- Admin (ngoài phạm vi INV-08, TextField/nhãn chẩn đoán dùng theme): admin_module_screen.dart:128,  admin_screen.dart:123, exercise_editor.dart:429,625, admin_widgets.dart:342, review_detail_screen.dart:457; code_cell.dart của PR #26 vẫn dùng p.surfaceRaised/p.ink (ghi nhận từ vòng 1).
+=> Không có khối code NÀO trong phạm vi sổ INV-08 còn lệch. Nếu muốn nghĩa rộng hơn ("mọi khối code"), còn 2 khối thật cần quyết: challenge_tab `example-box` và review_screen `_CodeBox` — orchestrator quyết sửa hay ghi DEVIATIONS (không chặn).
+
+## Không xác minh được (vòng 2)
+- Chưa xem bằng mắt (không build web/chụp màn hình); chỉ widget test + grep.
+- Độ tương phản thực tế của `codeInk.withValues(alpha: 0.18)` ô nhãn nguồn trên codeSurface chưa nhìn thấy.
+
+Kết luận vòng 2: PASS với Minor — INV-08 hết vỡ trong phạm vi sổ; Minor còn lại: challenge_tab.dart:182 và review_screen.dart:298 (ngoài sổ).
