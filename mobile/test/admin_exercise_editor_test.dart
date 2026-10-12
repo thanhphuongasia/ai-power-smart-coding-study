@@ -57,8 +57,9 @@ Map<String, dynamic> fullExercise() => {
 Future<ProviderContainer> pumpEditor(
   WidgetTester tester, {
   void Function(Map<String, dynamic> ex)? tweak,
+  Size size = const Size(412, 6000),
 }) async {
-  tester.view.physicalSize = const Size(412, 6000);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final content = sampleContent();
@@ -304,6 +305,19 @@ void main() {
     expect(tester.widget<ElevatedButton>(_applyButton()).onPressed, isNotNull);
   });
 
+  testWidgets(
+    'nhãn trùng + đóng mục Các ô: summary hiện lý do, Áp dụng vẫn vô hiệu',
+    (tester) async {
+      await pumpEditor(tester);
+      await tester.enterText(find.byKey(const Key('label-e1-b')), 'A');
+      await tester.pump();
+      await tester.tap(find.text('Các ô (blocks)'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('bị trùng'), findsOneWidget);
+      expect(tester.widget<ElevatedButton>(_applyButton()).onPressed, isNull);
+    },
+  );
+
   testWidgets('Thêm ô bị vô hiệu khi đã đủ 3 ô', (tester) async {
     await pumpEditor(tester);
     OutlinedButton add() => tester.widget<OutlinedButton>(
@@ -387,4 +401,42 @@ void main() {
     expect((ex['judge'] as Map)['zz_judge'], [1, 2]);
     expect(((ex['blocks'] as List)[0] as Map)['zz_block'], true);
   });
+
+  // Mỗi bề rộng ứng với một layout: 400 = một cột, 800 = form | panel,
+  // 1280 = mục lục | form | panel.
+  for (final w in [400.0, 800.0, 1280.0]) {
+    testWidgets(
+      'layout ${w.toInt()}px: một preview, một bộ nút, cases lỗi chặn',
+      (tester) async {
+        final c = await pumpEditor(tester, size: Size(w, 3000));
+        expect(find.byKey(const Key('merge-preview')), findsOneWidget);
+        expect(find.byKey(const Key('merge-ok')), findsOneWidget);
+        expect(find.byKey(const Key('exercise-apply')), findsOneWidget);
+        expect(find.byKey(const Key('exercise-cancel')), findsOneWidget);
+        expect(find.byKey(const Key('exercise-editor')), findsOneWidget);
+        expect(
+          find.byKey(const Key('toc-judge')),
+          w >= 1100 ? findsOneWidget : findsNothing,
+        );
+
+        await tester.enterText(
+          find.byKey(const Key('block-B-answer-0')),
+          'self.b = 99',
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('merge-preview')), findsOneWidget);
+        expect(find.byKey(const Key('merge-mismatch')), findsOneWidget);
+        expect(find.byKey(const Key('merge-ok')), findsNothing);
+
+        await tester.enterText(find.byKey(const Key('ex-cases')), '[ {');
+        await tester.pump();
+        expect(find.byKey(const Key('ex-cases-error')), findsOneWidget);
+        expect(tester.widget<ElevatedButton>(_applyButton()).onPressed, isNull);
+        await tester.tap(find.byKey(const Key('exercise-apply')));
+        await tester.pump();
+        expect(c.read(adminProvider).dirty, isFalse);
+        expect(find.byKey(const Key('exercise-editor')), findsOneWidget);
+      },
+    );
+  }
 }
