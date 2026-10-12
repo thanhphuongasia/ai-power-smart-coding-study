@@ -74,6 +74,11 @@ flutter:
         - asset: assets/fonts/JetBrainsMono-Regular.ttf
         - asset: assets/fonts/JetBrainsMono-Medium.ttf
           weight: 500
+    # Source Serif 4 (OFL) là font variable (trục wght): chữ thân bài đọc
+    # System Design, chọn trọng số bằng FontVariation.
+    - family: SourceSerif4
+      fonts:
+        - asset: assets/fonts/SourceSerif4-Variable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
