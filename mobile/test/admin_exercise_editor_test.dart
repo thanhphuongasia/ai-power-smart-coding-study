@@ -305,6 +305,19 @@ void main() {
     expect(tester.widget<ElevatedButton>(_applyButton()).onPressed, isNotNull);
   });
 
+  testWidgets(
+    'nhãn trùng + đóng mục Các ô: summary hiện lý do, Áp dụng vẫn vô hiệu',
+    (tester) async {
+      await pumpEditor(tester);
+      await tester.enterText(find.byKey(const Key('label-e1-b')), 'A');
+      await tester.pump();
+      await tester.tap(find.text('Các ô (blocks)'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('bị trùng'), findsOneWidget);
+      expect(tester.widget<ElevatedButton>(_applyButton()).onPressed, isNull);
+    },
+  );
+
   testWidgets('Thêm ô bị vô hiệu khi đã đủ 3 ô', (tester) async {
     await pumpEditor(tester);
     OutlinedButton add() => tester.widget<OutlinedButton>(

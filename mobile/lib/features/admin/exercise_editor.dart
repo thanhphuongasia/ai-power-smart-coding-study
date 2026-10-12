@@ -576,6 +576,7 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
             const SectionLabel('Đáp án chấp nhận (ô đầu = đáp án chuẩn)'),
             for (var i = 0; i < b.answers.length; i++)
               Column(
+                key: ValueKey(b.answers[i]),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _codeCell(
@@ -726,6 +727,10 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
   /// Các mục của form; mọi mục mở mặc định (test và người dùng đều thấy ngay).
   List<Widget> _sections(_Form f, String? casesError) {
     final warn = f.warnings.isNotEmpty;
+    final labelErrors = [
+      for (final b in f.blocks)
+        if (f.labelError(b) != null) f.labelError(b)!,
+    ];
     Widget section(
       String id,
       Widget child, {
@@ -798,7 +803,9 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
             ),
           ],
         ),
-        summary: '${f.blocks.length} ô',
+        summary: labelErrors.isNotEmpty
+            ? labelErrors.first
+            : '${f.blocks.length} ô',
         status: f.hasLabelError
             ? SectionStatus.error
             : (warn ? SectionStatus.warn : SectionStatus.ok),
