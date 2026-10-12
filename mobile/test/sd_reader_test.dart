@@ -910,6 +910,20 @@ void main() {
     expect(find.byKey(const Key('sd-reader')), findsOneWidget);
   });
 
+  testWidgets('(M) thanh trên: giữ nút quay lại, thêm nút menu mở mục lục', (
+    tester,
+  ) async {
+    await _size(tester, 400);
+    await _open(tester, _Server(_twoSections()));
+    expect(find.byKey(const Key('sd-reader-back')), findsOneWidget);
+    expect(find.byKey(const Key('sd-reader-menu')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sd-reader-menu')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sd-reader-menu-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('sd-menu-section-s1')), findsOneWidget);
+    expect(find.byKey(const Key('sd-menu-section-s2')), findsOneWidget);
+  });
+
   group('(S) vuốt từng card (snap)', () {
     /// Doc một section [n] card, mỗi card [lines] dòng (cao ~lines*~20px).
     Map<String, dynamic> snapDoc(int n, {int lines = 5}) => _doc([
