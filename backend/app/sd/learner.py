@@ -8,7 +8,8 @@
 
 Trạng thái khoá/xong chỉ tính ở đây (server), client chỉ vẽ:
 - section mở khi là section đầu hoặc section liền trước đã `done`; `done` = mọi card HIỆN HÀNH đã đọc.
-- Phase 2 mở khi mọi section `done`; task mở khi Phase 2 mở và (là task đầu hoặc task liền trước đã có ≥1 lần thử).
+- Phase 2 mở khi mọi section `done`; khi đó MỌI task mở cùng lúc (không khoá tuần tự), làm task nào trước cũng được.
+  Task `done` khi có ≥1 lần thử.
 
 Không bao giờ trả `rubric`/từ khoá của task: chúng là dữ liệu chấm, chỉ server đọc.
 """
@@ -70,10 +71,10 @@ def _sections_state(sections: list[SdSection], read_by_section: dict[str, set[st
 
 
 def _tasks_state(tasks: list[SdTask], attempts: dict[str, int], phase2: bool) -> list[dict]:
-    out, prev_done = [], True
+    out = []
     for t in tasks:
         n = attempts.get(t.id, 0)
-        unlocked = phase2 and prev_done
+        unlocked = phase2  # task không khoá tuần tự: Phase 2 mở là mọi task mở
         out.append(
             {
                 "id": t.id,
@@ -88,7 +89,6 @@ def _tasks_state(tasks: list[SdTask], attempts: dict[str, int], phase2: bool) ->
                 "ref_section_id": t.ref_section_id if unlocked else None,
             }
         )
-        prev_done = n >= 1
     return out
 
 

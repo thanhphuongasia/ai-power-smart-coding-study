@@ -174,14 +174,15 @@ def test_bad_progress_bodies_are_422(world, payload):
     assert r.status_code == 422
 
 
-# --- Phase 2 mở khoá khi đọc xong, task tuần tự theo lần thử ------------------------------
+# --- Phase 2 mở khoá khi đọc xong, mọi task mở cùng lúc (không khoá tuần tự) ---------------
 
 
-def test_phase2_unlocks_after_all_sections_and_tasks_follow_attempts(world):
+def test_phase2_unlocks_after_all_sections_and_all_tasks_open_together(world):
     world.read_all()
     d = world.doc()
     assert d["phase2_unlocked"] is True and d["context"] and all(s["done"] for s in d["sections"])
-    assert [t["unlocked"] for t in d["tasks"]] == [True] + [False] * 5
+    assert all(t["unlocked"] and not t["done"] and t["attempts"] == 0 for t in d["tasks"])  # chưa có lần thử nào vẫn mở hết
+    assert all(t["prompt"] and t["hints"] and t["ref_section_id"] for t in d["tasks"])
     assert d["tasks"][0]["prompt"] and d["tasks"][0]["hints"] and d["tasks"][0]["ref_section_id"]
 
     uid = world.session.scalars(select(SdProgress.user_id)).first()
@@ -191,7 +192,7 @@ def test_phase2_unlocks_after_all_sections_and_tasks_follow_attempts(world):
     world.session.flush()
     d = world.doc()
     assert [t["done"] for t in d["tasks"]][:2] == [True, False]
-    assert [t["unlocked"] for t in d["tasks"]] == [True, True] + [False] * 4
+    assert all(t["unlocked"] for t in d["tasks"])
     assert d["tasks"][0]["attempts"] == 1
     item = world.client.get("/api/sd/docs", headers=world.hdr["ann"]).json()["items"][0]
     assert (item["phase2_unlocked"], item["tasks_done"]) == (True, 1)
@@ -222,5 +223,42 @@ def test_attempt_counts_are_per_user(world):
     world.session.flush()
     assert world.doc("ann")["tasks"][0]["attempts"] == 1
     bob = world.doc("bob")
-    assert bob["tasks"][0]["attempts"] == 0 and not bob["tasks"][0]["done"] and not bob["tasks"][1]["unlocked"]
+    assert bob["tasks"][0]["attempts"] == 0 and not bob["tasks"][0]["done"] and bob["tasks"][1]["unlocked"]
     assert world.client.get("/api/sd/docs", headers=world.hdr["bob"]).json()["items"][0]["tasks_done"] == 0
+
+
+def _add_attempt(w, task_id, who="ann"):
+    uid = w.session.scalars(select(User.id).where(User.email == f"{who}@example.com")).one()
+    w.session.add(SdAttempt(user_id=uid, doc_id=DOC, task_id=task_id, n=1, answer="a", auto_result={}))
+    w.session.flush()
+
+
+def test_tasks_done_counts_out_of_order_attempts(world):
+    """Làm task thứ 3 và thứ 5 (bỏ qua 1, 2, 4): đếm đúng theo task đã làm, không theo thứ tự."""
+    world.read_all()
+    tasks = world.doc()["tasks"]
+    _add_attempt(world, tasks[2]["id"])
+    _add_attempt(world, tasks[4]["id"])
+    d = world.doc()
+    assert [t["done"] for t in d["tasks"]] == [False, False, True, False, True, False]
+    assert all(t["unlocked"] for t in d["tasks"])
+    item = world.client.get("/api/sd/docs", headers=world.hdr["ann"]).json()["items"][0]
+    assert (item["tasks"], item["tasks_done"]) == (6, 2)
+
+
+def test_phase1_incomplete_locks_every_task_and_hides_content(world):
+    """Mới đọc 8/9 section: mọi task khoá, đề/gợi ý/section tham chiếu ẩn hết."""
+    for s in world.doc()["sections"][:8]:
+        world.read_section(s)
+    d = world.doc()
+    assert d["phase2_unlocked"] is False
+    assert all(not t["unlocked"] and t["prompt"] is None and t["hints"] == [] and t["ref_section_id"] is None for t in d["tasks"])
+
+
+def test_reimport_losing_phase1_relocks_all_tasks(world, sample_md):
+    world.read_all()
+    assert all(t["unlocked"] for t in world.doc()["tasks"])
+    world.import_md(sample_md.replace("Chương trình khách hàng thân thiết", "Chương trình tích điểm"))
+    d = world.doc()
+    assert d["phase2_unlocked"] is False
+    assert all(not t["unlocked"] and t["prompt"] is None and t["hints"] == [] for t in d["tasks"])

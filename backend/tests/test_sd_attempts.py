@@ -64,7 +64,6 @@ def test_partial_answer_marks_missing_items(world):
 
 
 def test_matching_ignores_missing_diacritics(world):
-    _post(world, HALF)  # mở task kế
     url = f"/api/sd/docs/{DOC}/tasks/database-design/attempts"
     a = _post(world, "bang seats; ghe het han sau 10 phut; chan trung bang dieu kien", url=url).json()["attempt"]
     assert [i["ok"] for i in a["items"]] == [True, True, True, False]  # seats, hết hạn, điều kiện; không có bookings
@@ -78,20 +77,22 @@ def test_every_submit_is_a_new_numbered_row_newest_first(world):
     assert world.client.get(API + "?limit=1", headers=world.hdr["ann"]).json()["items"][0]["n"] == 3
 
 
-def test_next_task_unlocks_after_first_attempt(world):
+def test_all_tasks_open_and_can_be_submitted_out_of_order(world):
     d = world.doc()
-    assert [t["unlocked"] for t in d["tasks"]][:2] == [True, False]
-    second = f"/api/sd/docs/{DOC}/tasks/database-design/attempts"
-    assert _post(world, HALF, url=second).status_code == 409
-    _post(world, HALF)
-    assert [t["unlocked"] for t in world.doc()["tasks"]][:3] == [True, True, False]
-    assert _post(world, "bảng seats có version", url=second).status_code == 201
+    assert all(t["unlocked"] for t in d["tasks"])  # chưa nộp gì vẫn mở hết
+    third = d["tasks"][2]["id"]
+    r = _post(world, HALF, url=f"/api/sd/docs/{DOC}/tasks/{third}/attempts")  # task 3 trước task 1
+    assert r.status_code == 201 and r.json()["attempt"]["n"] == 1
+    after = world.doc()["tasks"]
+    assert [(t["attempts"], t["done"]) for t in after] == [(0, False), (0, False), (1, True), (0, False), (0, False), (0, False)]
 
 
 def test_task_locked_before_phase2(db_session, client_for, sample_md):
     w = World(db_session, client_for, sample_md)  # chưa đọc gì
-    r = _post(w, HALF)
-    assert r.status_code == 409 and r.json()["detail"] == "task_locked"
+    for t in w.doc()["tasks"]:
+        assert not t["unlocked"] and t["prompt"] is None and t["hints"] == [] and t["ref_section_id"] is None
+        r = _post(w, HALF, url=f"/api/sd/docs/{DOC}/tasks/{t['id']}/attempts")
+        assert r.status_code == 409 and r.json()["detail"] == "task_locked"
     assert db_session.scalars(select(SdAttempt)).all() == []
 
 
