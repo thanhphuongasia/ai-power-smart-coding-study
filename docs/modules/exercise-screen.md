@@ -14,7 +14,7 @@ không tính điểm.
 
 ## Dùng khi nào
 
-Router mở `ExerciseScreen` ở `/exercise/:exerciseId` (mobile/lib/app/router.dart:85). Điểm vào: dòng
+Router mở `ExerciseScreen` ở `/exercise/:exerciseId` (mobile/lib/app/router.dart:126). Điểm vào: dòng
 bài ở Topic detail (`ExerciseRow`), thẻ "Tiếp tục" ở Home, nút "Bài tiếp theo" sau khi pass, và mở
 thẳng route. Bài chưa mở khoá hiện `_LockedView` thay cho 3 tab
 (mobile/lib/features/exercise/exercise_screen.dart:36-40).

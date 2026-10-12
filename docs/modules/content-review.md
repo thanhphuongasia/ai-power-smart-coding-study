@@ -32,7 +32,7 @@ Endpoint (router admin, mọi route sau `require_admin`):
 | `GET /api/admin/changes` | các dòng pending kèm `before`/`after`, author, thời gian | | backend/app/admin_api.py:147-149 |
 | `POST /api/admin/changes/{id}/approve` | áp một mục (kèm mục bắt buộc đi cùng) lên live | 404 `change_not_found`; 409 `item_conflict`; 422 `dependency_missing` / `invalid` | backend/app/admin_api.py:152-174 |
 | `POST /api/admin/changes/{id}/reject` | bỏ mục (kèm mục không còn áp được) | 404 | backend/app/admin_api.py:152-174 |
-| `POST /api/admin/run` | chấm bài theo judge của draft, KHÔNG gọi `record_pass` | 404 `exercise_not_found` | backend/app/main.py:219-236 |
+| `POST /api/admin/run` | chấm bài theo judge của draft, KHÔNG gọi `record_pass` | 404 `exercise_not_found` | backend/app/main.py:225-242 |
 
 Mọi lỗi nghiệp vụ của hàng chờ có cùng dạng `{detail: <mã>, message, errors[]}` (backend/app/admin_api.py:~108-114 qua `_review_error`; mã ở backend/app/review.py:51-102). `approve`/`reject` trả thêm `version` mới của draft để editor đang mở không bị 409 giả (backend/app/admin_api.py:152-164).
 
@@ -75,7 +75,7 @@ Phía app:
 
 | Phần | Việc | file:dòng |
 | --- | --- | --- |
-| Nút vào | "Chờ duyệt (N)" trên màn Admin, key `admin-review-button`, route `/admin/review` | mobile/lib/features/admin/admin_screen.dart:29-33, mobile/lib/app/router.dart:94 |
+| Nút vào | "Chờ duyệt (N)" trên màn Admin, key `admin-review-button`, route `/admin/review` | mobile/lib/features/admin/admin_screen.dart:29-33, mobile/lib/app/router.dart:135 |
 | Nhãn "chờ duyệt" | `PendingBadge` trên thẻ project, module, file, bài | mobile/lib/features/admin/admin_widgets.dart:215, mobile/lib/features/admin/admin_screen.dart:75 |
 | Màn Duyệt và chi tiết | danh sách mục, diff theo trường trước/sau, nút Approve/Reject | mobile/lib/features/admin/review_screen.dart, mobile/lib/features/admin/review_detail_screen.dart |
 | Xem như học viên | `ExercisePreview`: dùng chính `ExerciseScreen` với `ProviderScope` override để tắt khoá bài, tắt đẩy tiến độ, judge gọi `/api/admin/run` | mobile/lib/features/exercise/exercise_screen.dart:51-75, mobile/lib/features/admin/review_detail_screen.dart:325 |
@@ -106,4 +106,4 @@ Không làm: lịch sử phiên bản nội dung ngoài các dòng approved/reje
 
 ## Nguồn
 
-backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/main.py:219-236; backend/app/tables.py:203-232; backend/migrations/versions/0006_content_changes.py; backend/tests/test_review.py; mobile/lib/features/admin/ (admin_screen.dart, review_screen.dart, review_detail_screen.dart, admin_widgets.dart); mobile/lib/features/exercise/exercise_screen.dart:51-75; mobile/lib/app/router.dart:94; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), STATUS.md, DEVIATIONS.md, reviews/SEAM.md.
+backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/main.py:225-242; backend/app/tables.py:203-232; backend/migrations/versions/0006_content_changes.py; backend/tests/test_review.py; mobile/lib/features/admin/ (admin_screen.dart, review_screen.dart, review_detail_screen.dart, admin_widgets.dart); mobile/lib/features/exercise/exercise_screen.dart:51-75; mobile/lib/app/router.dart:135; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), STATUS.md, DEVIATIONS.md, reviews/SEAM.md.
