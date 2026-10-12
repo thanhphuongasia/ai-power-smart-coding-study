@@ -80,6 +80,9 @@ Widget moduleCard(
   final ids = moduleExerciseIds(module);
   return AdminLevelCard(
     key: Key('module-$id-card'),
+    badge: ref.read(adminProvider).isPending('module', id)
+        ? PendingBadge(key: Key('module-$id-pending'))
+        : null,
     title: nameOf(module),
     description: module['description'] as String?,
     meta: '${moduleFileCount(module)} file · ${ids.length} bài',

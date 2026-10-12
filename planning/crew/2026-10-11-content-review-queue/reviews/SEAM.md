@@ -1,0 +1,21 @@
+# SEAM — review mối nối run content-review-queue
+
+Đã chạy thật: backend `pytest -q` (TEST_DATABASE_URL=scs_progressive_verify_test) = 626 passed, 2 skipped; mobile `flutter test` = 491 passed (All tests passed). Không chạy uvicorn/e2e, không chạm repo (chỉ đọc). Diff: 29 file trong working tree, đều thuộc run (backend 4 mới + 4 sửa, mobile, planning).
+
+INV-01: CÒN ĐÚNG — backend/app/content_api.py:185 — `/content` chỉ gọi read_content (bảng live); `read_judge` (content_api.py:157) đọc bảng Exercise. grep `ContentChange|content_changes|app.review` ngoài review/admin_api/mcp_server/main chỉ ra tables.py; progress.py:219 lọc theo live, không import review. Test: backend/tests/test_admin_api.py:98 (PUT xong /content không đổi).
+INV-02: CÒN ĐÚNG — backend/app/review.py:508 — `grep "load_content(" backend/app` chỉ còn review.py:508 (approve), định nghĩa load_content.py:307 và CLI load_content.py:410. admin_api.py và mcp_server.py không còn gọi.
+INV-03: CÒN ĐÚNG — backend/app/admin_api.py:98 — GET trả draft_content + admin_version(draft); mcp_server.py:91,99 `_read`/`_write` dùng review.draft_content; submit trả version tính cùng đường merge_pending (review.py:432); approve/reject trả draft_version (admin_api.py:162) — test_admin_api.py:117 khẳng định version approve == GET. Dart: admin_controller.dart save() nhận r.version, `_decide` nhận result.version cả khi dirty → không 409 giả. Test test_review.py:211 (approve giữ draft), test_mcp.py:229,269 (MCP tạo file rồi bài).
+INV-04: CÒN ĐÚNG — backend/app/review.py:491 — lock_content → _pending(with_for_update) → so _core(current)==_core(before) (502-503) → validation_errors(new_live) (505) → load_content (508). Lệch → ItemConflict 409; lỗi luật → InvalidResult 422. Test test_review.py:235,257.
+INV-05: CÒN ĐÚNG — mobile/lib/data/admin_repository.dart:276 — Dart đọc {detail,message,errors} cho 404/409/422 (dòng ~279-310), changes/approve/reject parse đúng khoá server (admin_api.py:111-115, review.py:559 change_json, 514 `also`). `order`/`placements` được review_detail_screen.dart:112-195 xử lý đúng shape review.py:114-144. 409 version_conflict của PUT chỉ có `detail` (admin_api.py:126) → Dart vẫn ra kind conflict. 422 unsupported_move (review.py:87) qua `_review_error` có đủ 3 khoá → hiện message. Test MockClient: mobile/test/review_screen_test.dart:355 (422 dependency_missing hiện message).
+INV-06: CÒN ĐÚNG — mobile/lib/features/exercise/exercise_screen.dart:63-77 — ExercisePreview override progressSyncEnabledProvider=false, loadedProgressProvider=null, progress/activity/review controller mới, JudgeClient path /api/admin/run. Mọi chỗ đẩy tiến độ (session_controller.dart:125,184; review_controller.dart:105) đều qua canPushProgress → chặn. CellEditorPage mang đúng container preview (code_tab.dart:124-143). Server: backend/app/main.py:219-235 admin_run không gọi record_pass, judge từ draft_judge (review.py:542). Test test_admin_api.py:335-349, mobile/test/exercise_preview_test.dart.
+INV-07: CÒN ĐÚNG — mobile/lib/features/browse/home_screen.dart:40 — admin-button (chạm 1) → admin_screen.dart:29-33 `admin-review-button` "Chờ duyệt (N)" (chạm 2) → /admin/review (router.dart:94). Test bắt đầu từ Home: mobile/test/review_screen_test.dart:130-133,319. Nhãn PendingBadge: admin_screen.dart:75, admin_theme_screen.dart:84, admin_module_screen.dart:135,188.
+
+## Mối nối chưa khai
+- Lệch nhỏ giữa `diff` backend (LCS) và hàng "Vị trí" Dart (đã ghi Backlog T-05b): chỉ hiển thị, không ảnh hưởng dữ liệu.
+- `load_content --force` (CLI) với mục chờ cũ: `before` cũ → approve trả 409 item_conflict (an toàn); thứ tự áp lại theo draft (đã ghi DEVIATIONS).
+- Học viên đang mở app chỉ thấy bản mới sau khi contentProvider refresh của chính họ; admin approve chỉ refresh provider của admin (admin_controller._decide) — hành vi cũ, không phải lỗi mới.
+- Migration 0006 phải chạy TRƯỚC khi app mới khởi động (admin GET/changes đọc content_changes); deploy.sh cần bước migrate (task deploy chưa kiểm).
+- Lỗi DB DataError ở `submit` (PUT/MCP) không bắt riêng như approve (admin_api.py:158); validation_errors đã chặn độ dài nên rủi ro thấp, chưa kiểm chứng.
+
+## Verdict
+PASS — 7/7 bất biến còn đúng, không finding chặn. Cần e2e thật của orchestrator (uvicorn + Chrome) và kiểm deploy migration; phần đó tôi không xác minh được.

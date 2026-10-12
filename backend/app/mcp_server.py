@@ -3,8 +3,9 @@
 - Cổng (`McpGate`) chạy TRƯỚC SDK: không có JWT hợp lệ của identity-service → 401 + `WWW-Authenticate`
   có `resource_metadata` (claude.ai chỉ hiện nút Connect khi thấy đúng thứ này trên một 401).
 - Mỗi tool kiểm lại quyền bằng `authorize_sub` (bảng `mcp_access`) — thu hồi có hiệu lực ngay.
-- Ghi đi đúng đường của admin PUT: hàm thuần `content_ops` → `validation_errors` (ngoài khoá) → khoá
-  ghi → so `admin_version` → `load_content(validated=True)`. Màn Admin cầm version cũ sẽ nhận 409.
+- Ghi đi đúng đường của admin PUT: hàm thuần `content_ops` trên DRAFT → `validation_errors` (ngoài khoá)
+  → `review.submit` (khoá ghi, so version với draft, ghi mục chờ duyệt). KHÔNG đụng nội dung đang chạy:
+  admin duyệt trong app thì học viên mới thấy. Đọc cũng đọc draft để các lần gọi nối tiếp nhau được.
 - Project = theme, module = topic, file = code file, lesson = exercise. Không có xoá.
 
 SDK chạy stateless + JSON response: mỗi POST là một request độc lập, không giữ phiên trong RAM.
@@ -23,17 +24,16 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
-from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
-from app import content_ops
+from app import content_ops, review
 from app.content_ops import ContentOpError
 from app.db import SessionLocal
-from app.export_content import admin_version, export_content
-from app.load_content import load_content, lock_content, validation_errors
+from app.export_content import admin_version
+from app.load_content import validation_errors
 from app.mcp_auth import (
     InvalidToken,
     JwksUnavailable,
@@ -52,7 +52,7 @@ _claims: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_claim
 
 INSTRUCTIONS = (
     "Công cụ soạn nội dung cho app học lập trình Smart Coding Study. Cây nội dung: project → module "
-    "(lồng được) → file → lesson. Mọi thay đổi có hiệu lực NGAY với học viên. Trước khi tạo/sửa bài, gọi "
+    "(lồng được) → file → lesson. Mọi thay đổi chỉ vào HÀNG CHỜ DUYỆT: admin phải duyệt trong app thì học viên mới thấy — hãy nói rõ điều này với người dùng sau khi ghi. Các lần đọc thấy cả mục đang chờ duyệt. Trước khi tạo/sửa bài, gọi "
     "get_authoring_guide để biết luật; thử với dry_run=true trước, sửa hết lỗi rồi mới ghi thật."
 )
 
@@ -88,7 +88,7 @@ def _read(fn: Callable[[dict], Any]) -> Any:
     with open_session() as session:
         _authorized(session)
         try:
-            return fn(export_content(session))
+            return fn(review.draft_content(session))
         except ContentOpError as exc:
             raise ToolError(str(exc)) from None
 
@@ -96,7 +96,7 @@ def _read(fn: Callable[[dict], Any]) -> Any:
 def _write(tool: str, op: Callable[[dict], dict], dry_run: bool) -> dict:
     with open_session() as session:
         user, sub = _authorized(session)
-        before = export_content(session)
+        before = review.draft_content(session)
         base = admin_version(before)
         try:
             after = op(before)
@@ -107,20 +107,24 @@ def _write(tool: str, op: Callable[[dict], dict], dry_run: bool) -> dict:
         if errors:
             raise ToolError("Nội dung không hợp lệ, chưa ghi gì:\n" + _capped(errors))
         if dry_run:
-            return {"ok": True, "dry_run": True, "message": "Hợp lệ. Gọi lại với dry_run=false để ghi."}
-        lock_content(session)
-        if admin_version(export_content(session)) != base:
-            session.rollback()
-            raise ToolError("Nội dung vừa được người khác sửa trong lúc kiểm. Đọc lại rồi thử lại.")
+            return {"ok": True, "dry_run": True, "message": "Hợp lệ. Gọi lại với dry_run=false để gửi vào hàng chờ duyệt."}
+        author = f"mcp:{sub} ({user.email})" if user.email else f"mcp:{sub}"
         try:
-            load_content(session, after, validated=True)
-        except DataError as exc:
+            result = review.submit(session, base, after, author)
+        except review.VersionConflict:
             session.rollback()
-            raise ToolError(f"DB từ chối nội dung ({type(exc.orig).__name__}) — kiểm độ dài id/tên") from None
-        version = admin_version(export_content(session))
+            raise ToolError("Người khác vừa sửa nội dung trong lúc kiểm. Đọc lại rồi thử lại.") from None
+        except review.ReviewError as exc:
+            session.rollback()
+            raise ToolError(exc.message) from None
         session.commit()
-    logger.info("mcp %s by %s (sub=%s): %s -> %s", tool, user.email, sub, base, version)
-    return {"ok": True, "version": version}
+    logger.info("mcp %s by %s (sub=%s): %s -> %s (%d pending)", tool, user.email, sub, base, result["version"], result["pending"])
+    return {
+        "ok": True,
+        "version": result["version"],
+        "pending": result["pending"],
+        "message": "Đã gửi vào hàng chờ duyệt — admin cần duyệt trong app thì học viên mới thấy.",
+    }
 
 
 # open_world_hint=False: tool chỉ chạm DB nội dung của app này (mặc định của spec là True).
@@ -189,7 +193,7 @@ def _writer(tool: str, op: Callable[[dict], dict], dry_run: bool):
 
 @mcp.tool(annotations=_WRITE)
 async def create_project(project: dict[str, Any], first_module: dict[str, Any], dry_run: bool = False) -> dict:
-    """Tạo project mới (id, name, description, tags?, diagram?) cùng module đầu tiên (id, name, description)."""
+    """Tạo project mới (id, name, description, tags?, diagram?) cùng module đầu tiên (id, name, description). Vào hàng chờ duyệt: báo người dùng là admin cần duyệt."""
     return await _writer("create_project", lambda c: content_ops.create_project(c, project, first_module), dry_run)
 
 
@@ -229,13 +233,13 @@ async def update_file(file_id: str, changes: dict[str, Any], dry_run: bool = Fal
 
 @mcp.tool(annotations=_WRITE)
 async def create_lesson(file_id: str, lesson: dict[str, Any], dry_run: bool = False) -> dict:
-    """Tạo bài mới đầy đủ (gồm judge) và gắn vào cuối file. Đọc get_authoring_guide trước."""
+    """Tạo bài mới đầy đủ (gồm judge) và gắn vào cuối file. Đọc get_authoring_guide trước. Vào hàng chờ duyệt: báo người dùng là admin cần duyệt."""
     return await _writer("create_lesson", lambda c: content_ops.create_lesson(c, file_id, lesson), dry_run)
 
 
 @mcp.tool(annotations=_UPDATE)
 async def update_lesson(lesson_id: str, changes: dict[str, Any], dry_run: bool = False) -> dict:
-    """Sửa bài: thay nguyên các field top-level được truyền (không đổi id)."""
+    """Sửa bài: thay nguyên các field top-level được truyền (không đổi id). Vào hàng chờ duyệt: báo người dùng là admin cần duyệt."""
     return await _writer("update_lesson", lambda c: content_ops.update_lesson(c, lesson_id, changes), dry_run)
 
 

@@ -1,5 +1,6 @@
 /// Trạng thái soạn nội dung: giữ nguyên JSON của content.json, mỗi thao tác
-/// sửa một bản sao mới (state bất biến) rồi đánh dấu "chưa lưu".
+/// sửa một bản sao mới (state bất biến) rồi đánh dấu "chưa lưu". Gửi duyệt
+/// đưa thay đổi vào hàng chờ; chỉ khi duyệt thì nội dung học viên mới đổi.
 library;
 
 import 'dart:async';
@@ -26,6 +27,8 @@ class AdminState {
     this.conflict = false,
     this.busy = false,
     this.notice,
+    this.pending = const [],
+    this.pendingCount = 0,
   });
 
   final AdminStatus status;
@@ -46,8 +49,19 @@ class AdminState {
   final bool conflict;
   final bool busy;
 
-  /// Thông báo thành công ngắn ("Hợp lệ", "Đã lưu").
+  /// Thông báo thành công ngắn ("Hợp lệ", "Đã gửi duyệt N mục").
   final String? notice;
+
+  /// Các mục đang chờ duyệt (tóm tắt).
+  final List<PendingItem> pending;
+
+  /// Số mục chờ. Bằng pending.length, trừ khoảnh khắc ngay sau gửi duyệt khi
+  /// danh sách chưa kịp tải lại.
+  final int pendingCount;
+
+  /// Mục [itemId] loại [kind] (project|module|file|exercise) có đang chờ duyệt.
+  bool isPending(String kind, String itemId) =>
+      pending.any((p) => p.kind == kind && p.itemId == itemId);
 
   List<Json> get themes => [
     if (doc?['themes'] is List)
@@ -69,6 +83,8 @@ class AdminState {
     bool? busy,
     String? notice,
     bool clearNotice = false,
+    List<PendingItem>? pending,
+    int? pendingCount,
   }) => AdminState(
     status: status ?? this.status,
     doc: doc ?? this.doc,
@@ -82,6 +98,8 @@ class AdminState {
     conflict: conflict ?? this.conflict,
     busy: busy ?? this.busy,
     notice: clearNotice ? null : (notice ?? this.notice),
+    pending: pending ?? this.pending,
+    pendingCount: pendingCount ?? this.pendingCount,
   );
 }
 
@@ -249,6 +267,8 @@ class AdminController extends Notifier<AdminState> {
         status: AdminStatus.ready,
         doc: d.content,
         version: d.version,
+        pending: d.pending,
+        pendingCount: d.pending.length,
       );
     } on AdminError catch (e) {
       state = hasDoc
@@ -494,30 +514,28 @@ class AdminController extends Notifier<AdminState> {
     }
   }
 
+  /// Gửi duyệt: đưa thay đổi vào hàng chờ. Nội dung học viên KHÔNG đổi ở bước
+  /// này nên không nạp lại contentProvider.
   Future<void> save() async {
     final doc = state.doc;
     final base = state.version;
     if (doc == null || base == null || state.busy) return;
     state = state.copyWith(busy: true, clearNotice: true, clearFailure: true);
     try {
-      final v = await _repo.save(base, doc);
-      // Người dùng sửa tiếp trong lúc chờ: bản mới chưa được lưu.
+      final r = await _repo.save(base, doc);
+      // Người dùng sửa tiếp trong lúc chờ: bản mới chưa được gửi.
       final stale = !identical(state.doc, doc);
+      final sent = 'Đã gửi duyệt ${r.pending} mục';
       state = state.copyWith(
         busy: false,
-        version: v,
+        version: r.version,
         dirty: stale,
         errors: const [],
         conflict: false,
-        notice: stale
-            ? 'Đã lưu bản trước, còn thay đổi mới chưa lưu'
-            : 'Đã lưu',
+        pendingCount: r.pending,
+        notice: stale ? '$sent, còn thay đổi mới chưa gửi' : sent,
       );
-      // Mối nối admin ↔ app: nội dung trên server vừa đổi → nạp lại /content để Home/bài thấy ngay.
-      // Chỉ khi nội dung đang được dùng (app thật: ContentGate luôn giữ nó).
-      if (ref.exists(contentProvider)) {
-        unawaited(ref.read(contentProvider.notifier).refresh());
-      }
+      await refreshPending();
     } on AdminError catch (e) {
       switch (e.kind) {
         case AdminErrorKind.conflict:
@@ -534,6 +552,85 @@ class AdminController extends Notifier<AdminState> {
           );
       }
     }
+  }
+
+  /// Tải lại danh sách mục chờ (không đụng doc/dirty). Lỗi mạng bị nuốt:
+  /// giữ danh sách cũ, [AdminState.pendingCount] vẫn đúng từ lần gửi/tải trước.
+  Future<void> refreshPending() async {
+    try {
+      final list = await _repo.changes();
+      state = state.copyWith(
+        pending: [
+          for (final c in list)
+            PendingItem(
+              id: c.id,
+              kind: c.kind,
+              itemId: c.itemId,
+              action: c.action,
+            ),
+        ],
+        pendingCount: list.length,
+      );
+    } on AdminError {
+      // giữ nguyên
+    }
+  }
+
+  /// Danh sách đầy đủ cho màn Duyệt. Lỗi ném ra để màn tự hiển thị.
+  Future<List<ContentChange>> changes() => _repo.changes();
+
+  /// Duyệt một mục. Trả null nếu thành công, ngược lại trả lỗi (có
+  /// `detail`/`message` của server) để màn Duyệt hiển thị.
+  Future<AdminError?> approve(int id) => _decide(id, approve: true);
+
+  /// Từ chối một mục (bỏ khỏi hàng chờ, live không đổi).
+  Future<AdminError?> reject(int id) => _decide(id, approve: false);
+
+  ChangeResult? _lastDecision;
+
+  /// Kết quả của lần duyệt/bỏ thành công gần nhất (có `also`), null nếu chưa
+  /// có hoặc lần gần nhất lỗi.
+  ChangeResult? get lastDecision => _lastDecision;
+
+  Future<AdminError?> _decide(int id, {required bool approve}) async {
+    _lastDecision = null;
+    if (state.busy) {
+      return const AdminError(
+        AdminErrorKind.server,
+        [],
+        'Đang xử lý, thử lại sau',
+      );
+    }
+    state = state.copyWith(busy: true, clearNotice: true, clearFailure: true);
+    final ChangeResult result;
+    try {
+      result = approve ? await _repo.approve(id) : await _repo.reject(id);
+    } on AdminError catch (e) {
+      state = state.copyWith(busy: false);
+      return e;
+    }
+    state = state.copyWith(busy: false);
+    // Bản nháp trên server đã đổi (hash mới = result.version). Có sửa chưa gửi
+    // thì KHÔNG tải đè (mất việc): giữ doc, chỉ nhận version mới để lần gửi
+    // sau không bị 409.
+    if (state.dirty) {
+      state = state.copyWith(
+        version: result.version,
+        notice: approve
+            ? null
+            : 'Đã bỏ mục này. Bạn đang có sửa chưa gửi — nếu gửi, '
+                  'mục này sẽ được đề xuất lại.',
+      );
+      await refreshPending();
+    } else {
+      await load();
+    }
+    // Duyệt làm live đổi → học viên (Home/bài) thấy ngay.
+    if (approve && ref.exists(contentProvider)) {
+      unawaited(ref.read(contentProvider.notifier).refresh());
+    }
+    _lastDecision = result;
+    return null;
   }
 }
 

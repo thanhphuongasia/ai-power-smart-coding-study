@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../shared/widgets.dart';
 import 'admin_controller.dart';
 import 'admin_widgets.dart';
 
@@ -25,7 +26,13 @@ class AdminScreen extends ConsumerWidget {
         return AdminList(
           key: const Key('admin-tree'),
           children: [
-            for (final t in s.themes) _themeCard(context, ref, t, withErrors),
+            GhostButton(
+              key: const Key('admin-review-button'),
+              label: 'Chờ duyệt (${s.pendingCount})',
+              onPressed: () => context.push('/admin/review'),
+            ),
+            for (final t in s.themes)
+              _themeCard(context, ref, t, withErrors, s),
             AdminAddButton(
               key: const Key('add-theme'),
               label: 'Thêm project',
@@ -51,6 +58,7 @@ class AdminScreen extends ConsumerWidget {
     WidgetRef ref,
     Json theme,
     Set<String> withErrors,
+    AdminState s,
   ) {
     final id = theme['id'] as String;
     final ctl = ref.read(adminProvider.notifier);
@@ -63,6 +71,9 @@ class AdminScreen extends ConsumerWidget {
       meta: '${topics.length} module · ${exerciseIds.length} bài',
       hasError: exerciseIds.any(withErrors.contains),
       errorKey: Key('theme-$id-error'),
+      badge: s.isPending('project', id)
+          ? PendingBadge(key: Key('theme-$id-pending'))
+          : null,
       onTap: () => context.push('/admin/theme/$id'),
       trailing: [
         IconButton(

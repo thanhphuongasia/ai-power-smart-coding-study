@@ -211,6 +211,30 @@ class ErrorDot extends StatelessWidget {
   );
 }
 
+/// Nhãn nhỏ "chờ duyệt" cho thẻ có mục đang nằm trong hàng chờ.
+class PendingBadge extends StatelessWidget {
+  const PendingBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2, vertical: 2),
+      decoration: BoxDecoration(
+        color: p.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Text(
+        'chờ duyệt',
+        style: AppText.caption.copyWith(
+          color: p.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class AdminMenuEntry {
   const AdminMenuEntry(this.id, this.label, this.onTap, {this.enabled = true});
   final String id;
@@ -257,6 +281,7 @@ class AdminLevelCard extends StatelessWidget {
     this.meta,
     this.hasError = false,
     this.errorKey,
+    this.badge,
     this.onTap,
     this.trailing = const [],
   });
@@ -269,6 +294,9 @@ class AdminLevelCard extends StatelessWidget {
   final String? meta;
   final bool hasError;
   final Key? errorKey;
+
+  /// Nhãn cạnh tiêu đề (vd [PendingBadge]).
+  final Widget? badge;
   final VoidCallback? onTap;
   final List<Widget> trailing;
 
@@ -303,6 +331,10 @@ class AdminLevelCard extends StatelessWidget {
                       if (hasError) ...[
                         const SizedBox(width: AppSpace.s2),
                         ErrorDot(key: errorKey),
+                      ],
+                      if (badge != null) ...[
+                        const SizedBox(width: AppSpace.s2),
+                        badge!,
                       ],
                     ],
                   ),
@@ -557,7 +589,7 @@ void _showErrorsSheet(BuildContext context, List<String> errors) {
   );
 }
 
-/// Thanh lưu ghim đáy: trạng thái, chip lỗi, Kiểm tra / Lưu, menu Hủy sửa.
+/// Thanh lưu ghim đáy: trạng thái, chip lỗi, Kiểm tra / Gửi duyệt, menu Hủy sửa.
 class AdminSaveBar extends ConsumerWidget {
   const AdminSaveBar({super.key});
 
@@ -650,7 +682,7 @@ class AdminSaveBar extends ConsumerWidget {
                 Expanded(
                   child: PrimaryButton(
                     key: const Key('admin-save'),
-                    label: 'Lưu',
+                    label: 'Gửi duyệt',
                     onPressed: s.busy ? null : ctl.save,
                   ),
                 ),

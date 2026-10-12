@@ -25,9 +25,10 @@ from sqlalchemy.exc import DataError, OperationalError
 
 from app import harness, mcp_server
 from app.admin_api import router as admin_router
-from app.auth import UserLookup, get_user_lookup, optional_bearer
+from app.auth import UserLookup, get_user_lookup, optional_bearer, require_admin
 from app.auth import router as auth_router
 from app.content_api import ContentNotLoaded, JudgeLookup, get_judge_lookup
+from app.review import get_draft_judge_lookup
 from app.content_api import router as content_router
 from app.mcp_auth import router as mcp_auth_router
 from app.progress import PassRecorder, get_pass_recorder
@@ -142,24 +143,8 @@ def get_runner() -> CodeRunner:
     return _RUNNER
 
 
-@app.post("/run", response_model=RunResponse)
-async def run(
-    request: RunRequest,
-    runner: CodeRunner = Depends(get_runner),
-    lookup_judge: JudgeLookup = Depends(get_judge_lookup),
-    token: str | None = Depends(optional_bearer),
-    lookup_user: UserLookup = Depends(get_user_lookup),
-    record_pass: PassRecorder = Depends(get_pass_recorder),
-) -> RunResponse:
-    # Tra DB (sync) trong threadpool để không chặn event loop; kết nối trả lại pool trước khi
-    # chờ máy chấm.
-    judge = await run_in_threadpool(lookup_judge, request.exercise_id)
-    if judge is None:
-        raise HTTPException(status_code=404, detail="exercise_not_found")
-    # Token sai/hết hạn: vẫn chấm như khách (không ghi tiến độ), không chặn việc Run. Chế độ mở
-    # (AUTH_OPEN_AS): không token cũng ra user mở → ghi tiến độ cho user đó.
-    user = await run_in_threadpool(lookup_user, token)
-
+async def _execute(runner: CodeRunner, judge, request: RunRequest) -> RunResponse:
+    """Ghép harness + case của `judge` với code rồi gửi máy chấm. Không ghi gì (caller quyết)."""
     payload = json.dumps(
         {
             "code": request.code,
@@ -186,18 +171,9 @@ async def run(
         # Code học viên chạy cùng tiến trình với harness nên có thể in một dòng kết quả
         # sai dạng; dòng đó coi như không đọc được, không để thành 500.
         try:
-            response = RunResponse.model_validate({**result, "duration_ms": duration_ms})
+            return RunResponse.model_validate({**result, "duration_ms": duration_ms})
         except ValidationError:
             logger.warning("harness result has wrong shape for %s", request.exercise_id)
-        else:
-            # Chỉ server ghi passed, và chỉ khi máy chấm xác nhận (client không tự khai được).
-            if user is not None and response.status == "passed":
-                try:
-                    await run_in_threadpool(record_pass, user.id, request.exercise_id)
-                except Exception:
-                    # Kết quả chấm vẫn trả về; chỉ mất lần ghi tiến độ này (Run lại là ghi được).
-                    logger.exception("record_pass failed for %s", request.exercise_id)
-            return response
     if execution.status == "error":
         # Harness bị dừng trước khi in kết quả (vd hết bộ nhớ): lỗi do code học viên.
         message = execution.message or (execution.stderr.strip().splitlines() or ["Chương trình bị dừng"])[-1]
@@ -210,3 +186,51 @@ async def run(
         )
     logger.warning("harness output not understood for %s", request.exercise_id)
     raise HTTPException(status_code=503, detail="runner_unavailable")
+
+
+@app.post("/run", response_model=RunResponse)
+async def run(
+    request: RunRequest,
+    runner: CodeRunner = Depends(get_runner),
+    lookup_judge: JudgeLookup = Depends(get_judge_lookup),
+    token: str | None = Depends(optional_bearer),
+    lookup_user: UserLookup = Depends(get_user_lookup),
+    record_pass: PassRecorder = Depends(get_pass_recorder),
+) -> RunResponse:
+    # Tra DB (sync) trong threadpool để không chặn event loop; kết nối trả lại pool trước khi
+    # chờ máy chấm.
+    judge = await run_in_threadpool(lookup_judge, request.exercise_id)
+    if judge is None:
+        raise HTTPException(status_code=404, detail="exercise_not_found")
+    # Token sai/hết hạn: vẫn chấm như khách (không ghi tiến độ), không chặn việc Run. Chế độ mở
+    # (AUTH_OPEN_AS): không token cũng ra user mở → ghi tiến độ cho user đó.
+    user = await run_in_threadpool(lookup_user, token)
+    response = await _execute(runner, judge, request)
+    # Chỉ server ghi passed, và chỉ khi máy chấm xác nhận (client không tự khai được).
+    if user is not None and response.status == "passed":
+        try:
+            await run_in_threadpool(record_pass, user.id, request.exercise_id)
+        except Exception:
+            # Kết quả chấm vẫn trả về; chỉ mất lần ghi tiến độ này (Run lại là ghi được).
+            logger.exception("record_pass failed for %s", request.exercise_id)
+    return response
+
+
+@app.post("/api/admin/run", response_model=RunResponse)
+async def admin_run(
+    http_request: Request,
+    _admin=Depends(require_admin),
+    runner: CodeRunner = Depends(get_runner),
+    lookup_judge: JudgeLookup = Depends(get_draft_judge_lookup),
+):
+    """Preview của admin: chấm theo bài trong DRAFT (kể cả bài chưa duyệt). KHÔNG ghi tiến độ.
+
+    Body đọc SAU khi qua require_admin (khai body trong chữ ký thì FastAPI parse trước khi kiểm quyền)."""
+    try:
+        request = RunRequest.model_validate_json(await http_request.body())
+    except ValidationError:
+        return JSONResponse(status_code=422, content={"detail": "invalid_request"})
+    judge = await run_in_threadpool(lookup_judge, request.exercise_id)
+    if judge is None:
+        raise HTTPException(status_code=404, detail="exercise_not_found")
+    return await _execute(runner, judge, request)

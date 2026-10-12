@@ -38,3 +38,40 @@ Map<String, dynamic> sampleContent() => {
     'e2': {'id': 'e2', 'title': 'Two'},
   },
 };
+
+/// Một mục trong GET /api/admin/changes (project đổi tên).
+Map<String, dynamic> sampleChange({
+  int id = 1,
+  String kind = 'project',
+  String itemId = 't1',
+  String action = 'update',
+}) => {
+  'id': id,
+  'kind': kind,
+  'item_id': itemId,
+  'action': action,
+  'before': action == 'create'
+      ? null
+      : {
+          'fields': {'id': itemId, 'name': 'Cũ'},
+          'prev': <String>[],
+        },
+  'after': action == 'delete'
+      ? null
+      : {
+          'fields': {'id': itemId, 'name': 'Mới'},
+          'prev': <String>[],
+        },
+  'status': 'pending',
+  'author': 'admin@x',
+  'created_at': '2026-10-11T00:00:00Z',
+  'updated_at': '2026-10-11T00:00:00Z',
+};
+
+/// Tóm tắt trong `pending` của GET /api/admin/content.
+Map<String, dynamic> samplePending({
+  int id = 1,
+  String kind = 'project',
+  String itemId = 't1',
+  String action = 'update',
+}) => {'id': id, 'kind': kind, 'item_id': itemId, 'action': action};

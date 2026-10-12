@@ -130,6 +130,10 @@ class _FileGroup extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (s.isPending('file', id)) ...[
+              const SizedBox(width: AppSpace.s2),
+              PendingBadge(key: Key('file-$id-pending')),
+            ],
             AdminActionMenu(
               menuKey: 'file-$id-menu',
               entries: [
@@ -180,6 +184,9 @@ class _FileGroup extends ConsumerWidget {
     final blocks = (json['blocks'] as List? ?? const []).length;
     return AdminLevelCard(
       key: Key('exercise-$id-card'),
+      badge: s.isPending('exercise', id)
+          ? PendingBadge(key: Key('exercise-$id-pending'))
+          : null,
       title: title.isEmpty ? id : title,
       subtitle: sig,
       meta: '$blocks ô',

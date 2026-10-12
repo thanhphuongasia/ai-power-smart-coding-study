@@ -1,0 +1,12 @@
+# Deviations — append-only
+- Plan crew mặc định: worktree + PR · Thực tế: thẳng trên main (memory work-directly-on-main) · Duyệt: user
+- Plan T-05 (5 file: 2 màn mới + exercise_screen + code_tab + router) · Thực tế: preview cần thêm judge_client.dart → tách T-05a (exercise_screen, code_tab, judge_client: chế độ preview) chạy song song T-04, và T-05b (review_screen, review_detail_screen, router) sau T-04+T-05a · Acceptance không đổi · Duyệt: orchestrator
+- Plan T-02 owned có main.py "nếu cần" · Thực tế: cần — tách `_execute` dùng chung cho /run và /api/admin/run (draft judge, không record_pass) · Duyệt: orchestrator
+- verify-task T-03 exit 4 (scope drift) do file mobile của T-04/T-05a đang chạy song song — giới hạn đã biết của baseline khi chạy song song; diff T-03 chỉ ở 2 file owned (mcp_server.py, test_mcp.py), test_mcp xanh · Duyệt: orchestrator
+- T-05a chạy dart format tràn sang completion_engine.dart, solution_tab.dart (ngoài owned; kiểm bằng dart format cả hai bản: chỉ khác định dạng) → orchestrator trả về nội dung HEAD (bản sao ở scratchpad) · Duyệt: orchestrator
+- T-04 correction thêm owned admin_theme_screen.dart, admin_module_screen.dart (badge module/file/bài — Minor-2 vòng 1) · Duyệt: orchestrator
+- Review backend vòng 2 (external) timeout 360s → không có second opinion vòng 2; chạy lại vòng 3 với timeout dài hơn, phạm vi hẹp · Duyệt: orchestrator
+- Vòng 2 M1 (xoá cả project có sơ đồ kẹt) → approve xoá project/module kéo theo mục XOÁ bài đang chờ trong nhánh; m1 (bỏ module duy nhất của project mới) → reject kèm project. Hành vi đổi: duyệt xoá module có bài đã được admin xoá giờ thành công (trước đây từ chối) · Duyệt: orchestrator
+- Chấp nhận (không chặn): CLI `load_content --force` đổi thứ tự live trong lúc có mục chờ cùng thùng chứa → approve áp lại thứ tự draft. Thao tác vận hành hiếm, không mất nội dung; ghi vào docs khi distill · Duyệt: orchestrator
+- Vòng 3 còn Major (đổi cha module: đảo cha–con, kéo module có sẵn vào project mới) → user chọn "Chặn đầu vào, deploy": submit từ chối đổi cha module có sẵn (422 unsupported_move, MCP → ToolError); sửa mcp_server.py (T-03) 3 dòng bắt ReviewError · Duyệt: user
+- Plan Verification bước 3 (app trên Chrome) · Thực tế: thay bằng widget test bắt đầu từ Home (review_screen_test: admin-button → admin-review-button) + e2e HTTP 22 bước trên uvicorn local; không chạy Chrome (lần trước cửa sổ hidden làm sai kết quả) · Duyệt: orchestrator

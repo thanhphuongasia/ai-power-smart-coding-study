@@ -11,6 +11,8 @@ import '../features/admin/admin_module_screen.dart';
 import '../features/admin/admin_screen.dart';
 import '../features/admin/admin_theme_screen.dart';
 import '../features/admin/exercise_editor.dart';
+import '../features/admin/review_detail_screen.dart';
+import '../features/admin/review_screen.dart' as admin_review;
 import '../features/browse/file_crosscut_screen.dart';
 import '../features/browse/home_screen.dart';
 import '../features/browse/theme_detail_screen.dart';
@@ -88,6 +90,18 @@ final GoRouter appRouter = GoRouter(
       parentNavigatorKey: _rootKey,
       path: '/admin',
       builder: (context, state) => const AdminScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/review',
+      builder: (context, state) => const admin_review.AdminReviewScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/review/:id',
+      builder: (context, state) => AdminReviewDetailScreen(
+        changeId: int.tryParse(state.pathParameters['id']!) ?? -1,
+      ),
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,

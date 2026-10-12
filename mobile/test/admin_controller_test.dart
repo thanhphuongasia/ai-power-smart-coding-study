@@ -10,6 +10,8 @@ import 'package:smart_coding_study/data/content_providers.dart';
 import 'package:smart_coding_study/data/content_repository.dart';
 import 'package:smart_coding_study/features/admin/admin_controller.dart';
 
+import 'support/admin_fixture.dart' show sampleChange, samplePending;
+
 /// Response JSON utf-8 (http.Response mặc định latin1 sẽ ném với tiếng Việt).
 http.Response jsonResponse(String body, int status) => http.Response(
   body,
@@ -51,11 +53,20 @@ Map<String, dynamic> sampleContent() => {
 
 class Server {
   Server({this.putStatus = 200, this.putBody, this.validateBody});
+
+  /// Mục chờ duyệt server trả (GET content.pending và GET changes).
+  List<Map<String, dynamic>> changes = [];
+  int decideStatus = 200;
+  Map<String, dynamic>? decideBody;
+  int changesStatus = 200;
   Completer<void>? putGate;
   Completer<void>? getGate;
   Map<String, dynamic>? Function()? content;
   int getStatus = 200;
   int putStatus;
+
+  /// Nếu đặt: PUT có base_version khác giá trị này → 409 version_conflict.
+  String? putExpectBase;
   Map<String, dynamic>? putBody;
   Map<String, dynamic>? validateBody;
   final requests = <http.Request>[];
@@ -70,8 +81,42 @@ class Server {
         jsonEncode({
           'version': 'v1',
           'content': content?.call() ?? sampleContent(),
+          'pending': [
+            for (final c in changes)
+              samplePending(
+                id: c['id'] as int,
+                kind: c['kind'] as String,
+                itemId: c['item_id'] as String,
+                action: c['action'] as String,
+              ),
+          ],
         }),
         200,
+      );
+    }
+    if (r.method == 'GET' && path == '/api/admin/changes') {
+      return jsonResponse(jsonEncode({'changes': changes}), changesStatus);
+    }
+    final decide = RegExp(
+      r'^/api/admin/changes/(\d+)/(approve|reject)$',
+    ).firstMatch(path);
+    if (r.method == 'POST' && decide != null) {
+      final id = int.parse(decide.group(1)!);
+      if (decideStatus == 200) {
+        changes.removeWhere((c) => c['id'] == id);
+      }
+      return jsonResponse(
+        jsonEncode(
+          decideBody ??
+              {
+                'id': id,
+                'status': decide.group(2) == 'approve'
+                    ? 'approved'
+                    : 'rejected',
+                'version': 'v3',
+              },
+        ),
+        decideStatus,
       );
     }
     if (r.method == 'POST' && path == '/api/admin/validate') {
@@ -82,7 +127,14 @@ class Server {
     }
     if (r.method == 'PUT' && path == '/api/admin/content') {
       await putGate?.future;
-      return jsonResponse(jsonEncode(putBody ?? {'version': 'v2'}), putStatus);
+      if (putExpectBase != null &&
+          (jsonDecode(r.body) as Map)['base_version'] != putExpectBase) {
+        return jsonResponse('{"detail":"version_conflict"}', 409);
+      }
+      return jsonResponse(
+        jsonEncode(putBody ?? {'version': 'v2', 'pending': 1}),
+        putStatus,
+      );
     }
     return http.Response('', 404);
   });
@@ -264,12 +316,12 @@ void main() {
   });
 
   test('save gửi base_version; thành công → version mới, hết dirty', () async {
-    final server = Server();
+    final server = Server()..changes = [sampleChange()];
     final c = await boot(server);
     final ctl = c.read(adminProvider.notifier);
     ctl.updateNode('t1', name: 'Đổi');
     await ctl.save();
-    final put = server.requests.last;
+    final put = server.requests.lastWhere((r) => r.method == 'PUT');
     expect(put.method, 'PUT');
     final body = jsonDecode(put.body) as Map;
     expect(body['base_version'], 'v1');
@@ -277,6 +329,286 @@ void main() {
     final s = c.read(adminProvider);
     expect(s.version, 'v2');
     expect(s.dirty, isFalse);
+    expect(s.notice, 'Đã gửi duyệt 1 mục');
+    expect(s.pendingCount, 1);
+    expect(s.isPending('project', 't1'), isTrue);
+  });
+
+  test('load đọc pending từ /content', () async {
+    final c = await boot(Server()..changes = [sampleChange(id: 7)]);
+    final s = c.read(adminProvider);
+    expect(s.pending.single.id, 7);
+    expect(s.pendingCount, 1);
+    expect(s.isPending('project', 't1'), isTrue);
+    expect(s.isPending('module', 't1'), isFalse);
+  });
+
+  test('load không có field pending (server cũ) → rỗng', () async {
+    final c = ProviderContainer(
+      overrides: [
+        adminRepositoryProvider.overrideWithValue(
+          AdminRepository(
+            MockClient(
+              (_) async => jsonResponse(
+                jsonEncode({'version': 'v1', 'content': sampleContent()}),
+                200,
+              ),
+            ),
+            baseUrl: Uri.parse('http://x'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(adminProvider, (_, _) {});
+    await c.read(adminProvider.notifier).load();
+    expect(c.read(adminProvider).pending, isEmpty);
+    expect(c.read(adminProvider).pendingCount, 0);
+  });
+
+  test('save thành công KHÔNG đụng contentProvider của học viên', () async {
+    var refreshed = 0;
+    final server = Server();
+    final c = ProviderContainer(
+      overrides: [
+        adminRepositoryProvider.overrideWithValue(
+          AdminRepository(server.client, baseUrl: Uri.parse('http://x')),
+        ),
+        contentProvider.overrideWith(() => _CountingContent(() => refreshed++)),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(adminProvider, (_, _) {});
+    c.listen(contentProvider, (_, _) {});
+    final ctl = c.read(adminProvider.notifier);
+    await ctl.load();
+    ctl.updateNode('t1', name: 'Đổi');
+    await ctl.save();
+    expect(refreshed, 0);
+  });
+
+  test('refreshPending lỗi mạng → giữ pendingCount từ lần gửi', () async {
+    final server = Server()..changesStatus = 500;
+    final c = await boot(server);
+    final ctl = c.read(adminProvider.notifier);
+    ctl.updateNode('t1', name: 'Đổi');
+    await ctl.save();
+    final s = c.read(adminProvider);
+    expect(s.pendingCount, 1);
+    expect(s.pending, isEmpty);
+    expect(s.failure, isNull);
+  });
+
+  test(
+    'approve: thành công → reload nháp + pending, nạp lại /content',
+    () async {
+      var refreshed = 0;
+      final server = Server()
+        ..changes = [
+          sampleChange(id: 1),
+          sampleChange(id: 2, itemId: 'm1', kind: 'module'),
+        ];
+      final c = ProviderContainer(
+        overrides: [
+          adminRepositoryProvider.overrideWithValue(
+            AdminRepository(server.client, baseUrl: Uri.parse('http://x')),
+          ),
+          contentProvider.overrideWith(
+            () => _CountingContent(() => refreshed++),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(adminProvider, (_, _) {});
+      c.listen(contentProvider, (_, _) {});
+      final ctl = c.read(adminProvider.notifier);
+      await ctl.load();
+      expect(c.read(adminProvider).pendingCount, 2);
+
+      final err = await ctl.approve(1);
+      expect(err, isNull);
+      final post = server.requests.lastWhere((r) => r.method == 'POST');
+      expect(post.url.path, '/api/admin/changes/1/approve');
+      final s = c.read(adminProvider);
+      expect(s.pending.map((p) => p.id), [2]);
+      expect(s.pendingCount, 1);
+      expect(s.busy, isFalse);
+      expect(refreshed, 1);
+    },
+  );
+
+  test('reject: thành công → reload, KHÔNG nạp lại /content', () async {
+    var refreshed = 0;
+    final server = Server()..changes = [sampleChange(id: 1)];
+    final c = ProviderContainer(
+      overrides: [
+        adminRepositoryProvider.overrideWithValue(
+          AdminRepository(server.client, baseUrl: Uri.parse('http://x')),
+        ),
+        contentProvider.overrideWith(() => _CountingContent(() => refreshed++)),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(adminProvider, (_, _) {});
+    c.listen(contentProvider, (_, _) {});
+    final ctl = c.read(adminProvider.notifier);
+    await ctl.load();
+    expect(await ctl.reject(1), isNull);
+    expect(
+      server.requests.lastWhere((r) => r.method == 'POST').url.path,
+      '/api/admin/changes/1/reject',
+    );
+    expect(c.read(adminProvider).pending, isEmpty);
+    expect(refreshed, 0);
+  });
+
+  test('approve khi đang có sửa chưa gửi → không tải đè doc', () async {
+    final server = Server()..changes = [sampleChange(id: 1)];
+    final c = await boot(server);
+    final ctl = c.read(adminProvider.notifier);
+    ctl.updateNode('t1', name: 'Đang sửa');
+    expect(await ctl.approve(1), isNull);
+    final s = c.read(adminProvider);
+    expect(s.dirty, isTrue);
+    expect(s.themes.single['name'], 'Đang sửa');
+    expect(s.pending, isEmpty);
+  });
+
+  test('dirty → approve → save() gửi base_version mới, không 409', () async {
+    final server = Server()
+      ..changes = [sampleChange(id: 1)]
+      ..putExpectBase = 'v3';
+    final c = await boot(server);
+    final ctl = c.read(adminProvider.notifier);
+    ctl.updateNode('t1', name: 'Đang sửa');
+    expect(await ctl.approve(1), isNull);
+    var s = c.read(adminProvider);
+    expect(s.version, 'v3');
+    expect(s.dirty, isTrue);
+    expect(s.themes.single['name'], 'Đang sửa');
+    await ctl.save();
+    s = c.read(adminProvider);
+    expect(s.conflict, isFalse);
+    expect(s.dirty, isFalse);
+    expect(s.version, 'v2');
+  });
+
+  test(
+    'dirty → reject → version mới + notice nói rõ, save không 409',
+    () async {
+      final server = Server()
+        ..changes = [sampleChange(id: 1)]
+        ..putExpectBase = 'v3';
+      final c = await boot(server);
+      final ctl = c.read(adminProvider.notifier);
+      ctl.updateNode('t1', name: 'Đang sửa');
+      expect(await ctl.reject(1), isNull);
+      var s = c.read(adminProvider);
+      expect(s.version, 'v3');
+      expect(s.dirty, isTrue);
+      expect(s.notice, contains('đề xuất lại'));
+      await ctl.save();
+      s = c.read(adminProvider);
+      expect(s.conflict, isFalse);
+      expect(s.dirty, isFalse);
+    },
+  );
+
+  test('không dirty → approve: tải lại, version theo server', () async {
+    final server = Server()..changes = [sampleChange(id: 1)];
+    final c = await boot(server);
+    final ctl = c.read(adminProvider.notifier);
+    expect(await ctl.approve(1), isNull);
+    final s = c.read(adminProvider);
+    expect(s.dirty, isFalse);
+    expect(s.version, 'v1'); // load() lấy version GET
+  });
+
+  test('404 trơn {"detail":"Not Found"} vẫn là network', () async {
+    final server = Server()
+      ..decideStatus = 404
+      ..decideBody = {'detail': 'Not Found'};
+    final c = await boot(server);
+    final err = await c.read(adminProvider.notifier).approve(1);
+    expect(err!.kind, AdminErrorKind.network);
+  });
+
+  test(
+    'approve 409 item_conflict → trả lỗi có message, state giữ nguyên',
+    () async {
+      final server = Server()
+        ..changes = [sampleChange(id: 1)]
+        ..decideStatus = 409
+        ..decideBody = {
+          'detail': 'item_conflict',
+          'message': 'Mục đã bị đổi bởi thay đổi khác',
+          'errors': ['xung đột t1'],
+        };
+      final c = await boot(server);
+      final ctl = c.read(adminProvider.notifier);
+      final err = await ctl.approve(1);
+      expect(err, isNotNull);
+      expect(err!.kind, AdminErrorKind.conflict);
+      expect(err.detail, 'item_conflict');
+      expect(err.message, 'Mục đã bị đổi bởi thay đổi khác');
+      expect(err.errors, ['xung đột t1']);
+      final s = c.read(adminProvider);
+      expect(s.busy, isFalse);
+      expect(
+        s.conflict,
+        isFalse,
+      ); // không nhầm với xung đột version khi gửi duyệt
+      expect(s.pending, hasLength(1));
+    },
+  );
+
+  test('approve 422 dependency_missing / 404 change_not_found', () async {
+    final server = Server()
+      ..decideStatus = 422
+      ..decideBody = {
+        'detail': 'dependency_missing',
+        'message': 'Thiếu module cha',
+        'errors': ['module m9'],
+      };
+    final c = await boot(server);
+    final ctl = c.read(adminProvider.notifier);
+    var err = await ctl.approve(1);
+    expect(err!.kind, AdminErrorKind.invalid);
+    expect(err.detail, 'dependency_missing');
+    expect(err.message, 'Thiếu module cha');
+    expect(err.errors, ['module m9']);
+
+    server
+      ..decideStatus = 404
+      ..decideBody = {'detail': 'change_not_found', 'message': 'Mục không còn'};
+    err = await ctl.reject(1);
+    expect(err!.kind, AdminErrorKind.server);
+    expect(err.detail, 'change_not_found');
+    expect(err.message, 'Mục không còn');
+
+    server
+      ..decideStatus = 403
+      ..decideBody = {};
+    err = await ctl.approve(1);
+    expect(err!.kind, AdminErrorKind.forbidden);
+  });
+
+  test('changes() trả ContentChange đủ before/after/author', () async {
+    final server = Server()
+      ..changes = [
+        sampleChange(id: 1),
+        sampleChange(id: 2, action: 'create', itemId: 'p2'),
+        sampleChange(id: 3, action: 'delete', itemId: 'p3'),
+      ];
+    final c = await boot(server);
+    final list = await c.read(adminProvider.notifier).changes();
+    expect(list, hasLength(3));
+    expect(list[0].author, 'admin@x');
+    expect(list[0].before!['fields'], isNotNull);
+    expect(list[0].after!['fields'], {'id': 't1', 'name': 'Mới'});
+    expect(list[1].before, isNull);
+    expect(list[2].after, isNull);
+    expect(list[0].createdAt, isNotNull);
   });
 
   test('save 409 → conflict, giữ nguyên sửa chưa lưu', () async {
@@ -362,6 +694,7 @@ void main() {
     expect(s.dirty, isTrue);
     expect(s.version, 'v2');
     expect(s.notice, contains('còn thay đổi mới'));
+    expect(s.notice, contains('Đã gửi duyệt'));
     expect(s.themes.single['name'], 'B');
   });
 
@@ -579,33 +912,6 @@ void main() {
     ctl.updateNode('t1', name: 'B');
     expect(c.read(adminProvider).conflict, isTrue);
   });
-
-  test(
-    'lưu thành công → nạp lại /content (Home thấy nội dung mới ngay)',
-    () async {
-      final server = Server();
-      var refreshed = 0;
-      final c = ProviderContainer(
-        overrides: [
-          adminRepositoryProvider.overrideWithValue(
-            AdminRepository(server.client, baseUrl: Uri.parse('http://x')),
-          ),
-          contentProvider.overrideWith(
-            () => _CountingContent(() => refreshed++),
-          ),
-        ],
-      );
-      addTearDown(c.dispose);
-      c.listen(adminProvider, (_, _) {});
-      // Nội dung đang được dùng, như trong app thật (ContentGate giữ nó).
-      c.listen(contentProvider, (_, _) {});
-      await c.read(adminProvider.notifier).load();
-      final ctl = c.read(adminProvider.notifier);
-      ctl.updateNode('t1', name: 'Đổi');
-      await ctl.save();
-      expect(refreshed, 1);
-    },
-  );
 }
 
 class _CountingContent extends ContentController {

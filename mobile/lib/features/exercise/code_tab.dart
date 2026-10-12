@@ -26,9 +26,12 @@ import 'session_controller.dart';
 import 'session_providers.dart';
 
 class CodeTab extends ConsumerStatefulWidget {
-  const CodeTab({super.key, required this.exercise});
+  const CodeTab({super.key, required this.exercise, this.preview = false});
 
   final Exercise exercise;
+
+  /// Admin xem trước: không có nút sang bài kế tiếp (không rời màn preview).
+  final bool preview;
 
   @override
   ConsumerState<CodeTab> createState() => _CodeTabState();
@@ -118,17 +121,23 @@ class _CodeTabState extends ConsumerState<CodeTab>
   Future<void> _openEditor(String label) async {
     _activity();
     setState(() => _activeLabel = label);
+    // Route mới là anh em của màn bài học trên Navigator, nằm ngoài
+    // ProviderScope lồng của preview → phải mang container hiện tại theo.
+    final container = ProviderScope.containerOf(context);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => CellEditorPage(
-          exercise: _exercise,
-          label: label,
-          codeOf: (l) => _cells[l] ?? '',
-          onChanged: _onCellChanged,
-          isDone: (l) => _isDone(_block(l)),
-          nextAfter: _nextAfter,
-          onActivity: _activity,
+        builder: (_) => UncontrolledProviderScope(
+          container: container,
+          child: CellEditorPage(
+            exercise: _exercise,
+            label: label,
+            codeOf: (l) => _cells[l] ?? '',
+            onChanged: _onCellChanged,
+            isDone: (l) => _isDone(_block(l)),
+            nextAfter: _nextAfter,
+            onActivity: _activity,
+          ),
         ),
       ),
     );
@@ -366,20 +375,22 @@ class _CodeTabState extends ConsumerState<CodeTab>
   }
 
   Widget _passedBar() {
+    final edit = GhostButton(
+      key: const Key('edit-again'),
+      label: 'Sửa lại',
+      onPressed: () => setState(() {
+        _result = null;
+        _merged = null;
+      }),
+    );
+    if (widget.preview) return Row(children: [edit]);
     final next = nextExerciseAfter(
       ref.read(contentIndexProvider),
       _exercise.id,
     );
     return Row(
       children: [
-        GhostButton(
-          key: const Key('edit-again'),
-          label: 'Sửa lại',
-          onPressed: () => setState(() {
-            _result = null;
-            _merged = null;
-          }),
-        ),
+        edit,
         const SizedBox(width: AppSpace.s2),
         Expanded(
           child: PrimaryButton(

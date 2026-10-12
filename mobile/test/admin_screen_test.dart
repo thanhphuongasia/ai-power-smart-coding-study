@@ -12,6 +12,7 @@ import 'package:smart_coding_study/features/admin/admin_widgets.dart';
 import 'package:smart_coding_study/main.dart';
 
 import 'admin_controller_test.dart' show jsonResponse, sampleContent;
+import 'support/admin_fixture.dart' show sampleChange, samplePending;
 import 'support/auth_fixture.dart';
 import 'support/content_fixture.dart';
 
@@ -20,6 +21,7 @@ Future<List<http.Request>> pumpFromHome(
   WidgetTester tester, {
   int putStatus = 200,
   Map<String, dynamic>? validateBody,
+  List<Map<String, dynamic>> pending = const [],
 }) async {
   tester.view.physicalSize = const Size(412, 915);
   tester.view.devicePixelRatio = 1;
@@ -27,9 +29,24 @@ Future<List<http.Request>> pumpFromHome(
   final requests = <http.Request>[];
   final client = MockClient((r) async {
     requests.add(r);
+    if (r.method == 'GET' && r.url.path == '/api/admin/changes') {
+      return jsonResponse(jsonEncode({'changes': pending}), 200);
+    }
     if (r.method == 'GET') {
       return jsonResponse(
-        jsonEncode({'version': 'v1', 'content': sampleContent()}),
+        jsonEncode({
+          'version': 'v1',
+          'content': sampleContent(),
+          'pending': [
+            for (final c in pending)
+              samplePending(
+                id: c['id'] as int,
+                kind: c['kind'] as String,
+                itemId: c['item_id'] as String,
+                action: c['action'] as String,
+              ),
+          ],
+        }),
         200,
       );
     }
@@ -41,7 +58,9 @@ Future<List<http.Request>> pumpFromHome(
     }
     return jsonResponse(
       jsonEncode(
-        putStatus == 200 ? {'version': 'v2'} : {'detail': 'version_conflict'},
+        putStatus == 200
+            ? {'version': 'v2', 'pending': 2}
+            : {'detail': 'version_conflict'},
       ),
       putStatus,
     );
@@ -150,7 +169,9 @@ void main() {
     expect(find.byKey(const Key('add-file')), findsOneWidget);
   });
 
-  testWidgets('đổi tên project → dirty → Lưu gửi base_version', (tester) async {
+  testWidgets('đổi tên project → dirty → Gửi duyệt gửi base_version', (
+    tester,
+  ) async {
     final requests = await pumpFromHome(tester);
     await renameTheme(tester, 'Tên mới');
     expect(find.text('Tên mới'), findsOneWidget);
@@ -158,11 +179,44 @@ void main() {
 
     await tester.tap(find.byKey(const Key('admin-save')));
     await tester.pumpAndSettle();
-    final put = requests.last;
+    final put = requests.lastWhere((r) => r.method == 'PUT');
     expect(put.method, 'PUT');
     expect((jsonDecode(put.body) as Map)['base_version'], 'v1');
     expect(find.text('Đã đồng bộ'), findsOneWidget);
-    expect(find.text('Đã lưu'), findsOneWidget);
+    expect(find.text('Đã gửi duyệt 2 mục'), findsOneWidget);
+    expect(find.text('Gửi duyệt'), findsOneWidget);
+    expect(find.text('Lưu'), findsNothing);
+  });
+
+  testWidgets('nút "Chờ duyệt (N)" hiện số mục và push /admin/review', (
+    tester,
+  ) async {
+    await pumpFromHome(
+      tester,
+      pending: [
+        sampleChange(id: 1),
+        sampleChange(id: 2, kind: 'module', itemId: 'm1'),
+      ],
+    );
+    expect(find.byKey(const Key('admin-review-button')), findsOneWidget);
+    expect(find.text('Chờ duyệt (2)'), findsOneWidget);
+    // Chỉ project có mục chờ mới có nhãn.
+    expect(find.byKey(const Key('theme-t1-pending')), findsOneWidget);
+    expect(find.text('chờ duyệt'), findsOneWidget);
+
+    await tapKey(tester, 'admin-review-button');
+    expect(
+      appRouter.routerDelegate.currentConfiguration.last.matchedLocation,
+      '/admin/review',
+    );
+  });
+
+  testWidgets('không có mục chờ → "Chờ duyệt (0)", không có nhãn', (
+    tester,
+  ) async {
+    await pumpFromHome(tester);
+    expect(find.text('Chờ duyệt (0)'), findsOneWidget);
+    expect(find.byKey(const Key('theme-t1-pending')), findsNothing);
   });
 
   testWidgets('thêm project qua nút "+ Thêm project"', (tester) async {
@@ -378,6 +432,39 @@ void main() {
     expect(find.byKey(const Key('admin-tree')), findsOneWidget);
     expect(find.byKey(const Key('theme-t1-card')), findsOneWidget);
     expect(find.byKey(const Key('module-m1-card')), findsNothing);
+  });
+
+  testWidgets('nhãn "chờ duyệt" ở thẻ module, file và bài', (tester) async {
+    await pumpFromHome(
+      tester,
+      pending: [
+        sampleChange(id: 1, kind: 'module', itemId: 'm1'),
+        sampleChange(id: 2, kind: 'file', itemId: 'f1'),
+        sampleChange(id: 3, kind: 'exercise', itemId: 'e1'),
+      ],
+    );
+    appRouter.go('/admin/theme/t1');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('module-m1-pending')), findsOneWidget);
+
+    appRouter.go('/admin/module/m1');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('file-f1-pending')), findsOneWidget);
+    expect(find.byKey(const Key('exercise-e1-pending')), findsOneWidget);
+    expect(find.byKey(const Key('exercise-e2-pending')), findsNothing);
+  });
+
+  testWidgets('không có mục chờ → thẻ module/file/bài không có nhãn', (
+    tester,
+  ) async {
+    await pumpFromHome(tester);
+    appRouter.go('/admin/theme/t1');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('module-m1-pending')), findsNothing);
+    appRouter.go('/admin/module/m1');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('file-f1-pending')), findsNothing);
+    expect(find.byKey(const Key('exercise-e1-pending')), findsNothing);
   });
 
   testWidgets('deep link module: breadcrumb theme/projects dùng go()', (

@@ -1,5 +1,5 @@
 """`/mcp` qua HTTP thật (TestClient + lifespan): cổng 401 trước SDK (INV-05), không rơi về chế độ mở hay
-token app (INV-03), ghi đúng một đường + hiện ở /content (INV-02), Admin cầm version cũ nhận 409
+token app (INV-03), ghi vào hàng chờ duyệt, không đụng /content (INV-02), Admin cầm version cũ nhận 409
 (INV-01), thu hồi có hiệu lực ngay (INV-04)."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from contextlib import contextmanager
 import httpx
 import pytest
 
-from app import mcp_auth, mcp_server
+from app import mcp_auth, mcp_server, review
 from app.content_api import read_content
 from app.mcp_access import allow, revoke
 from app.mcp_auth import JwksCache
@@ -203,21 +203,38 @@ def test_dry_run_does_not_write(granted, signer, loaded_session, content_data):
     assert result["dry_run"] is True
     assert _admin_version(granted) == before
     assert lesson["id"] not in read_content(loaded_session)["exercises"]
+    assert review.pending_rows(loaded_session) == []
 
 
-def test_create_lesson_shows_in_content_and_stale_admin_gets_409(granted, signer, loaded_session, content_data):
+def test_create_lesson_goes_to_review_queue_and_stale_admin_gets_409(granted, signer, loaded_session, content_data):
     token = login(granted, email=ADMIN).json()["token"]
     stale = granted.get("/api/admin/content", headers=bearer(token)).json()
+    live_before = granted.get("/content").json()
     lesson = _new_lesson(content_data)
     file_id = _first_file(content_data)
     result = _data(call(granted, signer, "create_lesson", file_id=file_id, lesson=lesson))
-    assert result["ok"] and result["version"] != stale["version"]
-    # INV-02: app thấy bài qua /content.
-    public = granted.get("/content").json()
-    assert lesson["id"] in public["exercises"] and "judge" not in public["exercises"][lesson["id"]]
-    # INV-01: màn Admin cầm version cũ không ghi đè được bài Claude vừa tạo.
+    assert result["ok"] and result["version"] != stale["version"] and result["pending"] >= 1
+    assert "hàng chờ duyệt" in result["message"]
+    # INV-02: nội dung đang chạy KHÔNG đổi; có mục pending đúng kind/action.
+    assert granted.get("/content").json() == live_before
+    assert lesson["id"] not in read_content(loaded_session)["exercises"]
+    rows = review.pending_rows(loaded_session)
+    row = next(r for r in rows if (r.kind, r.item_id) == ("exercise", lesson["id"]))
+    assert row.action == "create" and row.author == f"mcp:{SUB} ({ADMIN})"
+    # INV-01: màn Admin cầm version cũ không ghi đè được bài Claude vừa gửi.
     r = granted.put("/api/admin/content", json={"base_version": stale["version"], "content": stale["content"]}, headers=bearer(token))
     assert r.status_code == 409
+
+
+def test_second_call_sees_pending_of_first(granted, signer, loaded_session, content_data):
+    lesson = _new_lesson(content_data)
+    _data(call(granted, signer, "create_lesson", file_id=_first_file(content_data), lesson=lesson))
+    seen = _data(call(granted, signer, "get_lesson", lesson_id=lesson["id"]))
+    assert seen["id"] == lesson["id"]
+    # Cập nhật bài đang chờ: vẫn một mục pending cho bài đó (create), không hai.
+    _data(call(granted, signer, "update_lesson", lesson_id=lesson["id"], changes={"title": "Tiêu đề mới"}))
+    rows = [r for r in review.pending_rows(loaded_session) if (r.kind, r.item_id) == ("exercise", lesson["id"])]
+    assert len(rows) == 1 and rows[0].action == "create" and rows[0].after["fields"]["title"] == "Tiêu đề mới"
 
 
 def test_invalid_lesson_is_tool_error_and_nothing_written(granted, signer, content_data):
@@ -243,6 +260,32 @@ def test_create_project_module_file_chain(granted, signer, loaded_session):
     assert _data(call(granted, signer, "create_file", module_id="zz-sub", file={"id": "zz-file", "name": "main.py"}))["ok"]
     tree = _data(call(granted, signer, "get_project", project_id="zz-proj"))
     assert tree["modules"][0]["modules"][0]["files"][0]["id"] == "zz-file"
+    assert "zz-proj" not in [t["id"] for t in granted.get("/content").json()["themes"]]
+    assert {("project", "zz-proj"), ("module", "zz-mod"), ("module", "zz-sub"), ("file", "zz-file")} <= {
+        (r.kind, r.item_id) for r in review.pending_rows(loaded_session)
+    }
+
+
+def test_lesson_in_pending_file_then_approve_in_order(granted, signer, loaded_session, content_data):
+    """Tạo file rồi tạo bài trong file đó (cả hai đang chờ) — sau đó admin duyệt cha trước con thì bài lên đúng chỗ."""
+    project = {"id": "zz-proj", "name": "Dự án thử", "description": "mô tả", "tags": ["python"]}
+    first = {"id": "zz-mod", "name": "Module 1", "description": "m1"}
+    assert _data(call(granted, signer, "create_project", project=project, first_module=first))["ok"]
+    assert _data(call(granted, signer, "create_file", module_id="zz-mod", file={"id": "zz-file", "name": "main.py"}))["ok"]
+    src = next(k for k, e in content_data["exercises"].items() if e["class_name"] is None)  # project mới chưa có sơ đồ
+    lesson = _new_lesson({"exercises": {src: content_data["exercises"][src]}})
+    assert _data(call(granted, signer, "create_lesson", file_id="zz-file", lesson=lesson))["ok"]
+    assert _data(call(granted, signer, "get_lesson", lesson_id=lesson["id"]))["id"] == lesson["id"]
+    rows = {r.kind: r for r in review.pending_rows(loaded_session)}
+    with pytest.raises(review.DependencyMissing):
+        review.approve(loaded_session, rows["exercise"].id, "boss")
+    result = review.approve(loaded_session, rows["project"].id, "boss")  # kéo theo module cấp 1 mới
+    assert result["also"] == [rows["module"].id] and rows["module"].status == "approved"
+    for kind in ("file", "exercise"):
+        review.approve(loaded_session, rows[kind].id, "boss")
+    public = granted.get("/content").json()
+    theme = next(t for t in public["themes"] if t["id"] == "zz-proj")
+    assert theme["topics"][0]["files"][0]["exercise_ids"] == [lesson["id"]]
 
 
 def test_revoke_takes_effect_on_next_call(granted, signer, loaded_session):
@@ -300,7 +343,7 @@ def test_concurrent_requests_do_not_share_claims(granted, signer, monkeypatch):
 
 def test_write_between_validate_and_lock_is_refused(granted, signer, loaded_session, content_data, monkeypatch):
     # Người khác lưu đúng lúc tool vừa validate xong (trước khi có khoá): tool phải từ chối, không
-    # ghi đè. Bỏ lock_content hoặc bỏ bước so version dưới khoá thì test này đỏ.
+    # ghi đè. Bỏ lock_content hoặc bỏ bước so version dưới khoá trong review.submit thì test này đỏ.
     from app import content_ops
     from app.export_content import export_content
     from app.load_content import load_content as real_load
@@ -311,11 +354,11 @@ def test_write_between_validate_and_lock_is_refused(granted, signer, loaded_sess
         competing = content_ops.update_project(export_content(session), content_data["themes"][0]["id"], {"name": "Người khác vừa sửa"})
         real_load(session, competing, validated=True)
 
-    monkeypatch.setattr(mcp_server, "lock_content", lock_then_competing_write)
+    monkeypatch.setattr(review, "lock_content", lock_then_competing_write)
     lesson = _new_lesson(content_data)
     result = call(granted, signer, "create_lesson", file_id=_first_file(content_data), lesson=lesson)
     # Session test dùng chung nên rollback của tool xoá cả dữ liệu fixture — chỉ kiểm được thông điệp.
-    assert result["isError"] and "người khác sửa" in _text(result)
+    assert result["isError"] and "Người khác vừa sửa" in _text(result)
 
 
 def test_gate_rejects_without_reading_body(env):

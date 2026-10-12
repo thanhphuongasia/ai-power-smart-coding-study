@@ -55,13 +55,14 @@ class JudgeResult {
   final String? unavailableReason;
 }
 
-/// Gọi backend `POST /run`. Mọi lỗi mạng/HTTP/JSON đều trả
+/// Gọi backend `POST /run` (hoặc [_path] khác). Mọi lỗi mạng/HTTP/JSON đều trả
 /// [JudgeStatus.unavailable] chứ không ném exception.
 class JudgeClient {
   JudgeClient({
     http.Client? httpClient,
     Uri? baseUrl,
     this._timeout = const Duration(seconds: 20),
+    this._path = '/run',
   }) : _http = httpClient ?? http.Client(),
        _baseUrl = baseUrl ?? apiBaseUrl();
 
@@ -69,11 +70,15 @@ class JudgeClient {
   final http.Client _http;
   final Uri _baseUrl;
 
+  /// Đường dẫn endpoint chấm. Mặc định `/run` (học viên); admin xem trước bài
+  /// nháp dùng `/api/admin/run`.
+  final String _path;
+
   Future<JudgeResult> run(String exerciseId, String code) async {
     try {
       final response = await _http
           .post(
-            _baseUrl.resolve('/run'),
+            _baseUrl.resolve(_path),
             headers: const {'content-type': 'application/json'},
             body: jsonEncode({'exercise_id': exerciseId, 'code': code}),
           )

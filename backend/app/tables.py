@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -198,3 +198,35 @@ class McpAccess(Base):
     label: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ContentChange(Base):
+    """Một thay đổi nội dung CHỜ DUYỆT (hoặc đã duyệt/bỏ — giữ làm lịch sử), xem `app.review`.
+
+    Mỗi dòng là một mục (project/module/file/bài) so với live. Tối đa một dòng `pending` cho mỗi mục
+    (partial unique index). Không FK tới bảng nội dung: `load_content` xoá-rồi-ghi toàn bộ live.
+    """
+
+    __tablename__ = "content_changes"
+    __table_args__ = (
+        CheckConstraint("kind IN ('project','module','file','exercise')", name="ck_content_changes_kind"),
+        CheckConstraint("action IN ('create','update','delete')", name="ck_content_changes_action"),
+        CheckConstraint("status IN ('pending','approved','rejected')", name="ck_content_changes_status"),
+        Index(
+            "uq_content_changes_pending_item", "kind", "item_id", unique=True, postgresql_where=text("status = 'pending'")
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    item_id: Mapped[str] = mapped_column(String(100))
+    action: Mapped[str] = mapped_column(String(10))
+    # Mục trên live lúc gửi (null nếu create) / mục đề xuất (null nếu delete) — shape ở app.review.items.
+    before: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    after: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), index=True)
+    author: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decided_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -11,8 +11,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
 
 import '../../app/theme.dart';
+import '../../data/api_client.dart';
 import '../../data/content_providers.dart';
+import '../../data/judge_client.dart';
+import '../../data/progress_api.dart';
+import '../../domain/content.dart';
 import '../../domain/models.dart';
+import '../review/review_controller.dart';
+import '../stats/activity.dart';
 import '../../shared/widgets.dart';
 import 'challenge_tab.dart';
 import 'code_tab.dart';
@@ -20,24 +26,80 @@ import 'session_controller.dart';
 import 'session_providers.dart';
 import 'solution_tab.dart';
 
-void _leave(BuildContext context) {
-  if (context.canPop()) {
+void _leave(BuildContext context, {bool preview = false}) {
+  if (preview) {
+    // Preview mở bằng Navigator thường (không phụ thuộc GoRouter).
+    Navigator.of(context).maybePop();
+  } else if (context.canPop()) {
     context.pop();
   } else {
     context.go('/');
   }
 }
 
+/// Session không đếm giờ: preview không có idle/tự thoát.
+class _PreviewSession extends SessionController {
+  _PreviewSession(super.exerciseId);
+
+  @override
+  void start() {}
+}
+
+/// Admin xem trước bài [exerciseId] của [content] (bản nháp) đúng như học
+/// viên thấy. Scope lồng cô lập hoàn toàn khỏi tiến độ thật: không đẩy
+/// progress, draft/hint/solution không trộn, Run gọi `/api/admin/run`.
+class ExercisePreview extends StatelessWidget {
+  const ExercisePreview({
+    super.key,
+    required this.content,
+    required this.exerciseId,
+  });
+
+  final Content content;
+  final String exerciseId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: [
+        contentIndexProvider.overrideWithValue(content),
+        exerciseUnlockedProvider.overrideWith((ref, id) => true),
+        progressSyncEnabledProvider.overrideWithValue(false),
+        loadedProgressProvider.overrideWithValue(null),
+        progressProvider.overrideWith(ProgressController.new),
+        activityProvider.overrideWith(ActivityController.new),
+        reviewScheduleProvider.overrideWith(ReviewController.new),
+        sessionProvider.overrideWith2(_PreviewSession.new),
+        judgeClientProvider.overrideWith(
+          (ref) => JudgeClient(
+            httpClient: ref.watch(apiClientProvider),
+            path: '/api/admin/run',
+          ),
+        ),
+      ],
+      child: ExerciseScreen(exerciseId: exerciseId, preview: true),
+    );
+  }
+}
+
 class ExerciseScreen extends ConsumerWidget {
-  const ExerciseScreen({super.key, required this.exerciseId});
+  const ExerciseScreen({
+    super.key,
+    required this.exerciseId,
+    this.preview = false,
+  });
 
   final String exerciseId;
+
+  /// Chỉ [ExercisePreview] đặt true: banner, không có "bài tiếp", back bằng
+  /// Navigator.
+  final bool preview;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unlocked = ref.watch(exerciseUnlockedProvider(exerciseId));
     if (!unlocked) return _LockedView(exerciseId: exerciseId);
-    return _UnlockedView(exerciseId: exerciseId);
+    return _UnlockedView(exerciseId: exerciseId, preview: preview);
   }
 }
 
@@ -100,9 +162,10 @@ class _LockedView extends StatelessWidget {
 }
 
 class _UnlockedView extends ConsumerStatefulWidget {
-  const _UnlockedView({required this.exerciseId});
+  const _UnlockedView({required this.exerciseId, required this.preview});
 
   final String exerciseId;
+  final bool preview;
 
   @override
   ConsumerState<_UnlockedView> createState() => _UnlockedViewState();
@@ -170,7 +233,7 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
                   onPressed: () {
                     _idleDialogOpen = false;
                     Navigator.of(dialogContext).pop();
-                    if (mounted) _leave(context);
+                    if (mounted) _leave(context, preview: widget.preview);
                   },
                 ),
                 PrimaryButton(
@@ -210,7 +273,7 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
           _idleDialogOpen = false;
           Navigator.of(context, rootNavigator: true).pop();
         }
-        _leave(context);
+        _leave(context, preview: widget.preview);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Đã lưu tiến độ')));
@@ -236,6 +299,21 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
           body: SafeArea(
             child: Column(
               children: [
+                if (widget.preview)
+                  Container(
+                    key: const Key('preview-banner'),
+                    width: double.infinity,
+                    color: p.accent,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpace.s1,
+                      horizontal: AppSpace.s4,
+                    ),
+                    child: Text(
+                      'Xem trước — chưa duyệt',
+                      textAlign: TextAlign.center,
+                      style: AppText.label.copyWith(color: p.onAccent),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpace.s2,
@@ -249,7 +327,8 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
                         key: const Key('exercise-back'),
                         icon: const Icon(Icons.arrow_back),
                         tooltip: 'Quay lại',
-                        onPressed: () => _leave(context),
+                        onPressed: () =>
+                            _leave(context, preview: widget.preview),
                       ),
                       Expanded(
                         child: Column(
@@ -302,7 +381,7 @@ class _UnlockedViewState extends ConsumerState<_UnlockedView> {
                   child: TabBarView(
                     children: [
                       ChallengeTab(exercise: exercise),
-                      CodeTab(exercise: exercise),
+                      CodeTab(exercise: exercise, preview: widget.preview),
                       SolutionTab(exercise: exercise),
                     ],
                   ),
