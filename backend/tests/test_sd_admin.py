@@ -337,3 +337,151 @@ def test_only_admin_may_import_and_403_comes_before_422(db_session, client_for, 
     assert r.status_code == expected
     assert client.get("/api/admin/sd/docs", headers=h).status_code == expected
     assert client.put("/api/admin/sd/docs/x/status", json={"status": "draft"}, headers=h).status_code == expected
+
+
+# --- vòng 2 review: ReDoS heading, dòng tiếp nối, biên các trần, mutant còn sống ----------------
+
+BASE = "# T\n\n## C\n\n### S\n\nx\n"
+TASK_HEAD = "# T\n\n## C\n\n### S\n\nx\n\n## Thực chiến\n\n### t\n\nĐề: a\n\n"
+
+
+@pytest.mark.parametrize("pad", [" ", "\t"])
+def test_heading_with_thousands_of_blanks_is_linear(pad):
+    """`# a` + n khoảng trắng + `x` từng chạy bậc ba với regex lồng nhau (n=4000 mất 40s)."""
+    result, seconds = _timed("# a" + pad * 20_000 + "x\n\n## C\n\n### S\n\nx\n")
+    assert isinstance(result, MdError) and seconds < 1  # tiêu đề >200 ký tự bị từ chối, và nhanh
+    result, seconds = _timed("# a" + pad * 150 + "x\n\n## C\n\n### S\n\nx\n")
+    assert not isinstance(result, MdError) and seconds < 1
+
+
+def test_table_separator_check_is_linear_on_blank_lines():
+    result, seconds = _timed("# T\n\n## C\n\n### S\n\na | b\n" + " " * 900_000 + "\n")
+    assert seconds < 1 and not isinstance(result, MdError)
+
+
+@pytest.mark.parametrize(
+    "tail, needle",
+    [
+        ("Rubric:\n- ý :: k\n" + "x\n" * 400_000, "ý rubric dài quá"),
+        ("Gợi ý:\n- ý\n" + "x\n" * 400_000, "gợi ý dài quá"),
+        ("Rubric:\n- ý :: k\n\nĐáp án mẫu: S\n" + "x\n" * 400_000, "Đáp án mẫu» dài quá"),
+        ("Rubric:\n- ý :: " + ",".join(f"k{i}" for i in range(150_000)) + "\n", "tối đa 20 từ khoá"),
+        ("Rubric:\n" + "- ý :: k\n" * 120_000, "tối đa 12 ý rubric"),
+        ("Gợi ý:\n" + "- ý\n" * 120_000, "tối đa 5 gợi ý"),
+        ("Gợi ý:\n" * 20_000, "quá 300 dòng"),  # nhãn lặp không tích luỹ gì: chỉ trần số dòng chặn được
+    ],
+)
+def test_hostile_task_bodies_are_rejected_fast(tail, needle):
+    md = TASK_HEAD + tail
+    assert len(md) <= 1_100_000
+    result, seconds = _timed(md)
+    assert isinstance(result, MdError) and any(needle in e for e in result.errors), getattr(result, "errors", result)
+    assert seconds < 2
+
+
+@pytest.mark.parametrize(
+    "tail, needle",
+    [
+        ("Rubric:\n- ý :: k\n" + "- " + "a" * 301 + " :: k\n", "ý rubric dài quá"),
+        ("Rubric:\n- ý :: " + "k" * 61 + "\n", "mỗi từ khoá ≤60"),
+        ("Gợi ý:\n- " + "g" * 501 + "\nRubric:\n- ý :: k\n", "gợi ý dài quá"),
+        ("Rubric:\n- ý :: k\n\nĐáp án mẫu: " + "s" * 121 + "\n", "Đáp án mẫu» dài quá"),
+    ],
+)
+def test_each_task_field_has_its_own_length_cap(tail, needle):
+    with pytest.raises(MdError) as e:
+        parse_markdown(TASK_HEAD + tail)
+    assert any(needle in m for m in e.value.errors), e.value.errors
+
+
+def test_prompt_over_limit_is_rejected():
+    with pytest.raises(MdError) as e:
+        parse_markdown(TASK_HEAD.replace("Đề: a", "Đề: " + "a" * 4001) + "Rubric:\n- ý :: k\n")
+    assert any("«Đề:» dài quá" in m for m in e.value.errors)
+
+
+def test_unknown_reference_error_does_not_echo_unbounded_text():
+    with pytest.raises(MdError) as e:
+        parse_markdown(TASK_HEAD + "Rubric:\n- ý :: k\n\nĐáp án mẫu: " + "z" * 100)
+    assert all(len(m) < 300 for m in e.value.errors)
+
+
+def test_trailing_hash_is_kept_unless_it_is_a_closing_sequence():
+    doc = parse_markdown("# Dùng C#\n\n## C\n\n### Ngôn ngữ C#\n\nx\n\n### Mục ###\n\ny\n")
+    assert doc["title"] == "Dùng C#"
+    assert [s["title"] for s in doc["sections"]] == ["Ngôn ngữ C#", "Mục"]
+    assert doc["sections"][0]["id"] != doc["sections"][1]["id"]
+
+
+def _cards(n, prefix="p"):
+    return "".join(f"{prefix}{i}\n\n" for i in range(n))
+
+
+@pytest.mark.parametrize(
+    "md, ok",
+    [
+        ("# T\n\n## C\n\n### S\n\n" + _cards(200), True),  # đúng trần 200 card/section
+        ("# T\n\n## C\n\n### S\n\n" + _cards(201), False),
+        ("# T\n\n## Bối cảnh\n\n" + _cards(100) + "## C\n\n### S\n\nx\n", True),  # đúng trần 100 card bối cảnh
+        ("# T\n\n## Bối cảnh\n\n" + _cards(101) + "## C\n\n### S\n\nx\n", False),
+        ("# T\n\n## C\n\n" + "".join(f"### s{i}\n\n" + _cards(200, f"q{i}-") for i in range(15)), True),  # đúng 3000 card
+        ("# T\n\n## C\n\n" + "".join(f"### s{i}\n\n" + _cards(200, f"q{i}-") for i in range(15)) + "### z\n\nlẻ\n", False),
+        ("# T\n\n" + "".join(f"## c{i}\n\n### s\n\nx{i}\n\n" for i in range(50)), True),  # đúng 50 chương
+        ("# T\n\n" + "".join(f"## c{i}\n\n### s\n\nx{i}\n\n" for i in range(51)), False),
+        ("# T\n\n## C\n\n" + "".join(f"### s{i}\n\nx\n\n" for i in range(200)), True),  # đúng 200 section
+        ("# T\n\n## C\n\n" + "".join(f"### s{i}\n\nx\n\n" for i in range(201)), False),
+        (BASE + "\n## Thực chiến\n\n" + "".join(f"### t{i}\n\nĐề: a\n\nRubric:\n- ý :: k\n\n" for i in range(12)), True),  # đúng 12 task
+        (BASE + "\n## Thực chiến\n\n" + "".join(f"### t{i}\n\nĐề: a\n\nRubric:\n- ý :: k\n\n" for i in range(13)), False),
+    ],
+)
+def test_limits_are_inclusive_at_the_boundary(md, ok):
+    result, _ = _timed(md)
+    assert (not isinstance(result, MdError)) is ok, getattr(result, "errors", None)
+
+
+def test_card_title_and_length_caps():
+    with pytest.raises(MdError) as e:
+        parse_markdown("# T\n\n## C\n\n### " + "t" * 201 + "\n\nx\n")
+    assert any("tiêu đề dài quá 200" in m for m in e.value.errors)
+    with pytest.raises(MdError) as e:
+        parse_markdown(BASE + "\n" + "w" * 20_001 + "\n")
+    assert any("card quá dài" in m for m in e.value.errors)
+    assert parse_markdown(BASE + "\n" + "w" * 20_000 + "\n")["sections"][0]["cards"][1]["body"] == "w" * 20_000
+
+
+def test_card_id_ignores_title_but_depends_on_kind():
+    def only(body):
+        return parse_markdown("# T\n\n## C\n\n### S\n\n" + body)["sections"][0]["cards"][0]["id"]
+
+    assert only("#### A\n\nnội dung\n") == only("#### B\n\nnội dung\n") == only("nội dung\n")
+    assert only("```\nnội dung\n```\n") != only("nội dung\n")
+
+
+def test_crlf_and_bom_documents_parse_like_lf():
+    lf = parse_markdown(MINI)
+    assert parse_markdown(MINI.replace("\n", "\r\n")) == lf
+    assert parse_markdown("﻿" + MINI) == lf
+    assert parse_markdown(MINI.replace("\n", "\r")) == lf
+
+
+def test_lone_surrogate_is_rejected_not_a_server_error():
+    with pytest.raises(MdError) as e:
+        parse_markdown("# T\n\n## C\n\n### S\n\n\ud800\n")
+    assert any("NUL" in m or "surrogate" in m for m in e.value.errors)
+
+
+def test_markdown_size_is_counted_in_bytes_not_characters(admin):
+    client, h = admin
+    md = "# T\n\n## C\n\n### S\n\n" + "đ" * 600_000  # 600k ký tự nhưng ~1.2MB byte
+    r = _import(client, h, md)
+    assert r.status_code == 422 and any("quá lớn" in e for e in r.json()["errors"])
+
+
+def test_reimport_replaces_title_context_and_tasks(admin, db_session):
+    client, h = admin
+    first = "# Tên cũ\n\n## Bối cảnh\n\nCũ.\n\n## C\n\n### S\n\nx\n"
+    second = "# Tên mới\n\n## Bối cảnh\n\nMới.\n\n## C\n\n### S\n\nx\n"
+    assert _import(client, h, first, id="doc-a").status_code == 200
+    assert _import(client, h, second, id="doc-a").status_code == 200
+    doc = db_session.get(SdDoc, "doc-a")
+    assert doc.title == "Tên mới" and [c["body"] for c in doc.context] == ["Mới."]

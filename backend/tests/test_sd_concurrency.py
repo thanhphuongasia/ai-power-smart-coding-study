@@ -87,3 +87,73 @@ def test_concurrent_submits_get_distinct_consecutive_numbers_and_respect_quota(c
     with Session() as s:
         numbers = sorted(s.scalars(select(SdAttempt.n).where(SdAttempt.user_id == uid, SdAttempt.doc_id == DOC)))
     assert numbers == list(range(1, QUOTA + 1))
+
+
+def test_concurrent_imports_of_the_same_document_serialise(db_engine):
+    """Hai admin nhập cùng một tài liệu đúng lúc: khoá advisory theo id tài liệu tuần tự hoá việc xoá-ghi.
+    Bỏ khoá thì các transaction đè nhau trên unique (doc_id, position) và có request trả 422."""
+    from app.auth import require_admin
+    from app.sd.admin import router as _  # noqa: F401  (đảm bảo router đã nạp)
+
+    Session = sessionmaker(bind=db_engine)
+    md = open(os.path.join(BACKEND_DIR, "content", "sd", "airline-reservation.md"), encoding="utf-8").read()
+
+    def _session():
+        with Session() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = _session
+    app.dependency_overrides[require_admin] = lambda: CurrentUser(id=1, email="conc-admin@example.com", roles=("admin",), session_id=0)
+    barrier = threading.Barrier(8)
+
+    def imp(_i):
+        client = TestClient(app)
+        barrier.wait()
+        return client.post("/api/admin/sd/docs", json={"id": "conc-import", "markdown": md}).status_code
+
+    try:
+        with ThreadPoolExecutor(8) as pool:
+            codes = list(pool.map(imp, range(8)))
+        assert codes == [200] * 8, codes
+        with Session() as s:
+            assert s.get(SdDoc, "conc-import") is not None
+            assert len(s.scalars(select(SdSection).where(SdSection.doc_id == "conc-import")).all()) == 9
+            assert len(s.scalars(select(SdTask).where(SdTask.doc_id == "conc-import")).all()) == 6
+    finally:
+        app.dependency_overrides.clear()
+        with Session() as s:
+            s.execute(delete(SdTask).where(SdTask.doc_id == "conc-import"))
+            s.execute(delete(SdSection).where(SdSection.doc_id == "conc-import"))
+            s.execute(delete(SdDoc).where(SdDoc.id == "conc-import"))
+            s.commit()
+
+
+def test_concurrent_graders_cannot_both_write_the_first_review(committed_world):
+    """Hai người chấm cùng đọc bản `auto`: khoá hàng (FOR UPDATE) làm người sau thấy `reviewed` và bị từ chối."""
+    from app.sd.attempts import SdError, submit_feedback
+
+    Session, uid = committed_world
+    with Session() as s:
+        row = SdAttempt(user_id=uid, doc_id=DOC, task_id="api-design", n=1, answer="a", auto_result={"hits": [True] * 4, "score": 100})
+        s.add(row)
+        s.commit()
+        attempt_id = row.id
+    barrier = threading.Barrier(6)
+
+    def grade(i: int) -> str:
+        with Session() as s:
+            barrier.wait()
+            try:
+                submit_feedback(s, attempt_id, feedback=f"người chấm {i}", verdicts=[{"ok": True, "note": ""}] * 4, reviewer=f"t{i}")
+                s.commit()
+                return "ok"
+            except SdError:
+                s.rollback()
+                return "refused"
+
+    with ThreadPoolExecutor(6) as pool:
+        results = list(pool.map(grade, range(6)))
+    assert results.count("ok") == 1 and results.count("refused") == 5, results
+    with Session() as s:
+        row = s.get(SdAttempt, attempt_id)
+        assert row.status == "reviewed" and row.feedback.startswith("người chấm")

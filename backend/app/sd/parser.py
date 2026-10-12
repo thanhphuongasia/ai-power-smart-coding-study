@@ -37,9 +37,13 @@ MAX_KEYWORDS = 20
 MAX_KEYWORD_CHARS = 60
 MAX_RUBRIC_TEXT = 300
 MAX_PROMPT_CHARS = 4000
+MAX_HINT_CHARS = 500
+MAX_REF_CHARS = 120
+MAX_TASK_LINES = 300  # số dòng có chữ trong MỘT task: chặn nối chuỗi/từ khoá bậc hai trên đầu vào xấu
 MAX_ERRORS = 50
 
-_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+_HEADING = re.compile(r"^(#{1,6})[ \t]+(\S.*)$")
+_SEP_CELL = re.compile(r":?-+:?")
 _LABEL = re.compile(r"^(đề|prompt|gợi ý|hints?|rubric|đáp án mẫu|reference)[ \t]*:[ \t]*(.*)$", re.IGNORECASE)
 _BULLET = re.compile(r"^[ \t]*[-*+][ \t]+(.*)$")
 _LABEL_KIND = {
@@ -101,7 +105,31 @@ def _card_id(kind: str, body: str) -> str:
 
 
 _FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
-_TABLE_SEP = re.compile(r"^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$")
+
+
+def _parse_heading(line: str) -> tuple[int, str] | None:
+    """(cấp, chữ) nếu là heading ATX. Dãy '#' đóng chỉ bị bỏ khi đứng sau khoảng trắng (CommonMark): 'C#' giữ nguyên.
+    Viết bằng mã tuyến tính, không dùng regex lồng nhau."""
+    m = _HEADING.match(line)
+    if not m:
+        return None
+    text = m.group(2).rstrip(" \t")
+    j = len(text)
+    while j and text[j - 1] == "#":
+        j -= 1
+    if j < len(text) and (j == 0 or text[j - 1] in " \t"):
+        text = text[:j].rstrip(" \t")
+    return (len(m.group(1)), text) if text else None
+
+
+def _is_table_sep(line: str) -> bool:
+    """Dòng phân cách bảng `---|:---:|---`, kiểm bằng cắt chuỗi + fullmatch từng ô (tuyến tính)."""
+    t = line.strip()
+    if "-" not in t:
+        return False
+    t = t[1:] if t.startswith("|") else t
+    t = t[:-1] if t.endswith("|") else t
+    return all(_SEP_CELL.fullmatch(c.strip()) for c in t.split("|"))
 
 
 def _fence_open(line: str) -> tuple[str, int, str] | None:
@@ -129,8 +157,7 @@ def _starts_table(entries: list, i: int) -> bool:
         "|" in line
         and i + 1 < len(entries)
         and entries[i + 1][0] == "line"
-        and "-" in entries[i + 1][2]
-        and _TABLE_SEP.match(entries[i + 1][2]) is not None
+        and _is_table_sep(entries[i + 1][2])
     )
 
 
@@ -160,9 +187,6 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
         cards.append(card)
 
     while i < n:
-        if len(cards) >= limit:
-            errors.append(f"{where}: quá {limit} card (giới hạn), dừng đọc tiếp")
-            break
         e = entries[i]
         if e[0] == "title":
             title = e[1]
@@ -172,6 +196,11 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
         if not line.strip():
             i += 1
             continue
+        if len(cards) >= limit:
+            errors.append(f"{where}: quá {limit} card (giới hạn), dừng đọc tiếp")
+            break
+        if len(errors) > MAX_ERRORS:
+            break
         fence = _fence_open(line)
         if fence:
             ch, size, info_text = fence
@@ -222,78 +251,110 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
     return cards
 
 
-def _task(name: str, entries: list[Entry], errors: list[str]) -> dict | None:
+def _task(name: str, entries: list[Entry], errors: list[str]) -> dict:
+    """Đọc một task. Mọi phần tích luỹ (đề, gợi ý, ý rubric, từ khoá, đáp án mẫu) bị chặn độ dài TRƯỚC khi nối
+    thêm và cả task bị chặn số dòng: 1MB dòng tiếp nối không còn nối chuỗi/dedupe bậc hai."""
     where = f"task «{name}»"
     prompt: list[str] = []
+    prompt_len = 0
     hints: list[str] = []
     rubric: list[dict] = []
     ref = ""
     kind = ""
+    lines = 0
     for e in entries:
+        if len(errors) > MAX_ERRORS:
+            break
         if e[0] != "line":
             continue
         _, lineno, line = e
-        if not line.strip():
+        s = line.strip()
+        if not s:
             continue
-        m = _LABEL.match(line.strip())
+        lines += 1
+        if lines > MAX_TASK_LINES:
+            errors.append(f"{where}: quá {MAX_TASK_LINES} dòng (giới hạn), dừng đọc tiếp")
+            break
+        m = _LABEL.match(s)
         if m:
             kind = _LABEL_KIND[m.group(1).lower()]
             rest = m.group(2).strip()
             if kind == "prompt" and rest:
                 prompt.append(rest)
+                prompt_len += len(rest) + 1
             elif kind == "ref":
+                if len(rest) > MAX_REF_CHARS:
+                    errors.append(f"{where}: «Đáp án mẫu» dài quá {MAX_REF_CHARS} ký tự (dòng {lineno})")
+                    break
                 ref = rest
             elif rest:
                 errors.append(f"{where}: sau nhãn «{m.group(1)}:» phải xuống dòng rồi liệt kê bằng '- ' (dòng {lineno})")
+            if prompt_len > MAX_PROMPT_CHARS:
+                errors.append(f"{where}: «Đề:» dài quá {MAX_PROMPT_CHARS} ký tự")
+                break
             continue
         b = _BULLET.match(line)
         if kind == "prompt":
-            prompt.append(line.strip())
+            prompt.append(s)
+            prompt_len += len(s) + 1
+            if prompt_len > MAX_PROMPT_CHARS:
+                errors.append(f"{where}: «Đề:» dài quá {MAX_PROMPT_CHARS} ký tự")
+                break
         elif kind == "hints":
             if b:
-                hints.append(b.group(1).strip())
+                if len(hints) >= MAX_HINTS:
+                    errors.append(f"{where}: tối đa {MAX_HINTS} gợi ý (dòng {lineno})")
+                    break
+                piece = b.group(1).strip()
+                if len(piece) > MAX_HINT_CHARS:
+                    errors.append(f"{where}: một gợi ý dài quá {MAX_HINT_CHARS} ký tự (dòng {lineno})")
+                    break
+                hints.append(piece)
             elif hints:
-                hints[-1] += " " + line.strip()
+                if len(hints[-1]) + 1 + len(s) > MAX_HINT_CHARS:
+                    errors.append(f"{where}: một gợi ý dài quá {MAX_HINT_CHARS} ký tự (dòng {lineno})")
+                    break
+                hints[-1] += " " + s
         elif kind == "rubric":
             if not b:
-                if rubric and "::" not in line:
-                    rubric[-1]["text"] += " " + line.strip()
+                if rubric and "::" not in s:
+                    if len(rubric[-1]["text"]) + 1 + len(s) > MAX_RUBRIC_TEXT:
+                        errors.append(f"{where}: ý rubric dài quá {MAX_RUBRIC_TEXT} ký tự (dòng {lineno})")
+                        break
+                    rubric[-1]["text"] += " " + s
                 else:
                     errors.append(f"{where}: dòng rubric phải bắt đầu bằng '- ' (dòng {lineno})")
                 continue
+            if len(rubric) >= MAX_RUBRIC:
+                errors.append(f"{where}: tối đa {MAX_RUBRIC} ý rubric (dòng {lineno})")
+                break
             text, sep, kws = b.group(1).partition("::")
-            keywords: list[str] = []
-            for k in kws.split(","):
-                k = k.strip().lower()
-                if k and k not in keywords:
-                    keywords.append(k)
+            if len(kws) > MAX_KEYWORDS * (MAX_KEYWORD_CHARS + 2):  # chặn TRƯỚC khi tách/dedupe chuỗi khổng lồ
+                errors.append(f"{where}: tối đa {MAX_KEYWORDS} từ khoá, mỗi từ khoá ≤{MAX_KEYWORD_CHARS} ký tự (dòng {lineno})")
+                continue
+            keywords = list(dict.fromkeys(k for k in (x.strip().lower() for x in kws.split(",")) if k))
             if not sep or not keywords or not text.strip():
                 errors.append(f"{where}: rubric cần dạng '- ý cần có :: từ khoá, từ khoá' (dòng {lineno})")
                 continue
             if len(keywords) > MAX_KEYWORDS or any(len(k) > MAX_KEYWORD_CHARS for k in keywords):
-                errors.append(
-                    f"{where}: tối đa {MAX_KEYWORDS} từ khoá, mỗi từ khoá ≤{MAX_KEYWORD_CHARS} ký tự (dòng {lineno})"
-                )
+                errors.append(f"{where}: tối đa {MAX_KEYWORDS} từ khoá, mỗi từ khoá ≤{MAX_KEYWORD_CHARS} ký tự (dòng {lineno})")
                 continue
             if len(text.strip()) > MAX_RUBRIC_TEXT:
                 errors.append(f"{where}: ý rubric dài quá {MAX_RUBRIC_TEXT} ký tự (dòng {lineno})")
                 continue
             rubric.append({"text": text.strip(), "keywords": keywords})
         elif kind == "ref":
-            ref = (ref + " " + line.strip()).strip()
+            if len(ref) + 1 + len(s) > MAX_REF_CHARS:
+                errors.append(f"{where}: «Đáp án mẫu» dài quá {MAX_REF_CHARS} ký tự (dòng {lineno})")
+                break
+            ref = (ref + " " + s).strip()
         else:
             errors.append(f"{where}: nội dung trước nhãn «Đề:» (dòng {lineno})")
     text_prompt = "\n".join(prompt).strip()
     if not text_prompt:
         errors.append(f"{where}: thiếu «Đề:»")
-    if len(text_prompt) > MAX_PROMPT_CHARS:
-        errors.append(f"{where}: «Đề:» dài quá {MAX_PROMPT_CHARS} ký tự")
     if not rubric:
         errors.append(f"{where}: thiếu «Rubric:» (cần ít nhất một ý)")
-    if len(rubric) > MAX_RUBRIC:
-        errors.append(f"{where}: tối đa {MAX_RUBRIC} ý rubric")
-    if len(hints) > MAX_HINTS:
-        errors.append(f"{where}: tối đa {MAX_HINTS} gợi ý")
     return {"name": name, "prompt": text_prompt, "hints": hints, "rubric": rubric, "ref": ref}
 
 
@@ -319,8 +380,8 @@ def parse_markdown(md: str) -> dict:
                 fence = None
             items.append(("line", no, line))
             continue
-        m = _HEADING.match(line)
-        items.append(("heading", no, len(m.group(1)), m.group(2).strip()) if m else ("line", no, line))
+        h = _parse_heading(line)
+        items.append(("heading", no, h[0], h[1]) if h else ("line", no, line))
 
     title = ""
     pre: list[int] = []
@@ -338,6 +399,8 @@ def parse_markdown(md: str) -> dict:
         return MdError([f"dòng {no}: quá {limit} {what} (giới hạn), dừng đọc tiếp"])
 
     for it in items:
+        if len(errors) > MAX_ERRORS:
+            raise MdError(errors[:MAX_ERRORS] + [f"… và {len(errors) - MAX_ERRORS} lỗi nữa"])
         if it[0] == "heading":
             _, no, level, text = it
             if len(text) > MAX_TITLE_CHARS:
@@ -436,14 +499,12 @@ def parse_markdown(md: str) -> dict:
     seen_tasks: dict[str, int] = {}
     for t in tasks_raw:
         parsed = _task(t["name"], t["entries"], errors)
-        if parsed is None:
-            continue
         ref = parsed.pop("ref")
         ref_id = None
         if ref:
             ref_id = by_slug.get(slugify(ref)) or by_title.get(slugify(ref))
             if ref_id is None:
-                errors.append(f"task «{t['name']}»: «Đáp án mẫu: {ref}» không khớp section nào")
+                errors.append(f"task «{t['name']}»: «Đáp án mẫu: {ref[:80]}» không khớp section nào")
         tasks.append({"id": _unique(slugify(t["name"]), seen_tasks), "position": len(tasks), **parsed, "ref_section_id": ref_id})
 
     if errors:

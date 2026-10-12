@@ -195,11 +195,25 @@ def test_rubric_changes_after_submit_do_not_rewrite_history(world, granted, sign
     assert not call(granted, signer, "sd_submit_feedback", attempt_id=a["id"], verdicts=_verdicts([True] * 4), feedback="ok").get("isError")
 
 
-def test_queue_limit_is_clamped(world, granted, signer):
-    for text in (HALF, GOOD):
+def test_queue_limit_is_clamped(world, granted, signer, monkeypatch):
+    from app.sd import attempts as sd_attempts
+
+    monkeypatch.setattr(sd_attempts, "MAX_QUEUE", 2)  # trần thật là 50: hạ xuống để thử bằng 3 dòng
+    for text in (HALF, GOOD, "chưa biết"):
         _submit(world, text)
     assert len(_data(call(granted, signer, "sd_list_attempts", limit=0))) == 1
     assert len(_data(call(granted, signer, "sd_list_attempts", limit=100000))) == 2
+
+
+def test_queue_is_ordered_by_submission_time_not_by_id(world, granted, signer):
+    from datetime import datetime, timedelta, timezone
+
+    ids = [_submit(world, t)["id"] for t in (HALF, GOOD, "chưa biết")]
+    now = datetime.now(timezone.utc)
+    for attempt_id, age in zip(ids, (timedelta(0), timedelta(hours=2), timedelta(hours=1))):
+        world.session.get(SdAttempt, attempt_id).created_at = now - age  # id tăng nhưng thời điểm nộp đảo ngược
+    world.session.flush()
+    assert [i["attempt_id"] for i in _data(call(granted, signer, "sd_list_attempts"))] == [ids[1], ids[2], ids[0]]
 
 
 @pytest.mark.parametrize(
