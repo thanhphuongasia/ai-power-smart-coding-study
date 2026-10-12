@@ -120,13 +120,13 @@ void main() {
       );
     });
 
-    test('theme airline đứng đầu, cây ≥ 2 cấp module, 26 bài method', () {
+    test('theme airline đứng đầu, cây ≥ 2 cấp module, 31 bài method', () {
       final airline = testContent.themes.first;
       expect(airline.id, 'airline');
       expect(airline.topics.any((t) => t.modules.isNotEmpty), isTrue);
       expect(airline.allTopics.length, greaterThanOrEqualTo(4));
       final methods = allExercises.where((e) => e.className != null).toList();
-      expect(methods.length, 26);
+      expect(methods.length, 31);
       for (final e in methods) {
         final judge = rawExercises[e.id]['judge'] as Map<String, dynamic>;
         expect(
