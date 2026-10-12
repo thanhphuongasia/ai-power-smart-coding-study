@@ -23,6 +23,7 @@ import '../features/review/review_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/system_design/sd_docs_screen.dart';
+import '../features/system_design/sd_path_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
@@ -77,6 +78,12 @@ final GoRouter appRouter = GoRouter(
       path: '/theme/:themeId',
       builder: (context, state) =>
           ThemeDetailScreen(state.pathParameters['themeId']!),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/design/:docId',
+      builder: (context, state) =>
+          SdPathScreen(docId: state.pathParameters['docId']!),
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,
