@@ -296,7 +296,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
       _text.clear();
       _restoring = false;
       ref.read(_attemptsProvider(_akey).notifier).insert(attempt);
-      // Task kế có thể vừa mở khoá, tiến độ doc/danh sách đổi.
+      // Task vừa nộp chuyển sang done, tiến độ doc/danh sách đổi.
       ref.invalidate(sdDocProvider(widget.docId));
       ref.invalidate(sdDocsProvider);
       setState(() => _sending = false);
@@ -352,7 +352,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
     if (!task.unlocked) {
       children.add(
         const Text(
-          'Task này chưa mở. Làm task trước để mở khoá.',
+          'Task này chưa mở. Đọc xong Phase 1 để mở Thực chiến.',
           key: Key('sd-task-locked'),
           style: TextStyle(
             fontFamily: kSerifFamily,

@@ -778,3 +778,27 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: tốn thời gian dựng; chạy bằng tay (Chrome qua điều khiển, chưa có script tự động lặp lại); chạy trên web chứ không phải thiết bị iOS/Android thật.
 
 **Nguồn**: planning/crew/2026-10-12-system-design-mode/e2e/web_e2e.md:1-16; planning/crew/2026-10-12-system-design-mode/e2e/web_e2e_server.py; planning/crew/2026-10-12-system-design-mode/STATUS.md.
+
+### System Design: màn đọc vuốt snap theo card bằng ScrollPhysics, không dùng PageView
+
+**Quyết định** (run 2026-10-12-sd-reader-hotfix, issue #35): màn đọc giữ `SingleChildScrollView` và gắn `SdCardSnapPhysics`. Fling (vận tốc ≥ 300 px/s) đi tới mốc card kế tiếp theo chiều vuốt, nhưng không xa hơn 0,9 chiều cao viewport so với vị trí hiện tại. Kéo chậm (dưới ngưỡng) cuộn tự do. Luật "đã đọc" giữ nguyên (mép dưới card đi qua mép dưới viewport); physics chặn việc bỏ qua nên card chưa hiện không bị đánh dấu. Bảng mốc (`_anchors()`) đo từ layout thật mỗi lần cần và dùng chung cho snap và menu mục lục; menu nhảy section đặt cờ `_menuJumps` để lúc cuộn không đánh dấu card nào.
+
+**Vì sao**: người dùng thử trên điện thoại thấy một cú vuốt trôi qua nhiều card, và card bị bỏ qua cũng bị tính là đã đọc. `PageView` (một card một trang) bị bỏ vì card cao hơn màn hình sẽ không đọc trọn được; chặn 0,9 viewport cho phép card dài đọc bằng nhiều lần vuốt mà không để lọt nội dung.
+
+**Phương án đã bỏ**: `PageView`; đổi luật "đã đọc" sang đo khác (physics đã đủ chặn, giữ luật cũ là đổi ít nhất).
+
+**Đánh đổi đã chấp nhận**: chỉ kiểm bằng widget test (`tester.fling`), chưa thử trên thiết bị thật; cuộn con lăn/trackpad trên web không có code riêng, chưa xác minh hành vi; bảng mốc đo lại mỗi lần thả tay (O(số card), không dựng widget).
+
+**Nguồn**: mobile/lib/features/system_design/card_snap_physics.dart:14-18, 37-90; mobile/lib/features/system_design/reader_screen.dart:287-325, 329-350, 426-450; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 1, 2, INV-02, INV-04).
+
+### System Design: bỏ khoá tuần tự của task, mọi task mở khi Phase 1 xong (thay thế phần "task" của quyết định "server tính khoá/mở")
+
+**Quyết định** (run 2026-10-12-sd-reader-hotfix, issue #35): **thay thế** luật "task mở khi task liền trước có ≥1 lần thử" ở mục "System Design: server tính khoá/mở, client chỉ vẽ" (run 2026-10-12-system-design-mode). Từ nay `unlocked = phase2` cho mọi task: Phase 2 mở (mọi section `done`) thì mọi task mở cùng lúc, làm task nào trước cũng được. `done` vẫn là `attempts >= 1`. Đề, gợi ý, `ref_section_id` vẫn chỉ trả khi task mở. POST lần thử dùng chung `_tasks_state` nên 201 với task bất kỳ khi Phase 2 mở, 409 `task_locked` khi chưa. Các phần khác của quyết định cũ không đổi: section vẫn khoá tuần tự, Phase 2 vẫn chỉ mở khi Phase 1 xong, server vẫn là nơi duy nhất tính khoá/mở. Client bỏ thông báo "Làm task trước để mở khoá"; task chỉ khoá khi Phase 2 khoá ("Đọc xong Phase 1 để mở Thực chiến").
+
+**Vì sao**: user dùng thử không muốn bị buộc làm theo thứ tự task. Luật nằm một chỗ ở server nên đổi một dòng (`_tasks_state`), client và POST attempt đi theo mà không cần migration hay đổi schema.
+
+**Phương án đã bỏ**: giữ khoá tuần tự và chỉ nới ở UI (sẽ lệch với 409 của server, đúng loại lỗi mà quyết định "server tính khoá/mở" sinh ra để chặn).
+
+**Đánh đổi đã chấp nhận**: không còn ràng buộc thứ tự giữa các task; node "hiện tại" trên lộ trình vẫn đúng một (node mở chưa xong đầu tiên theo thứ tự section, bối cảnh, task). Dòng cũ ở mục quyết định gốc không sửa (append-only); mục này là bản hiệu lực cho phần task.
+
+**Nguồn**: backend/app/sd/learner.py:73-92; backend/app/sd/attempts.py:102-104; mobile/lib/features/system_design/sd_path_screen.dart:85-112, 232-237; mobile/lib/features/system_design/task_screen.dart:352-356; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 4, INV-01, INV-03), DEVIATIONS.md.

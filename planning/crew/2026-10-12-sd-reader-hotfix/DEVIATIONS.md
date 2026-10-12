@@ -1,0 +1,3 @@
+# DEVIATIONS (append-only): plan nói gì · thực tế · quyết định · ai duyệt
+- PLAN T-02 owned có context_screen.dart · thực tế không cần sửa (sdStartTask đã chọn task unlocked && !done đầu tiên, không giả định tuần tự) · bỏ file khỏi owned khi chạy verify-task; thêm test khoá hành vi nút Bắt đầu ở sd_task_flow_test.dart · orchestrator tự quyết, acceptance không đổi
+- Seam review (INV-02) · plan nói con lăn/trackpad web giữ tự do · thực tế: kéo thanh cuộn (thumb) hoặc Home/End trên web desktop không qua physics, có thể đánh dấu đọc card đã lướt qua · quyết định: ghi Backlog (Minor, chỉ web desktop), không sửa trong hotfix · duyệt: orchestrator (chưa user)

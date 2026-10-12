@@ -90,7 +90,7 @@ Map<String, dynamic> _doc({
       'unlocked': true,
     },
   ],
-  'tasks': tasks ?? [_task('t1', 1), _task('t2', 2, unlocked: false)],
+  'tasks': tasks ?? [_task('t1', 1), _task('t2', 2)],
 };
 
 Map<String, dynamic> _attempt(
@@ -300,11 +300,7 @@ void main() {
     ) async {
       final s = _Server(
         doc: _doc(
-          tasks: [
-            _task('t1', 1, done: true),
-            _task('t2', 2),
-            _task('t3', 3, unlocked: false),
-          ],
+          tasks: [_task('t1', 1, done: true), _task('t2', 2), _task('t3', 3)],
         ),
       );
       await _open(tester, s, '/design/doc1/context');
@@ -381,6 +377,66 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Bắt đầu Task 1'), findsOneWidget);
     });
+
+    // Hotfix #35: mọi task mở cùng lúc → nút "Bắt đầu" không dựa tuần tự.
+    Future<void> startCase(
+      WidgetTester tester,
+      List<bool> done,
+      String label,
+      String id,
+    ) async {
+      final s = _Server(
+        doc: _doc(
+          tasks: [
+            for (var i = 0; i < done.length; i++)
+              _task('t${i + 1}', i + 1, done: done[i]),
+          ],
+        ),
+      );
+      await _open(tester, s, '/design/doc1/context');
+      expect(find.text(label), findsOneWidget);
+      await _tap(tester, _k('sd-context-start'));
+      expect(_loc(), '/design/doc1/tasks/$id');
+    }
+
+    testWidgets('mọi task mở, chưa xong task nào → Bắt đầu task ĐẦU', (
+      tester,
+    ) async {
+      await startCase(tester, [false, false, false], 'Bắt đầu Task 1', 't1');
+    });
+
+    testWidgets('task 1 xong, 2-3 mở → Bắt đầu Task 2', (tester) async {
+      await startCase(tester, [true, false, false], 'Bắt đầu Task 2', 't2');
+    });
+
+    testWidgets('task 1-2 xong, 3 chưa → Bắt đầu Task 3', (tester) async {
+      await startCase(tester, [true, true, false], 'Bắt đầu Task 3', 't3');
+    });
+
+    testWidgets('làm task 2 trước (1 chưa, 3 chưa) → vẫn Bắt đầu Task 1', (
+      tester,
+    ) async {
+      await startCase(tester, [false, true, false], 'Bắt đầu Task 1', 't1');
+    });
+
+    testWidgets('tất cả task xong → nút mở task đầu', (tester) async {
+      await startCase(tester, [true, true, true], 'Bắt đầu Task 1', 't1');
+    });
+
+    testWidgets('Phase 2 chưa mở → không có nút Bắt đầu', (tester) async {
+      final s = _Server(
+        doc: _doc(
+          phase2: false,
+          tasks: [
+            _task('t1', 1, unlocked: false),
+            _task('t2', 2, unlocked: false),
+          ],
+        ),
+      );
+      await _open(tester, s, '/design/doc1/context');
+      expect(_k('sd-context-locked'), findsOneWidget);
+      expect(_k('sd-context-start'), findsNothing);
+    });
   });
 
   group('SdTaskScreen: đề, gợi ý, bộ đếm', () {
@@ -391,7 +447,7 @@ void main() {
         doc: _doc(
           tasks: [
             _task('t1', 1, hints: ['mẹo một', 'mẹo hai']),
-            _task('t2', 2, unlocked: false),
+            _task('t2', 2),
           ],
         ),
       );
@@ -443,9 +499,24 @@ void main() {
       expect(s.posts, isEmpty);
     });
 
-    testWidgets('task khoá: thông điệp, KHÔNG có ô viết/nộp', (tester) async {
-      await _open(tester, _Server(), '/design/doc1/tasks/t2');
+    testWidgets('task khoá (Phase 2 chưa mở): thông điệp đúng lý do, KHÔNG có '
+        'ô viết/nộp', (tester) async {
+      final s = _Server(
+        doc: _doc(
+          phase2: false,
+          tasks: [
+            _task('t1', 1, unlocked: false),
+            _task('t2', 2, unlocked: false),
+          ],
+        ),
+      );
+      await _open(tester, s, '/design/doc1/tasks/t2');
       expect(_k('sd-task-locked'), findsOneWidget);
+      expect(
+        find.textContaining('Đọc xong Phase 1 để mở Thực chiến'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Làm task trước'), findsNothing);
       expect(_k('sd-task-input'), findsNothing);
       expect(_k('sd-task-submit'), findsNothing);
       expect(find.text('Task 2/2'), findsOneWidget);
@@ -774,7 +845,7 @@ void main() {
         doc: _doc(
           tasks: [
             _task('t1', 1, ref: 's1'),
-            _task('t2', 2, unlocked: false),
+            _task('t2', 2),
           ],
         ),
       );
@@ -813,29 +884,40 @@ void main() {
       expect(_loc(), '/');
     });
 
-    testWidgets('server mở khoá task kế sau khi nộp → đi tiếp được', (
-      tester,
-    ) async {
-      final s = _Server(); // t2 đang khoá
+    testWidgets('task kế mở sẵn (không cần nộp task trước): từ task 1 sang '
+        'task 2', (tester) async {
+      final s = _Server(
+        doc: _doc(tasks: [_task('t1', 1), _task('t2', 2), _task('t3', 3)]),
+      )..attempts = [_attempt(1)];
       await _open(tester, s, '/design/doc1/tasks/t1');
+      await _tap(tester, _k('sd-task-next'));
+      expect(_loc(), '/design/doc1/tasks/t2');
+    });
+
+    testWidgets('làm task 3 (cuối) trước: nộp xong không có "Task tiếp theo", '
+        'doc báo task 3 done còn task 1 vẫn mở', (tester) async {
+      final s = _Server(
+        doc: _doc(tasks: [_task('t1', 1), _task('t2', 2), _task('t3', 3)]),
+      );
+      await _open(tester, s, '/design/doc1/tasks/t3');
+      expect(_k('sd-task-locked'), findsNothing);
       await _type(tester, 'bài');
-      // Server mở khoá t2 khi chấm xong (INV-04: chỉ server quyết).
       s.onPost = (_) async {
-        s.doc = _doc(tasks: [_task('t1', 1, done: true), _task('t2', 2)]);
+        s.doc = _doc(
+          tasks: [_task('t1', 1), _task('t2', 2), _task('t3', 3, done: true)],
+        );
         final a = _attempt(1, score: 100);
         s.attempts.insert(0, a);
         return _json({'attempt': a}, 201);
       };
       await _tap(tester, _k('sd-task-submit'));
-      await _tap(tester, _k('sd-task-next'));
-      expect(_loc(), '/design/doc1/tasks/t2');
-    });
-
-    testWidgets('task kế còn khoá → quay về', (tester) async {
-      final s = _Server()..attempts = [_attempt(1)]; // t2 khoá
-      await _open(tester, s, '/design/doc1/tasks/t1');
-      await _tap(tester, _k('sd-task-next'));
-      expect(_loc(), '/');
+      expect(_k('sd-task-next'), findsNothing);
+      expect(find.text('Task 3/3'), findsOneWidget);
+      // Task 1 vẫn làm được: mở màn task 1 thấy ô viết, không bị khoá.
+      _router.go('/design/doc1/tasks/t1');
+      await tester.pumpAndSettle();
+      expect(_k('sd-task-input'), findsOneWidget);
+      expect(_k('sd-task-locked'), findsNothing);
     });
 
     testWidgets('task cuối: không có "Task tiếp theo"', (tester) async {

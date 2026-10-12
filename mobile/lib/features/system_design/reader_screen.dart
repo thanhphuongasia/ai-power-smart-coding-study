@@ -17,6 +17,8 @@ import '../../data/sd_repository.dart';
 import '../../domain/sd_models.dart';
 import '../../shared/widgets.dart';
 import 'block_renderer.dart';
+import 'card_snap_physics.dart';
+import 'reader_menu.dart';
 
 /// Nền thanh trên (hằng riêng của màn này, không theo theme).
 const Color _kBarColor = Color(0xFF0B1220);
@@ -144,8 +146,15 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
   /// Thẻ trước chỉ số này không được đánh dấu bằng cú nhảy mở màn.
   int _startIndex = 0;
 
+  /// > 0 khi menu đang cuộn tới một section: `_evaluate` không đánh dấu thẻ nào
+  /// (thẻ chạy ngang qua trong lúc cuộn không phải thẻ người đọc đã xem).
+  int _menuJumps = 0;
+
   final _readCount = ValueNotifier<int>(0);
   late final ValueNotifier<String> _currentTitle;
+
+  /// Id section đang ở đầu viewport (menu tô sáng dòng này).
+  late final ValueNotifier<String> _currentSectionId;
 
   @override
   void initState() {
@@ -166,6 +175,9 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
     _recount();
     _currentTitle = ValueNotifier(
       widget.doc.sections.isEmpty ? '' : widget.doc.sections.first.title,
+    );
+    _currentSectionId = ValueNotifier(
+      widget.doc.sections.isEmpty ? '' : widget.doc.sections.first.id,
     );
     _scroll.addListener(_evaluate);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialPosition());
@@ -190,6 +202,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
     _scroll.dispose();
     _readCount.dispose();
     _currentTitle.dispose();
+    _currentSectionId.dispose();
     super.dispose();
   }
 
@@ -271,6 +284,46 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
     _evaluate();
   }
 
+  // ── Bảng mốc cuộn (dùng chung cho vuốt snap và menu nhảy section: INV-04) ──
+
+  /// Mốc của mọi card theo thứ tự tài liệu: offset cuộn để đỉnh card chạm đỉnh
+  /// viewport. Card đầu section lấy đỉnh tiêu đề section (hiện cả tiêu đề), card
+  /// đầu tài liệu lấy 0. Đo lại từ layout thật mỗi lần gọi (O(số card), không
+  /// dựng widget). Rỗng khi chưa có layout. `sectionStart` = mốc đầu section:
+  /// menu hamburger lọc theo cờ này để nhảy tới section.
+  List<({double offset, String sectionId, bool sectionStart})> _anchors() {
+    final vp = _viewportKey.currentContext?.findRenderObject();
+    if (vp is! RenderBox ||
+        !vp.attached ||
+        !vp.hasSize ||
+        !_scroll.hasClients) {
+      return const [];
+    }
+    final vTop = vp.localToGlobal(Offset.zero).dy;
+    final base = _scroll.offset;
+    final out = <({double offset, String sectionId, bool sectionStart})>[];
+    String? lastSection;
+    for (final f in _flat) {
+      final start = f.section.id != lastSection;
+      lastSection = f.section.id;
+      final ctx = (start ? _headerKeys[f.section.id] : f.key)?.currentContext;
+      final box = ctx?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) continue;
+      final top = base + box.localToGlobal(Offset.zero).dy - vTop;
+      out.add((
+        offset: out.isEmpty ? 0.0 : top,
+        sectionId: f.section.id,
+        sectionStart: start,
+      ));
+    }
+    return out;
+  }
+
+  /// Hàm ổn định (tearoff) để physics không bị coi là đổi sau mỗi lần build.
+  List<double> _snapOffsets() => [for (final a in _anchors()) a.offset];
+
+  late final _snapPhysics = SdCardSnapPhysics(anchors: _snapOffsets);
+
   // ── Đo hình học: thẻ nào đã được lướt qua ──
 
   void _evaluate() {
@@ -282,6 +335,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
 
     final touched = <String>{};
     for (final f in _flat) {
+      if (_menuJumps > 0) break; // đang nhảy từ menu: chưa đánh dấu gì
       final sid = f.section.id;
       if (_unlocked[sid] != true || _read[sid]!.contains(f.card.id)) continue;
       final box = f.key.currentContext?.findRenderObject();
@@ -309,15 +363,91 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
 
     // Section đang đọc = section có tiêu đề đã chạm mép trên viewport.
     var current = widget.doc.sections.isEmpty
-        ? ''
-        : widget.doc.sections.first.title;
+        ? null
+        : widget.doc.sections.first;
     for (final s in widget.doc.sections) {
       final h = _headerKeys[s.id]?.currentContext?.findRenderObject();
       if (h is RenderBox && h.attached && h.hasSize) {
-        if (h.localToGlobal(Offset.zero).dy <= vTop + 24) current = s.title;
+        if (h.localToGlobal(Offset.zero).dy <= vTop + 24) current = s;
       }
     }
-    _currentTitle.value = current;
+    _currentTitle.value = current?.title ?? '';
+    _currentSectionId.value = current?.id ?? '';
+  }
+
+  // ── Menu mục lục ──
+
+  void _openMenu() {
+    final items = <SdMenuItem>[];
+    var chapterNo = 0;
+    int? lastChapter;
+    for (final s in widget.doc.sections) {
+      if (s.chapterPosition != lastChapter) chapterNo++;
+      lastChapter = s.chapterPosition;
+      items.add(
+        SdMenuItem(
+          id: s.id,
+          title: s.title,
+          chapterIndex: chapterNo,
+          chapterName: s.chapter,
+          readCount: _read[s.id]?.length ?? 0,
+          total: s.cards.length,
+          // INV-01: khoá/xong chỉ theo server (unlocked ban đầu + nextSectionId,
+          // done ban đầu + kết quả PUT), không đếm card cục bộ.
+          state: _unlocked[s.id] != true
+              ? SdMenuState.locked
+              : _doneNotified.contains(s.id)
+              ? SdMenuState.done
+              : SdMenuState.open,
+          current: s.id == _currentSectionId.value,
+        ),
+      );
+    }
+    unawaited(
+      showSdReaderMenu(
+        context,
+        items: items,
+        onSelect: (sid) => unawaited(_scrollToSection(sid)),
+        onLockedTap: (_) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Hoàn thành section trước để mở khoá'),
+              ),
+            );
+        },
+      ),
+    );
+  }
+
+  /// Cuộn tới đầu section [sid] theo bảng mốc chung với snap (INV-04). Không
+  /// nhảy section khoá (INV-01), phòng khi gọi lạc đường.
+  Future<void> _scrollToSection(String sid) async {
+    if (!mounted || _unlocked[sid] != true || !_scroll.hasClients) return;
+    final target = _anchors()
+        .where((a) => a.sectionStart && a.sectionId == sid)
+        .firstOrNull;
+    if (target == null) return;
+    final dest = target.offset.clamp(0.0, _scroll.position.maxScrollExtent);
+    // INV-02: trong lúc cuộn không đánh dấu thẻ nào; xong thì thẻ phía trên
+    // đích chỉ tính khi còn thấy được (cùng cơ chế `_startIndex` lúc mở màn).
+    _menuJumps++;
+    try {
+      await _scroll.animateTo(
+        dest,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } finally {
+      _menuJumps--;
+      if (mounted) {
+        if (_menuJumps == 0) {
+          _startIndex = _flat.firstWhere((f) => f.section.id == sid).index;
+          _evaluate();
+        }
+      }
+    }
   }
 
   void _schedule(String sid, {bool restart = false}) {
@@ -435,6 +565,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
             total: _total,
             title: _currentTitle,
             onBack: () => Navigator.of(context).maybePop(),
+            onMenu: _openMenu,
           ),
           Expanded(
             child: Container(
@@ -447,6 +578,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
               child: SingleChildScrollView(
                 key: _viewportKey,
                 controller: _scroll,
+                physics: _snapPhysics,
                 padding: const EdgeInsets.fromLTRB(22, 28, 22, 56),
                 child: Center(
                   child: ConstrainedBox(
@@ -562,12 +694,14 @@ class _TopBar extends StatelessWidget {
     required this.total,
     required this.title,
     required this.onBack,
+    required this.onMenu,
   });
 
   final ValueNotifier<int> readCount;
   final int total;
   final ValueNotifier<String> title;
   final VoidCallback onBack;
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -580,6 +714,12 @@ class _TopBar extends StatelessWidget {
             tooltip: 'Quay lại',
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: onBack,
+          ),
+          IconButton(
+            key: const Key('sd-reader-menu'),
+            tooltip: 'Mục lục',
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: onMenu,
           ),
           Expanded(
             flex: 3,
