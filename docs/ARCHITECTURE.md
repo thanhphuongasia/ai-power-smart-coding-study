@@ -13,13 +13,13 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 
 | thành phần | vai trò và toạ độ | mục chi tiết |
 | --- | --- | --- |
-| backend | API `POST /run`: chạy harness + unit test của bài (đọc từ Postgres) qua máy chấm (Judge0), trả đúng/sai từng test — backend/app/main.py:106 | docs/modules/judge-backend.md:1 |
+| backend | API `POST /run`: chạy harness + unit test của bài (đọc từ Postgres) qua máy chấm (Judge0), trả đúng/sai từng test — backend/app/main.py:112 | docs/modules/judge-backend.md:1 |
 | backend/content | `GET /content`: cả cây nội dung học (theme → module lồng nhau → file → bài) từ Postgres, không có phần chấm — backend/app/content_api.py:184 | docs/ARCHITECTURE.md:1 |
 | backend/load_content | đường ghi nội dung DUY NHẤT: validate rồi thay toàn bộ trong một transaction dưới advisory lock; CLI `--if-empty`/`--force` — backend/app/load_content.py:307, backend/app/load_content.py:390 | docs/modules/content-admin.md:1 |
 | backend/content_rules + export_content | luật nội dung port từ Dart chạy ở server; xuất DB ra shape `content.json` — backend/app/content_rules.py:274, backend/app/export_content.py:36 | docs/modules/content-admin.md:1 |
 | backend/admin_api | `/api/admin/content` GET (bản nháp)/PUT (gửi vào hàng chờ; version, 409) + `/api/admin/validate` + `/api/admin/changes*` (duyệt/bỏ từng mục), chỉ role admin — backend/app/admin_api.py:33, backend/app/admin_api.py:147 | docs/modules/content-admin.md:1 |
-| backend/review | hàng chờ duyệt: bảng `content_changes`, draft = live ⊕ mục chờ, submit/approve/reject theo từng mục, luật cha–con; `/api/admin/run` chấm theo draft — backend/app/review.py:399, backend/app/review.py:487, backend/app/main.py:219 | docs/modules/content-review.md:1 |
-| backend/mcp | `POST /mcp` cho claude.ai: cổng `McpGate` verify JWT RS256 của identity-service (401 + `resource_metadata`, 503 khi JWKS chết), quyền theo bảng `mcp_access` kiểm mỗi tool call, 12 tool ghi vào hàng chờ duyệt qua cùng đường/khoá với admin PUT — backend/app/mcp_server.py:246, backend/app/mcp_auth.py:169, backend/app/mcp_access.py:49 | docs/modules/mcp.md:1 |
+| backend/review | hàng chờ duyệt: bảng `content_changes`, draft = live ⊕ mục chờ, submit/approve/reject theo từng mục, luật cha–con; `/api/admin/run` chấm theo draft — backend/app/review.py:399, backend/app/review.py:487, backend/app/main.py:225 | docs/modules/content-review.md:1 |
+| backend/mcp | `POST /mcp` cho claude.ai: cổng `McpGate` verify JWT RS256 của identity-service (401 + `resource_metadata`, 503 khi JWKS chết), quyền theo bảng `mcp_access` kiểm mỗi tool call, 12 tool nội dung ghi vào hàng chờ duyệt qua cùng đường/khoá với admin PUT, cộng 3 tool `sd_*` chấm bài System Design (không qua hàng chờ) — backend/app/mcp_server.py:303, backend/app/mcp_server.py:270-296, backend/app/mcp_auth.py:169, backend/app/mcp_access.py:49 | docs/modules/mcp.md:1 |
 | backend/auth | đăng nhập email+mật khẩu (argon2id), token Bearer lưu sha256, throttle, đổi mật khẩu, `current_user`/`require_admin` — backend/app/auth.py:160, backend/app/auth.py:222 | docs/modules/auth-progress.md:1 |
 | backend/progress | `GET/PUT /api/progress*`, `record_pass` do `/run` gọi — backend/app/progress.py:28, backend/app/progress.py:196 | docs/modules/auth-progress.md:1 |
 | backend/seed_users | tạo 2 tài khoản ban đầu, mật khẩu chỉ vào file root 0600 — backend/app/seed_users.py:45 | docs/modules/deploy.md:1 |
@@ -30,9 +30,12 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | data | tải nội dung + cache (mobile/lib/data/content_repository.dart:40), provider nội dung (mobile/lib/data/content_providers.dart:11), client gọi `/run` (mobile/lib/data/judge_client.dart:59), đăng nhập (mobile/lib/data/auth_repository.dart:61), client gắn Bearer (mobile/lib/data/api_client.dart:59), tiến độ server (mobile/lib/data/progress_api.dart:116), admin (mobile/lib/data/admin_repository.dart:1) | docs/ARCHITECTURE.md:1 |
 | features/exercise | màn bài 3 tab (<900px) hoặc chia đôi đề | editor (≥900px) (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
-| features/review, stats, practice, shell | ôn tập, thống kê, luyện, shell (bottom nav <700px; ≥700px top bar + ☰ mở drawer — mobile/lib/features/shell/app_shell.dart:22, mobile/lib/features/shell/app_drawer.dart:25); đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
+| features/review, stats, practice, shell | ôn tập, thống kê, luyện, shell (bottom nav 5 tab <700px; ≥700px top bar + ☰ mở drawer — mobile/lib/features/shell/app_shell.dart:22, mobile/lib/features/shell/app_drawer.dart:25); đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:30-72) | docs/ARCHITECTURE.md:1 |
 | features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài responsive 3 breakpoint với ô code tô màu (mobile/lib/features/admin/exercise_editor.dart:386, mobile/lib/features/admin/code_cell.dart:133), màn Chờ duyệt + chi tiết diff + xem thử như học viên (mobile/lib/features/admin/review_screen.dart:1, mobile/lib/features/admin/review_detail_screen.dart:1, mobile/lib/features/exercise/exercise_screen.dart:51), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
+| backend/sd | chế độ học System Design: parser `.md` → chapter/section/card + task (id card = hash NFC của nội dung), API admin nhập tài liệu `/api/admin/sd`, API học viên `/api/sd` (khoá/mở tính ở server), lần thử + chấm từ khoá + hàm chấm sâu cho MCP — backend/app/sd/parser.py:366, backend/app/sd/admin.py:57, backend/app/sd/learner.py:47, backend/app/sd/attempts.py:85, backend/app/sd/evaluator.py:29 | docs/modules/sd-study.md:1 |
+| backend/sd tables | 5 bảng `sd_docs/sd_sections/sd_tasks/sd_progress/sd_attempts` + migration `0007`; tiến độ và lần thử chỉ FK `users`, không FK tới nội dung — backend/app/tables.py:241, backend/app/tables.py:290, backend/migrations/versions/0007_system_design.py:22 | docs/modules/sd-study.md:1 |
+| features/system_design + tab Design | tab thứ 5: danh sách tài liệu, lộ trình `DuoPath` (mobile/lib/features/system_design/duo_path.dart:80), màn đọc tự đánh dấu (mobile/lib/features/system_design/reader_screen.dart:122), bối cảnh + task + bản nháp theo người dùng (mobile/lib/features/system_design/task_screen.dart:186); model và repository (mobile/lib/domain/sd_models.dart:1, mobile/lib/data/sd_repository.dart:33); route khai ở router, đã khớp index ở shell/drawer — backend/app/sd/learner.py:47 (nơi server tính khoá/mở mà các màn này chỉ vẽ lại) | docs/modules/sd-study.md:1 |
 | deploy | triển khai lên VPS dùng chung: nginx cổng 443 (HTTPS, domain `codewithphuong.jacons-corp.com`, cert Let's Encrypt; :80 và :8090 trả 308) phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:87-97, deploy/nginx/smart-coding-study.conf:8-27 | docs/modules/deploy.md:1 |
 | deploy/ios | build bản iOS cho TestFlight: `flutter build ipa` trỏ cùng origin HTTPS; icon tạm sinh bằng script — deploy/ios-build.sh:11-35, deploy/IOS-TESTFLIGHT.md:1, mobile/tool/make_app_icon.py:1 | docs/modules/deploy.md:1 |
 | shared | widget dùng chung (card, chip, nút, progress bar...) (mobile/lib/shared/widgets.dart:1) | docs/ARCHITECTURE.md:1 |
@@ -53,13 +56,13 @@ khai. Chi tiết xem `docs/modules/judge-backend.md`.
 
 | Bước | Ai làm | file:dòng |
 | --- | --- | --- |
-| Kiểm body (≤64KB, có Content-Length) và `code` ≤ 8000 ký tự | middleware + `RunRequest` | backend/app/main.py:39-53 |
-| Tra bài trong Postgres bằng session ngắn (đóng trước khi chờ máy chấm); không có bài → 404 | `lookup_judge` | backend/app/main.py:114-116, backend/app/content_api.py:156-182 |
-| Ghép payload `{code, function, class_name, cases}` | `run()` | backend/app/main.py:118-125 |
-| Gửi `HARNESS_SOURCE` làm source, payload làm stdin cho máy chấm (tối đa 4 đồng thời) | `runner.run` | backend/app/main.py:124-125 |
-| Máy chấm hỏng/429/5xx/không hiểu → `503 runner_unavailable` | `RunnerUnavailable` | backend/app/main.py:126-128 |
-| DB không kết nối được → `503 database_unavailable`; chưa nạp nội dung → `503 content_not_loaded` | exception handler | backend/app/main.py:69-78 |
-| Quá giờ → `status: timeout`; còn lại parse dòng `__JUDGE_RESULT__` | `harness.parse_result` | backend/app/main.py:131-139 |
+| Kiểm body (≤64KB, có Content-Length) và `code` ≤ 8000 ký tự | middleware + `RunRequest` | backend/app/main.py:42-56 |
+| Tra bài trong Postgres bằng session ngắn (đóng trước khi chờ máy chấm); không có bài → 404 | `lookup_judge` | backend/app/main.py:120-122, backend/app/content_api.py:156-182 |
+| Ghép payload `{code, function, class_name, cases}` | `run()` | backend/app/main.py:124-131 |
+| Gửi `HARNESS_SOURCE` làm source, payload làm stdin cho máy chấm (tối đa 4 đồng thời) | `runner.run` | backend/app/main.py:130-131 |
+| Máy chấm hỏng/429/5xx/không hiểu → `503 runner_unavailable` | `RunnerUnavailable` | backend/app/main.py:132-134 |
+| DB không kết nối được → `503 database_unavailable`; chưa nạp nội dung → `503 content_not_loaded` | exception handler | backend/app/main.py:75-84 |
+| Quá giờ → `status: timeout`; còn lại parse dòng `__JUDGE_RESULT__` | `harness.parse_result` | backend/app/main.py:137-145 |
 
 ```python
 class CodeRunner(Protocol):
@@ -228,7 +231,7 @@ block mà là `ExerciseProgress.passed` (mobile/lib/features/exercise/session_co
 
 Hợp đồng `/run` được giữ khớp bằng hai bên tự viết (Python `RunResponse` và Dart `JudgeClient._parse`)
 cộng test fixture tay — không sinh code từ một schema chung (mobile/lib/data/judge_client.dart:109-146,
-backend/app/main.py:64-82). Hình dạng `/content` cũng giữ khớp bằng hai bên tự viết: model pydantic
+backend/app/main.py:67-88). Hình dạng `/content` cũng giữ khớp bằng hai bên tự viết: model pydantic
 (backend/app/content_schema.py:66-102) và `Content.fromJson` (mobile/lib/domain/content.dart:14), có test fixture
 đọc thẳng `backend/content/content.json` (mobile/test/support/content_fixture.dart:12). `contentIndexProvider`
 không có mặc định — quên override thì ném `UnimplementedError` (mobile/lib/data/content_providers.dart:11-13).
@@ -389,7 +392,7 @@ Phân quyền kiểm ở server; UI ẩn nút Admin chỉ để gọn. Chi tiế
 | Kiểm quyền | không token hợp lệ: 401 `not_authenticated`; thiếu role admin: 403 `admin_required` | backend/app/auth.py:184-194 |
 | Chế độ mở | env `AUTH_OPEN_AS=<email>`: không token (hoặc token sai) = user đó, token thật thắng; `/api/me` có `open`; đổi mật khẩu 403 `open_mode`; app vào thẳng bằng phiên token rỗng (xem `docs/modules/auth-progress.md`) | backend/app/auth.py:166-189, mobile/lib/data/auth_repository.dart:114-123 |
 | Tiến độ | `GET /api/progress` (ẩn id bài không còn), `PUT /api/progress/{id}` và `/state`; không nhận `passed` | backend/app/progress.py:179-256 |
-| Ghi passed | chỉ `/run` ghi, khi máy chấm trả passed và request có Bearer hợp lệ | backend/app/progress.py:28-44, backend/app/main.py:178-184 |
+| Ghi passed | chỉ `/run` ghi, khi máy chấm trả passed và request có Bearer hợp lệ | backend/app/progress.py:28-44, backend/app/main.py:184-190 |
 | Bảng | `users`, `user_sessions`, `user_progress` (khoá `(user_id, exercise_id)`, KHÔNG FK tới bài), `user_state` | backend/app/tables.py:128-184 |
 | App | `AuthGate` đặt sau `ContentGate`; vào app khi `/api/progress` của đúng phiên đã tải; draft đẩy sau 800 ms, hint/xem lời giải/lịch ôn đẩy ngay (mobile/lib/app/auth_gate.dart:13-36, mobile/lib/features/exercise/session_controller.dart:74-86) | docs/modules/auth-progress.md:1 |
 
@@ -420,9 +423,39 @@ Nếu người khác đã gửi trước thì server trả 409 để không ai �
 
 ### Ranh giới
 
-Server không chạy lời giải mẫu khi Gửi duyệt (không thực thi code ở server admin); việc đó là của nút Run, và preview của admin chấm bằng `/api/admin/run` theo bản nháp mà không ghi tiến độ (backend/app/main.py:219-236). Chưa hỗ trợ chuyển module sang project/module cha khác: gửi duyệt bị 422 `unsupported_move` (backend/app/review.py:87-95). Không có lịch sử phiên bản: khôi phục dùng `export_content` và git.
+Server không chạy lời giải mẫu khi Gửi duyệt (không thực thi code ở server admin); việc đó là của nút Run, và preview của admin chấm bằng `/api/admin/run` theo bản nháp mà không ghi tiến độ (backend/app/main.py:225-242). Chưa hỗ trợ chuyển module sang project/module cha khác: gửi duyệt bị 422 `unsupported_move` (backend/app/review.py:87-95). Không có lịch sử phiên bản: khôi phục dùng `export_content` và git.
 Luật nội dung có hai bản cài đặt, Dart (`mergeCells`, preview/test) và Python (`content_rules.py`, server), không có test so trực tiếp nhau (backend/app/content_rules.py:8-11).
 Lưu là thay toàn bộ nội dung, nên học viên đang mở bài giữ bản cũ tới lần tải kế.
+
+## Chế độ học System Design — tài liệu `.md` → card → lộ trình → thực chiến
+
+### Là gì
+
+Bên cạnh chế độ code (bài tập chấm bằng test), app có một chế độ đọc và viết thiết kế hệ thống. Admin nhập một file markdown; backend cắt thành chương, section và "card" (mỗi đoạn, bảng, khối code là một card). Học viên đọc theo thứ tự, và khi đọc hết mọi section thì mở phần thực chiến: tự viết lời giải cho từng task, thấy điểm theo từ khoá ngay, rồi nhờ Claude chấm sâu hơn qua MCP. Chế độ này có bảng, API và màn hình riêng, không đi qua `load_content` hay hàng chờ duyệt. Chi tiết đầy đủ ở `docs/modules/sd-study.md`.
+
+### Cách hoạt động
+
+| Việc | Ở đâu | file:dòng |
+| --- | --- | --- |
+| Cắt markdown thành section/card/task; chuẩn hoá NFC trước khi băm; mọi trần được kiểm trước khi tích luỹ | `parse_markdown` | backend/app/sd/parser.py:366-373, backend/app/sd/parser.py:28-45 |
+| Nhập lại tài liệu trong một transaction dưới advisory lock, không chạm tiến độ/lần thử | `_import` | backend/app/sd/admin.py:57-93 |
+| Server tính `done`/`unlocked` của section, Phase 2 và task; response không có rubric/từ khoá | `_sections_state`, `_tasks_state` | backend/app/sd/learner.py:47-92 |
+| PUT tiến độ chỉ thêm card đã đọc; section khoá trả 409 | `put_progress` | backend/app/sd/learner.py:159-198 |
+| Nộp bài: chấm từ khoá ngay, chụp rubric lúc nộp, tối đa 20 lần/task/24 giờ, câu trả lời ≤8KB | `submit_attempt` | backend/app/sd/attempts.py:85-140 |
+| Một bản duy nhất cho học viên: `reviewed` (Claude) thắng `auto` (từ khoá) | `attempt_view` | backend/app/sd/attempts.py:53-75 |
+| Claude đọc hàng đợi, đọc bài (kèm `answer_notice`), ghi feedback từng ý; ghi đè bản đã chấm cần `replace=true` | `review_queue`, `review_detail`, `submit_feedback` | backend/app/sd/attempts.py:194-309 |
+
+```python
+class Evaluator(Protocol):
+    def evaluate(self, answer: str, rubric: list[dict]) -> dict:
+```
+(backend/app/sd/evaluator.py:23-24)
+
+Phía Flutter, tab Design là tab thứ 5, thêm cuối ở ba nơi phải khớp index (branch của router, destination của `NavigationBar`, mục drawer); danh sách node trong lộ trình do `DuoPath` vẽ từ `done`/`unlocked` mà server trả, không tự tính (mục chi tiết: docs/modules/sd-study.md:1).
+
+### Ranh giới
+
+Không dùng chung bảng hay hàng chờ duyệt với chế độ code: tiến độ và lần thử chỉ FK `users`, vì nhập lại tài liệu xoá rồi ghi lại section/task và FK cascade sẽ xoá tiến độ (backend/app/tables.py:236-238). Không gọi LLM trực tiếp: chấm sâu là việc của Claude qua MCP. Học viên chỉ có route `/api/sd`, luôn lọc theo `user.id` (backend/app/sd/learner.py:104, backend/app/sd/attempts.py:154-155). Chưa có màn admin trong app để nhập `.md`, và chưa có SRS cho card System Design.
 
 ## deploy — web + API cùng một origin trên VPS
 
@@ -521,8 +554,10 @@ Deploy VPS (run 2026-10-11-deploy-vps-web): `/run` có thể trả 504 khi tải
 
 Hàng chờ duyệt (run content-review-queue, planning/crew/2026-10-11-content-review-queue/STATUS.md Backlog): `GET /api/admin/changes` không phân trang và `merge_pending` deepcopy mỗi mục chờ (O(k·N)); CLI `load_content --force` đổi thứ tự trong lúc có mục chờ thì approve áp lại thứ tự của draft; học viên đang mở app chỉ thấy bản duyệt khi tự refresh. Chi tiết `docs/modules/content-review.md`.
 
+System Design (run 2026-10-12-system-design-mode, planning/crew/2026-10-12-system-design-mode/STATUS.md Backlog): màn đọc dựng cả tài liệu một lần (1000 card ≈ 12k element; trần server 3000 card, backend/app/sd/parser.py:33); `task.id` là slug tên task nên đổi tên task mất lần thử (backend/app/sd/parser.py:13); nhập lại làm Phase 1 mất `done` thì Phase 2 khoá lại và app báo sai lý do; điểm ✓/✗ từng ý cho phép dò từ khoá (tối đa 20 lần/ngày/task, backend/app/sd/attempts.py:33); còn rủi ro dư prompt injection ở lớp ngôn ngữ vì `answer` đi vào ngữ cảnh của Claude (backend/app/sd/attempts.py:176-180). Chi tiết: docs/modules/sd-study.md:1.
+
 Tài khoản, tiến độ và quản trị (run users-progress-admin, planning/crew/2026-10-11-users-progress-admin/STATUS.md Backlog; HTTPS đã có từ run testflight-prep):
-code học viên in giả dòng kết quả "passed" thì server vẫn ghi passed (backend/app/main.py:178-184); "xong bài" có thể lệch local/server khi token
+code học viên in giả dòng kết quả "passed" thì server vẫn ghi passed (backend/app/main.py:184-190); "xong bài" có thể lệch local/server khi token
 hết hạn đúng lúc Run vì `/run` không trả 401 (reviews/SEAM.md mục 1); PUT tiến độ không tuần tự hoá và không flush khi app vào nền; lịch ôn theo
 `block.id` mồ côi khi admin đổi nhãn ô; form admin chỉ cảnh báo 4 trong 12 luật nội dung; chưa có trang quản lý user. Test backend dùng chung một DB test nên hai
 pytest song song đỏ lẻ tẻ (backend/README.md:54-60). Luồng UI thật trên Chrome/VPS chưa được reviewer tự chạy; e2e chạy bằng script API (20/20) và widget test.
