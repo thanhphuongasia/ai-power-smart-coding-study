@@ -93,7 +93,23 @@ def test_chapter_body_without_h3_becomes_section_named_after_chapter():
 
 def test_slugify_vietnamese():
     assert slugify("Đề bài và yêu cầu") == "de-bai-va-yeu-cau"
-    assert slugify("!!!") == "item"
+    assert slugify("Design / API") == "design-api"
+
+
+def test_titles_without_ascii_letters_get_distinct_stable_ids():
+    """Tên toàn chữ Hán từng cùng thành 'item' nên tài liệu thứ hai ghi đè tài liệu thứ nhất."""
+    a, b = slugify("系统设计"), slugify("設計")
+    assert a != b and a.startswith("x-") and b.startswith("x-") and a == slugify("系统设计")
+    ids = [parse_markdown(f"# {t}\n\n## C\n\n### S\n\nx\n")["title"] for t in ("系统设计", "設計")]
+    assert ids == ["系统设计", "設計"]
+
+
+def test_two_unicode_titled_documents_do_not_overwrite_each_other(admin):
+    client, h = admin
+    one = _import(client, h, "# 系统设计\n\n## C\n\n### S\n\nx\n").json()
+    two = _import(client, h, "# 設計\n\n## C\n\n### S\n\ny\n").json()
+    assert one["id"] != two["id"]
+    assert [i["id"] for i in client.get("/api/admin/sd/docs", headers=h).json()["items"]] == [one["id"], two["id"]]
 
 
 @pytest.mark.parametrize(
@@ -165,6 +181,31 @@ def test_suffix_id_never_collides_with_an_existing_slug():
     md = "# T\n\n## C\n\n### Foo\n\na\n\n### Foo\n\nb\n\n### Foo 2\n\nc\n"
     ids = [s["id"] for s in parse_markdown(md)["sections"]]
     assert len(set(ids)) == 3
+
+
+def test_four_backtick_fence_may_contain_three_backtick_fence():
+    md = "# T\n\n## C\n\n### S\n\n````md\n```py\nx\n```\n````\n\nsau\n"
+    cards = parse_markdown(md)["sections"][0]["cards"]
+    assert [c["kind"] for c in cards] == ["code", "text"] and cards[0]["body"] == "```py\nx\n```" and cards[0]["lang"] == "md"
+
+
+def test_closing_fence_must_not_carry_text_and_inline_ticks_are_not_a_fence():
+    md = "# T\n\n## C\n\n### S\n\n```\na\n``` b\nc\n```\n\n```inline``` đoạn văn\n"
+    cards = parse_markdown(md)["sections"][0]["cards"]
+    assert cards[0]["body"] == "a\n``` b\nc" and cards[1]["kind"] == "text"
+
+
+def test_table_without_leading_pipe_is_a_table_card():
+    md = "# T\n\n## C\n\n### S\n\nTrước\n\na | b\n--- | ---\n1 | 2\n\nSau\n"
+    assert [c["kind"] for c in parse_markdown(md)["sections"][0]["cards"]] == ["text", "table", "text"]
+
+
+def test_code_cards_keep_indentation_in_their_id_but_text_cards_do_not():
+    def ids(body):
+        return [c["id"] for c in parse_markdown("# T\n\n## C\n\n### S\n\n" + body)["sections"][0]["cards"]]
+
+    assert ids("```py\nif x:\n    y\n```\n") != ids("```py\nif x:\n  y\n```\n")
+    assert ids("a   b\n") == ids("a b\n")
 
 
 def test_renaming_a_section_changes_its_id_but_editing_text_does_not():

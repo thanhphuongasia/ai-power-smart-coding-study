@@ -169,3 +169,39 @@ def test_reviewed_attempt_replaces_auto_result_in_api(world):
     assert [(i["text"], i["ok"], i["note"]) for i in a["items"]] == [("Có endpoint giữ ghế", True, "đúng"), ("Phân trang", False, "chưa nói")]
     assert a["score"] == 50 and a["reviewed_at"]
     assert not _keys(a) & {"verdicts", "reviewed_by"}
+
+
+# --- cô lập quota / danh sách theo user và theo task (INV-06) --------------------------------
+
+
+def test_quota_is_per_user_and_per_task(world):
+    ann, now = _uid(world), datetime.now(timezone.utc)
+    for n in range(1, 21):
+        world.session.add(SdAttempt(user_id=ann, doc_id=DOC, task_id="api-design", n=n, answer="a", auto_result={}, created_at=now))
+    world.session.flush()
+    assert _post(world, HALF).status_code == 429
+    world.read_all("bob")
+    assert _post(world, HALF, "bob").status_code == 201  # lần thử của ann không khoá bob
+    assert _post(world, "bảng seats", url=f"/api/sd/docs/{DOC}/tasks/database-design/attempts").status_code == 201  # quota của task khác
+
+
+def test_attempt_list_is_scoped_to_the_task(world):
+    _post(world, "câu trả lời cho api-design")
+    other = f"/api/sd/docs/{DOC}/tasks/database-design/attempts"
+    _post(world, "câu trả lời cho database-design", url=other)
+    mine_api = world.client.get(API, headers=world.hdr["ann"]).json()["items"]
+    mine_db = world.client.get(other, headers=world.hdr["ann"]).json()["items"]
+    assert [i["answer"] for i in mine_api] == ["câu trả lời cho api-design"]
+    assert [i["answer"] for i in mine_db] == ["câu trả lời cho database-design"]
+
+
+def test_history_keeps_the_rubric_the_learner_saw(world, sample_md):
+    a = _post(world, GOOD).json()["attempt"]
+    assert len(a["items"]) == 4
+    world.import_md(sample_md.replace("- Có Booking Service :: booking\n", "- Có Booking Service :: booking\n- Ý mới chen vào :: zzz\n"))
+    world.import_md(sample_md.replace(
+        "- Có endpoint giữ ghế (hold) tách riêng khỏi đặt vé :: hold, giữ ghế\n",
+        "- Ý mới chen đầu :: zzz\n- Có endpoint giữ ghế (hold) tách riêng khỏi đặt vé :: hold, giữ ghế\n",
+    ))
+    again = world.client.get(API, headers=world.hdr["ann"]).json()["items"][0]
+    assert [i["text"] for i in again["items"]] == [i["text"] for i in a["items"]] and all(i["ok"] for i in again["items"])

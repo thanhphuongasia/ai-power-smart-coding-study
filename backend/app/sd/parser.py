@@ -59,11 +59,12 @@ class MdError(Exception):
 
 
 def slugify(text: str) -> str:
-    """Tiếng Việt → slug ASCII: bỏ dấu, đ→d, mọi thứ khác chữ/số thành '-'. Rỗng → 'item'."""
+    """Tiếng Việt → slug ASCII: bỏ dấu, đ→d, mọi thứ khác chữ/số thành '-'. Tên không còn chữ/số ASCII nào
+    (vd toàn chữ Hán) → 'x-' + hash của tên: ổn định, và hai tên khác nhau không dồn về cùng một id."""
     t = unicodedata.normalize("NFKD", text.replace("đ", "d").replace("Đ", "D"))
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
     t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:60].strip("-")
-    return t or "item"
+    return t or "x-" + hashlib.sha1(text.strip().encode("utf-8")).hexdigest()[:8]
 
 
 def _bad_text(s: str) -> bool:
@@ -91,16 +92,46 @@ def _unique(base: str, seen: dict[str, int]) -> str:
 
 
 def _card_id(kind: str, body: str) -> str:
-    norm = " ".join(body.split())
+    # Văn bản: khoảng trắng không có nghĩa. Code/sơ đồ: thụt dòng CÓ nghĩa, chỉ bỏ khoảng trắng cuối dòng.
+    if kind in ("code", "diagram"):
+        norm = "\n".join(line.rstrip() for line in body.split("\n"))
+    else:
+        norm = " ".join(body.split())
     return hashlib.sha1(f"{kind}\n{norm}".encode("utf-8")).hexdigest()[:8]
 
 
-def _is_fence(line: str) -> str | None:
-    s = line.lstrip()
-    for m in ("```", "~~~"):
-        if s.startswith(m):
-            return m
-    return None
+_FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
+_TABLE_SEP = re.compile(r"^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$")
+
+
+def _fence_open(line: str) -> tuple[str, int, str] | None:
+    """(ký tự, độ dài, info) nếu `line` mở một khối code rào. Info của rào ``` không được chứa dấu `."""
+    m = _FENCE.match(line)
+    if not m:
+        return None
+    ch, info = m.group(1)[0], m.group(2)
+    if ch == "`" and "`" in info:
+        return None
+    return ch, len(m.group(1)), info
+
+
+def _fence_close(line: str, ch: str, size: int) -> bool:
+    m = _FENCE.match(line)
+    return bool(m) and m.group(1)[0] == ch and len(m.group(1)) >= size and not m.group(2).strip()
+
+
+def _starts_table(entries: list, i: int) -> bool:
+    """Bảng GFM: dòng bắt đầu bằng '|', hoặc dòng có '|' kèm dòng kế là dòng phân cách `---|---`."""
+    line = entries[i][2]
+    if line.lstrip().startswith("|"):
+        return True
+    return (
+        "|" in line
+        and i + 1 < len(entries)
+        and entries[i + 1][0] == "line"
+        and "-" in entries[i + 1][2]
+        and _TABLE_SEP.match(entries[i + 1][2]) is not None
+    )
 
 
 # Một "mục" trong một phạm vi là ("line", số_dòng, nội_dung) hoặc ("title", tiêu_đề).
@@ -141,15 +172,16 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
         if not line.strip():
             i += 1
             continue
-        fence = _is_fence(line)
+        fence = _fence_open(line)
         if fence:
-            info = line.lstrip()[len(fence):].strip().split()
+            ch, size, info_text = fence
+            info = info_text.strip().split()
             lang = info[0].lower() if info else ""
             body: list[str] = []
             i += 1
             closed = False
             while i < n and entries[i][0] == "line":
-                if _is_fence(entries[i][2]) == fence:
+                if _fence_close(entries[i][2], ch, size):
                     closed = True
                     i += 1
                     break
@@ -160,11 +192,16 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
             add("diagram" if lang == "mermaid" else "code", "\n".join(body), lineno, lang)
             continue
         stripped = line.lstrip()
-        if stripped.startswith("|"):
+        if _starts_table(entries, i):
             body = []
-            while i < n and entries[i][0] == "line" and entries[i][2].lstrip().startswith("|"):
-                body.append(entries[i][2].strip())
-                i += 1
+            if stripped.startswith("|"):
+                while i < n and entries[i][0] == "line" and entries[i][2].lstrip().startswith("|"):
+                    body.append(entries[i][2].strip())
+                    i += 1
+            else:  # bảng không có '|' đầu dòng: tới dòng trống hoặc dòng không có '|'
+                while i < n and entries[i][0] == "line" and entries[i][2].strip() and "|" in entries[i][2]:
+                    body.append(entries[i][2].strip())
+                    i += 1
             add("table", "\n".join(body), lineno)
             continue
         if stripped.startswith(">"):
@@ -177,7 +214,7 @@ def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> 
         body = []
         while i < n and entries[i][0] == "line" and entries[i][2].strip():
             t = entries[i][2]
-            if _is_fence(t) or t.lstrip().startswith(("|", ">")):
+            if _fence_open(t) or t.lstrip().startswith((">",)) or _starts_table(entries, i):
                 break
             body.append(t.rstrip())
             i += 1
@@ -269,15 +306,16 @@ def parse_markdown(md: str) -> dict:
 
     # Lượt 1: tách heading (ngoài khối code) khỏi dòng thường.
     items: list[tuple] = []
-    fence: str | None = None
+    fence: tuple[str, int] | None = None
     for no, line in enumerate(md.split("\n"), 1):
-        f = _is_fence(line)
-        if fence is None and f:
-            fence = f
-            items.append(("line", no, line))
-            continue
-        if fence is not None:
-            if f == fence:
+        if fence is None:
+            opened = _fence_open(line)
+            if opened:
+                fence = (opened[0], opened[1])
+                items.append(("line", no, line))
+                continue
+        else:
+            if _fence_close(line, *fence):
                 fence = None
             items.append(("line", no, line))
             continue
