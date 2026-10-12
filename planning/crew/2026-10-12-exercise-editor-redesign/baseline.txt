@@ -1,1 +1,1 @@
-?? planning/crew/2026-10-12-exercise-editor-redesign/
+ M planning/crew/2026-10-12-exercise-editor-redesign/baseline.txt
