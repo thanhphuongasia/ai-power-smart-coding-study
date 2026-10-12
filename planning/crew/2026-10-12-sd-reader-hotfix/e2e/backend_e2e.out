@@ -1,0 +1,18 @@
+StreamableHTTP session manager started
+admin admin@e2e.test imported sd doc design-an-airline-reservation-system
+admin admin@e2e.test imported sd doc design-an-airline-reservation-system
+StreamableHTTP session manager shutting down
+OK   H0 import 200
+OK   H1 Phase 1 chưa xong: mọi task khoá  [6 task]
+OK   H1 POST attempt mọi task = 409  [[409, 409, 409, 409, 409, 409]]
+OK   H2 Phase 1 xong: Phase 2 mở
+OK   H2 mọi task mở ngay (không tuần tự)  [[True, True, True, True, True, True]]
+OK   H2 prompt có ở mọi task mở
+OK   H3 làm task thứ 3 trước task 1 = 201  [{"attempt":{"id":1,"n":1,"answer":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","created_at":]
+OK   H3 chỉ task 3 done  [[False, False, True, False, False, False]]
+OK   H3 task cuối cũng 201
+OK   H4 bob chưa đọc Phase 1: 409
+OK   H5 nhập lại làm mất done: Phase 2 + mọi task khoá lại
+OK   H5 POST khi Phase 2 khoá lại = 409
+
+KẾT QUẢ: TẤT CẢ OK

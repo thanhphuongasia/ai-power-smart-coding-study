@@ -19,3 +19,4 @@
 | 2026-10-12-exercise-editor-redesign | Thiết kế lại màn Soạn bài tập: code cell Jupyter, mục đóng/mở, responsive 3 cột (#25) | PR #26 mở, chờ user merge (done sau merge) |
 | 2026-10-12-issue29-reskin | Thay áo The Coach + responsive web (#29) | PR #30 mở, chờ user merge (done sau merge) |
 | 2026-10-12-system-design-mode | Chế độ học System Design: nhập .md, lộ trình kiểu Duolingo, đọc liền mạch, Thực chiến + MCP feedback (#31) | PR mở, chờ user merge (done sau merge) |
+| 2026-10-12-sd-reader-hotfix | Hotfix #35: màn đọc vuốt từng card, menu mục lục, task không khoá tuần tự | P2 đang làm |
