@@ -648,3 +648,17 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: backend phụ thuộc identity-service sống (JWKS chết thì `/mcp` trả 503, có grace 1 giờ cho khoá đã cache); chuỗi resource phải khớp ở ba nơi (PRM, `aud`, `AllowedResources`) và đổi domain là sửa cả hai repo; redeploy identity-service chạm các app khác (chỉ đổi config); đổi mật khẩu app không thu hồi quyền MCP vì quyền gắn tài khoản identity, cắt bằng `revoke`.
 
 **Nguồn**: backend/app/mcp_auth.py:1-13,169-218; backend/app/mcp_server.py:246-274; backend/app/tables.py:187-201; planning/crew/2026-10-11-mcp-content/PLAN.md (Context, Thiết kế, INV-03, INV-04, INV-06), DEVIATIONS.md.
+
+### Mọi sửa nội dung vào hàng chờ theo mục; live và draft là hai khái niệm tách biệt
+
+**Quyết định** (run 2026-10-11-content-review-queue): học viên chỉ đọc "live" (các bảng nội dung). Admin PUT và MCP không còn ghi live mà ghi các dòng `pending` vào bảng `content_changes` (migration 0006), mỗi dòng ứng một mục project/module/file/bài. "Draft" = live cộng mọi dòng pending; admin editor, MCP đọc/ghi và `GET /api/admin/content` đều làm việc trên draft, `base_version` = hash draft. Chỉ hai đường ghi live: `approve` từng mục (khoá, so mục live với `before`, validate toàn bộ live mới, rồi `load_content`) và CLI `load_content --force`. Preview của admin dùng lại `ExerciseScreen` với `/api/admin/run` chấm theo draft và không ghi tiến độ. Sửa lại mục "DB là nguồn chính ... một đường ghi": "một đường ghi" nay nghĩa là một hàm `load_content` cho nội dung đang chạy, còn PUT và MCP chỉ gửi duyệt.
+
+**Vì sao**: Claude qua MCP và admin editor trước đó ghi thẳng, nên một bản sửa sai lộ ngay cho học viên. User muốn xem thử đúng màn học viên và duyệt/bỏ từng bài, project/module/file là mục duyệt riêng.
+
+**Quyết định con**: (1) mỗi mục lưu `order` đầy đủ của anh em thay vì anchor `prev`, nên áp theo thứ tự nào cũng ra đúng draft và round-trip đúng khi đổi thứ tự; (2) diff chỉ coi là "đổi chỗ" những mục không thuộc dãy con chung dài nhất, để chèn một bài vào đầu file không biến mọi bài sau thành mục chờ; (3) ràng buộc cha–con khi duyệt: tạo con trước cha thì 422 `dependency_missing`, project mới kéo module cấp 1 mới, xoá project/module kéo các mục XOÁ trong nhánh, bài không bao giờ bị xoá ngầm, reject kéo theo mục không còn áp được.
+
+**Phương án đã bỏ / lệch plan**: (1) hỗ trợ chuyển module sang cha khác — sau 3 vòng review vẫn còn Major (đảo cha–con, kéo module có sẵn vào project mới), user chọn chặn đầu vào: 422 `unsupported_move`, MCP trả ToolError; (2) anchor `prev` — bỏ vì không round-trip khi đổi thứ tự; (3) Chrome e2e — thay bằng widget test từ Home và e2e HTTP 22 bước (cửa sổ hidden từng làm sai kết quả).
+
+**Đánh đổi đã chấp nhận**: CLI `load_content --force` khi có mục chờ cùng thùng chứa thì approve áp lại thứ tự draft; duyệt xoá module có bài đã được admin xoá giờ thành công; hàng chờ chưa phân trang; học viên đang mở app chỉ thấy bản mới khi tự refresh. Vận hành: test backend cần `TEST_DATABASE_URL` DB riêng, vì process fuzz của reviewer trên DB test dùng chung giữ khoá làm suite chậm.
+
+**Nguồn**: backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/mcp_server.py:91-125; backend/app/tables.py:203-232; backend/app/main.py:219-236; mobile/lib/features/exercise/exercise_screen.dart:51-75; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.

@@ -1,10 +1,10 @@
 # content-admin
 
-> Nội dung học nằm trong Postgres là nguồn chính; admin sửa qua `/api/admin/*` hoặc CLI, mọi đường ghi đi qua đúng một hàm `load_content` với một bộ luật chung; app có màn Admin (cây nội dung + form sửa bài).
+> Nội dung học nằm trong Postgres là nguồn chính; admin sửa qua `/api/admin/*` (vào hàng chờ duyệt, xem `docs/modules/content-review.md`) hoặc CLI; mọi đường ghi vào nội dung đang chạy đi qua đúng một hàm `load_content` với một bộ luật chung; app có màn Admin (cây nội dung + form sửa bài).
 
 ## Là gì
 
-Trước run này, `content.json` là nguồn thật và mỗi lần deploy thay toàn bộ DB bằng file đó, nên sửa trong DB sẽ bị ghi đè. Giờ ngược lại: DB là nguồn chính, admin sửa nội dung trong app và bấm Lưu, còn deploy chỉ nạp file khi DB còn rỗng. Để hai đường ghi (CLI và admin) không cho ra dữ liệu khác nhau, cả hai cùng đi qua `load_content`: kiểm bộ luật nội dung, kiểm phiên bản, rồi xoá hết và ghi lại trong một transaction (một lô thao tác DB hoặc xong hết hoặc huỷ hết). Các luật nội dung trước đây chỉ chạy trong test Dart trên `content.json` nay được port sang Python để chạy trên mọi bộ nội dung trước khi ghi. Nhờ vậy admin không thể lưu một bài mà học viên gõ đúng đáp án vẫn bị chấm sai.
+Trước run này, `content.json` là nguồn thật và mỗi lần deploy thay toàn bộ DB bằng file đó, nên sửa trong DB sẽ bị ghi đè. Giờ ngược lại: DB là nguồn chính, admin sửa nội dung trong app và bấm "Gửi duyệt" (bản sửa vào hàng chờ, chỉ khi admin duyệt thì học viên mới thấy; xem `docs/modules/content-review.md`), còn deploy chỉ nạp file khi DB còn rỗng. Để hai đường ghi vào nội dung đang chạy (CLI và duyệt) không cho ra dữ liệu khác nhau, cả hai cùng đi qua `load_content`: kiểm bộ luật nội dung, kiểm phiên bản, rồi xoá hết và ghi lại trong một transaction (một lô thao tác DB hoặc xong hết hoặc huỷ hết). Các luật nội dung trước đây chỉ chạy trong test Dart trên `content.json` nay được port sang Python để chạy trên mọi bộ nội dung trước khi ghi. Nhờ vậy admin không thể lưu một bài mà học viên gõ đúng đáp án vẫn bị chấm sai.
 
 ## Dùng khi nào
 
@@ -16,13 +16,14 @@ API admin (router gắn `Depends(require_admin)` ở cấp router nên route th�
 
 | Endpoint | Việc | Mã trả | file:dòng |
 | --- | --- | --- | --- |
-| `GET /api/admin/content` | xuất toàn bộ nội dung CÓ `judge` + `version` | 200 `{version, content}` | backend/app/admin_api.py:77-80 |
+| `GET /api/admin/content` | xuất BẢN NHÁP (live + mục chờ duyệt) CÓ `judge`, `version` = hash bản nháp, kèm danh sách mục chờ | 200 `{version, content, pending}` | backend/app/admin_api.py:94-98 |
 | `POST /api/admin/validate` `{content}` | chạy đủ luật, không ghi | 200 `{ok, errors[]}`; body sai 422 | backend/app/admin_api.py:83-90 |
-| `PUT /api/admin/content` `{base_version, content}` | kiểm luật, kiểm version, thay toàn bộ | 200 `{version}` · 409 `version_conflict` · 422 `{errors[]}` · 413 | backend/app/admin_api.py:93-124 |
+| `PUT /api/admin/content` `{base_version, content}` | kiểm luật, kiểm version với bản nháp, ghi thành các mục CHỜ DUYỆT (KHÔNG đụng nội dung đang chạy) | 200 `{version, pending}` · 409 `version_conflict` · 422 `{errors[]}` · 413 | backend/app/admin_api.py:118-144 |
+| `/api/admin/changes*` | danh sách, duyệt, bỏ từng mục | xem `docs/modules/content-review.md` | backend/app/admin_api.py:147-174 |
 
 Không token là 401, học viên là 403 (xem `docs/modules/auth-progress.md`). Mọi 422 của admin cùng dạng `{errors:[...]}`, tối đa 200 lỗi, để app hiện được trên form (backend/app/admin_api.py:35-61). Body được đọc sau khi qua kiểm quyền, nên khách chưa đăng nhập không bắt server parse tới 4MB (backend/app/admin_api.py:64-66, backend/app/main.py:26-27).
 
-Một đường ghi duy nhất. `_save` kiểm luật TRƯỚC khi giữ khoá (nội dung sai thì không chặn ai), sau đó lấy khoá ghi, so `base_version` với phiên bản hiện tại, rồi gọi `load_content(validated=True)`:
+Một đường ghi vào nội dung đang chạy. `_save` (PUT) kiểm luật TRƯỚC khi giữ khoá (nội dung sai thì không chặn ai), rồi `review.submit` lấy khoá ghi, so `base_version` với hash BẢN NHÁP và chỉ ghi dòng chờ duyệt; `load_content(validated=True)` chỉ được gọi khi admin duyệt một mục (`review.approve`, backend/app/review.py:512) hoặc từ CLI. Khoá dùng chung:
 
 ```python
 def lock_content(session: Session) -> None:
@@ -38,7 +39,7 @@ def lock_content(session: Session) -> None:
 | `version` công khai | sha256 của nội dung bỏ `judge` | `/content`, cache của app | backend/app/load_content.py:46-48 |
 | `admin_version` | sha256 của TOÀN BỘ nội dung (gồm `judge`) | `base_version` của PUT / 409 | backend/app/export_content.py:52-55 |
 
-Admin chỉ sửa test case thì `admin_version` đổi còn `version` công khai không đổi, nên mới phát hiện được xung đột.
+Admin chỉ sửa test case thì `admin_version` đổi còn `version` công khai không đổi, nên mới phát hiện được xung đột. Từ khi có hàng chờ, `admin_version` tính trên bản nháp (live + mục chờ), nên gửi duyệt hay duyệt/bỏ một mục đều đổi nó; `approve`/`reject` trả về version mới để editor đang mở không bị 409 giả.
 
 Bộ luật chung (`validation_errors`, rỗng = hợp lệ): schema pydantic, ký tự Postgres không lưu được (NUL, surrogate lẻ, NaN), trần kích thước, id trùng, shape case chấm, sơ đồ class, rồi `content_rule_errors` (backend/app/load_content.py:217-283, backend/app/content_rules.py:274-310). Luật port từ Dart nằm ở `content_rules.py`:
 
@@ -79,7 +80,7 @@ Màn Admin trong app đi từng tầng (drill-down: chạm một thẻ để xu�
 
 **Menu ⋯** (`AdminActionMenu` + `AdminMenuEntry`) gom hành động phụ của thẻ vào một nút; thao tác thêm dùng nút lớn `AdminAddButton`. **Hộp thoại thêm bài** có ba ô: Tiêu đề, Tên hàm, Class (tuỳ chọn); tên hàm và class phải là định danh Python (`^[A-Za-z_][A-Za-z0-9_]*$`), tiêu đề rỗng thì không tạo. Bấm Thêm thì tạo bài với template khung đúng hàm/class đó rồi mở thẳng form sửa bài.
 
-**Thanh dưới ghim** `AdminSaveBar` dùng chung cho cả ba tầng: "Đã đồng bộ" hoặc "● Chưa lưu", nút Kiểm tra và Lưu; có lỗi thì hiện chip "N lỗi" chạm mở bottom sheet danh sách lỗi; "Hủy sửa" có hộp xác nhận. 409 hiện `AdminConflictBanner` (tải lại sẽ bỏ thay đổi chưa lưu); 422 đưa lỗi vào chip/sheet. Mọi ghi đi qua controller (`updateNode`, `addTheme`, `addModule`, `addFile`, `addExercise`, `deleteExercise`, ...), không màn nào sửa JSON trực tiếp, nên dirty/409/422 giữ nguyên hành vi cũ.
+**Thanh dưới ghim** `AdminSaveBar` dùng chung cho cả ba tầng: "Đã đồng bộ" hoặc "● Chưa lưu", nút Kiểm tra và Gửi duyệt (trước đây là Lưu); có lỗi thì hiện chip "N lỗi" chạm mở bottom sheet danh sách lỗi; "Hủy sửa" có hộp xác nhận. 409 hiện `AdminConflictBanner` (tải lại sẽ bỏ thay đổi chưa lưu); 422 đưa lỗi vào chip/sheet. Mọi ghi đi qua controller (`updateNode`, `addTheme`, `addModule`, `addFile`, `addExercise`, `deleteExercise`, ...), không màn nào sửa JSON trực tiếp, nên dirty/409/422 giữ nguyên hành vi cũ.
 
 **Chấm đỏ** trên thẻ bài, module và project lấy từ chuỗi lỗi server (hàm `exerciseIdsWithErrors` đổi chuỗi lỗi thành tập id bài), nhận ba dạng:
 
@@ -100,7 +101,7 @@ final template = cls == null
 // ... 'indent_level': cls == null ? 1 : 2,
 ```
 
-Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Sau khi Lưu thành công, `AdminController` gọi `contentProvider.notifier.refresh()` để Home thấy tên mới ngay; thiếu bước này admin lưu xong vẫn thấy dữ liệu cũ tới khi tải lại trang.
+Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Gửi duyệt thành công thì `AdminController.save` KHÔNG nạp lại `contentProvider` (nội dung học viên chưa đổi, mobile/lib/features/admin/admin_controller.dart:517-519); chỉ khi admin duyệt một mục (`_decide`) mới gọi `contentProvider.notifier.refresh()` để Home của admin thấy bản mới ngay (mobile/lib/features/admin/admin_controller.dart:629-631).
 
 ## Ranh giới & đánh đổi
 
@@ -108,9 +109,10 @@ Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Sau khi 
 | --- | --- | --- |
 | DB là nguồn chính; deploy `--if-empty` | `content.json` là nguồn, deploy ghi đè | admin sửa trực tiếp mà không bị deploy xoá; đổi lại sửa bằng file phải export trước |
 | Port luật Dart sang Python, chạy ở server | chỉ test Dart trên `content.json` | admin ghi được bộ nội dung bất kỳ, nên luật phải chạy trên bộ đó |
-| Một hàm ghi `load_content` cho CLI và admin | admin có đường ghi riêng | không thể có hai bộ luật lệch nhau; khoá ghi chung |
-| `409` theo `admin_version` | ghi đè "người lưu sau thắng" | hai admin không âm thầm xoá việc của nhau |
-| Lưu = thay toàn bộ nội dung | cập nhật từng bản ghi | một đường ghi, kiểm cả bộ luật liên bài (id toàn cục, sơ đồ) |
+| Một hàm ghi `load_content` cho CLI và duyệt | admin có đường ghi riêng | không thể có hai bộ luật lệch nhau; khoá ghi chung |
+| Lưu = gửi vào hàng chờ, học viên chỉ thấy bản đã duyệt | ghi thẳng như trước | admin/Claude sửa nháp được mà không lộ cho học viên (`docs/modules/content-review.md`) |
+| `409` theo `admin_version` (của bản nháp) | ghi đè "người lưu sau thắng" | hai admin không âm thầm xoá việc của nhau |
+| Editor vẫn gửi cả bộ nội dung; server diff ra từng mục | gửi từng mục từ client | app giữ nguyên thao tác sửa; kiểm cả bộ luật liên bài (id toàn cục, sơ đồ) trên bản nháp |
 | Server KHÔNG chạy lời giải mẫu khi Lưu | chạy `judge.solution` qua harness | tránh thực thi code ở server admin; việc đó là của nút Run trên máy chấm |
 | Server cho module rỗng (không có luật "mỗi module có ≥1 bài") | port nguyên luật Dart | admin xoá bài cuối của module hoặc dựng khung trước sẽ bị chặn; test Dart vẫn giữ luật trên `content.json` (DEVIATIONS.md) |
 
@@ -125,9 +127,9 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 - UI drill-down: web luôn mở lại Home khi tải trang nên deep link `/admin/...` chưa dùng được (có từ trước); đếm số bài/lỗi tính lại mỗi lần build, chưa đo; test chưa phân biệt nhánh pop/go của breadcrumb trên stack sâu (planning/crew/2026-10-11-admin-ux-levels/reviews/T-02.md Backlog).
 - Admin đổi nhãn ô thì lịch ôn khoá theo `block.id` cũ thành mồ côi (SEAM #3).
 - Backend: giữ kết nối DB khi đọc body admin; chưa có test tranh khoá bằng hai kết nối thật; phép kiểm chéo CPU của sơ đồ được đo <1s ở payload xấu nhất bằng test hiệu năng, nhưng run đóng sau 3 vòng review (vòng 3 vẫn CẦN SỬA, orchestrator sửa rồi đóng, không có vòng 4; user duyệt).
-- Admin lưu xong, học viên đang mở bài giữ nội dung cũ tới lần tải kế; bài bị xoá thì `/run` trả 404.
+- Admin duyệt xong, học viên đang mở bài giữ nội dung cũ tới lần tải kế; bài bị xoá thì `/run` trả 404.
 - Chưa xác minh: hành vi nginx thật với `location /api/admin/` ngoài lần smoke test 401 sau deploy; CORS khi `flutter run` khác origin backend local.
 
 ## Nguồn
 
-backend/app/admin_api.py:1-124; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-60; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:88-110; planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.
+backend/app/admin_api.py:1-174; backend/app/review.py:399-436,487-514; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-60; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:88-110; planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.

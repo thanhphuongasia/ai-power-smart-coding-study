@@ -17,8 +17,9 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | backend/content | `GET /content`: cả cây nội dung học (theme → module lồng nhau → file → bài) từ Postgres, không có phần chấm — backend/app/content_api.py:184 | docs/ARCHITECTURE.md:1 |
 | backend/load_content | đường ghi nội dung DUY NHẤT: validate rồi thay toàn bộ trong một transaction dưới advisory lock; CLI `--if-empty`/`--force` — backend/app/load_content.py:307, backend/app/load_content.py:390 | docs/modules/content-admin.md:1 |
 | backend/content_rules + export_content | luật nội dung port từ Dart chạy ở server; xuất DB ra shape `content.json` — backend/app/content_rules.py:274, backend/app/export_content.py:36 | docs/modules/content-admin.md:1 |
-| backend/admin_api | `/api/admin/content` GET/PUT (version, 409) + `/api/admin/validate`, chỉ role admin — backend/app/admin_api.py:33 | docs/modules/content-admin.md:1 |
-| backend/mcp | `POST /mcp` cho claude.ai: cổng `McpGate` verify JWT RS256 của identity-service (401 + `resource_metadata`, 503 khi JWKS chết), quyền theo bảng `mcp_access` kiểm mỗi tool call, 12 tool ghi qua cùng đường/khoá với admin PUT — backend/app/mcp_server.py:246, backend/app/mcp_auth.py:169, backend/app/mcp_access.py:49 | docs/modules/mcp.md:1 |
+| backend/admin_api | `/api/admin/content` GET (bản nháp)/PUT (gửi vào hàng chờ; version, 409) + `/api/admin/validate` + `/api/admin/changes*` (duyệt/bỏ từng mục), chỉ role admin — backend/app/admin_api.py:33, backend/app/admin_api.py:147 | docs/modules/content-admin.md:1 |
+| backend/review | hàng chờ duyệt: bảng `content_changes`, draft = live ⊕ mục chờ, submit/approve/reject theo từng mục, luật cha–con; `/api/admin/run` chấm theo draft — backend/app/review.py:399, backend/app/review.py:487, backend/app/main.py:219 | docs/modules/content-review.md:1 |
+| backend/mcp | `POST /mcp` cho claude.ai: cổng `McpGate` verify JWT RS256 của identity-service (401 + `resource_metadata`, 503 khi JWKS chết), quyền theo bảng `mcp_access` kiểm mỗi tool call, 12 tool ghi vào hàng chờ duyệt qua cùng đường/khoá với admin PUT — backend/app/mcp_server.py:246, backend/app/mcp_auth.py:169, backend/app/mcp_access.py:49 | docs/modules/mcp.md:1 |
 | backend/auth | đăng nhập email+mật khẩu (argon2id), token Bearer lưu sha256, throttle, đổi mật khẩu, `current_user`/`require_admin` — backend/app/auth.py:160, backend/app/auth.py:222 | docs/modules/auth-progress.md:1 |
 | backend/progress | `GET/PUT /api/progress*`, `record_pass` do `/run` gọi — backend/app/progress.py:28, backend/app/progress.py:196 | docs/modules/auth-progress.md:1 |
 | backend/seed_users | tạo 2 tài khoản ban đầu, mật khẩu chỉ vào file root 0600 — backend/app/seed_users.py:45 | docs/modules/deploy.md:1 |
@@ -30,7 +31,7 @@ không nhận `.dart`. Vì vậy cột cuối của dòng Dart trỏ về mục 
 | features/exercise | màn bài 3 tab (mobile/lib/features/exercise/exercise_screen.dart:31), tiến độ/đồng hồ (mobile/lib/features/exercise/session_controller.dart:29), editor autocomplete | docs/modules/exercise-screen.md:1 |
 | features/browse | duyệt Home → Theme → Module (lồng nhiều tầng) → danh sách bài, nhóm theo class, có trạng thái khoá (mobile/lib/features/browse/exercise_row.dart:39) | docs/ARCHITECTURE.md:1 |
 | features/review, stats, practice, shell | ôn tập, thống kê, luyện, bottom nav; đọc tiến độ từ cùng `progressProvider`, không mô tả chi tiết ở đây (mobile/lib/app/router.dart:26-59) | docs/ARCHITECTURE.md:1 |
-| features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài (mobile/lib/features/admin/exercise_editor.dart:380), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
+| features/admin + account | màn Admin đi từng tầng Projects → module → file/bài (mobile/lib/features/admin/admin_screen.dart:15, mobile/lib/features/admin/admin_theme_screen.dart:1, mobile/lib/features/admin/admin_module_screen.dart:1), form sửa bài (mobile/lib/features/admin/exercise_editor.dart:380), màn Chờ duyệt + chi tiết diff + xem thử như học viên (mobile/lib/features/admin/review_screen.dart:1, mobile/lib/features/admin/review_detail_screen.dart:1, mobile/lib/features/exercise/exercise_screen.dart:51), đăng nhập và đổi mật khẩu (mobile/lib/features/account/login_screen.dart:1) | docs/modules/content-admin.md:1 |
 | app | theme (mobile/lib/app/theme.dart:1) + router (mobile/lib/app/router.dart:22) + cổng nội dung (mobile/lib/app/content_gate.dart:12) + cổng đăng nhập (mobile/lib/app/auth_gate.dart:13) | docs/ARCHITECTURE.md:1 |
 | deploy | triển khai lên VPS dùng chung: nginx cổng 443 (HTTPS, domain `codewithphuong.jacons-corp.com`, cert Let's Encrypt; :80 và :8090 trả 308) phục vụ web tĩnh và chuyển `/content`, `/run`, `/api/*` vào uvicorn 127.0.0.1:8100; một lệnh `deploy/deploy.sh` (migration, nạp nội dung chỉ khi DB rỗng, seed user) — deploy/deploy.sh:1, deploy/deploy.sh:87-97, deploy/nginx/smart-coding-study.conf:8-27 | docs/modules/deploy.md:1 |
 | deploy/ios | build bản iOS cho TestFlight: `flutter build ipa` trỏ cùng origin HTTPS; icon tạm sinh bằng script — deploy/ios-build.sh:11-35, deploy/IOS-TESTFLIGHT.md:1, mobile/tool/make_app_icon.py:1 | docs/modules/deploy.md:1 |
@@ -382,23 +383,23 @@ Mật khẩu và token đi qua HTTPS (deploy/nginx/smart-coding-study.conf:22-30
 ### Là gì
 
 Admin sửa nội dung ngay trong app: màn Admin đi từng tầng theme → module → file/bài (mỗi tầng một màn, có breadcrumb) và form sửa từng bài. Bấm "Kiểm tra" chạy bộ luật
-nội dung ở server mà không ghi, bấm "Lưu" ghi cả bộ nội dung kèm số phiên bản đang giữ; nếu người khác đã lưu trước thì server trả 409 để
-không ai âm thầm xoá việc của nhau. CLI và nút Lưu cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
-`docs/modules/content-admin.md`.
+nội dung ở server mà không ghi, bấm "Gửi duyệt" gửi cả bộ nội dung kèm số phiên bản đang giữ; server diff ra từng mục và đưa vào hàng chờ, học viên vẫn chỉ thấy bản đã duyệt (live).
+Nếu người khác đã gửi trước thì server trả 409 để không ai âm thầm xoá việc của nhau. Claude qua MCP cũng chỉ vào hàng chờ. Admin duyệt hoặc bỏ từng mục ở màn "Chờ duyệt"; CLI và duyệt cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
+`docs/modules/content-admin.md` và `docs/modules/content-review.md`.
 
 ### Cách hoạt động
 
 | Chặng | Làm gì | file:dòng |
 | --- | --- | --- |
-| API | `GET /api/admin/content` (có `judge`), `POST /api/admin/validate`, `PUT /api/admin/content` → 200 / 409 / 422; cả router gắn `require_admin` | backend/app/admin_api.py:33, backend/app/admin_api.py:77-124 |
+| API | `GET /api/admin/content` (bản nháp, có `judge`), `POST /api/admin/validate`, `PUT /api/admin/content` → 200 / 409 / 422 (vào hàng chờ), `GET /api/admin/changes`, `POST .../approve`, `POST .../reject`; cả router gắn `require_admin` | backend/app/admin_api.py:33, backend/app/admin_api.py:94-174 |
 | Luật | schema + trần kích thước + id/case/sơ đồ + luật port từ Dart (marker, ghép đáp án == solution, ≤3 ô, 3 gợi ý, không ô sau `return`, sơ đồ khớp code) | backend/app/load_content.py:217-283, backend/app/content_rules.py:274-310 |
-| Ghi | kiểm `base_version` rồi `load_content` trong cùng một `pg_advisory_xact_lock` | backend/app/admin_api.py:93-111, backend/app/load_content.py:298-300 |
+| Ghi | PUT: kiểm `base_version` (hash bản nháp) rồi upsert mục chờ trong `pg_advisory_xact_lock`; chỉ `approve` (và CLI `--force`) mới gọi `load_content` lên nội dung đang chạy | backend/app/review.py:399-434, backend/app/review.py:487-514, backend/app/load_content.py:298-300 |
 | CLI | `load_content --if-empty` (deploy) / `--force`; `export_content` xuất DB ra shape `content.json` | backend/app/load_content.py:390-416, backend/app/export_content.py:36-69 |
-| App | `AdminController` giữ bản nháp và `version`; Lưu thành công thì nạp lại `/content` (mobile/lib/features/admin/admin_controller.dart:456-480) | docs/modules/content-admin.md:1 |
+| App | `AdminController` giữ bản nháp và `version`; Gửi duyệt không nạp lại `/content`, chỉ duyệt một mục mới nạp lại (mobile/lib/features/admin/admin_controller.dart:517-519, mobile/lib/features/admin/admin_controller.dart:629-631) | docs/modules/content-review.md:1 |
 
 ### Ranh giới
 
-Server không chạy lời giải mẫu khi Lưu (không thực thi code ở server admin); việc đó là của nút Run (backend/app/admin_api.py:9). Không có lịch sử phiên bản: khôi phục dùng `export_content` và git.
+Server không chạy lời giải mẫu khi Gửi duyệt (không thực thi code ở server admin); việc đó là của nút Run, và preview của admin chấm bằng `/api/admin/run` theo bản nháp mà không ghi tiến độ (backend/app/main.py:219-236). Chưa hỗ trợ chuyển module sang project/module cha khác: gửi duyệt bị 422 `unsupported_move` (backend/app/review.py:87-95). Không có lịch sử phiên bản: khôi phục dùng `export_content` và git.
 Luật nội dung có hai bản cài đặt, Dart (`mergeCells`, preview/test) và Python (`content_rules.py`, server), không có test so trực tiếp nhau (backend/app/content_rules.py:8-11).
 Lưu là thay toàn bộ nội dung, nên học viên đang mở bài giữ bản cũ tới lần tải kế.
 
@@ -496,6 +497,8 @@ widget test, chưa chạy e2e.
 Deploy VPS (run 2026-10-11-deploy-vps-web): `/run` có thể trả 504 khi tải cao vì hàng đợi Semaphore(4)
 (backend/app/main.py:36) cộng 15s Judge0 vượt `proxy_read_timeout` 18s; domain lặp ở ba file (deploy/deploy.sh:16, deploy/ios-build.sh:11, deploy/nginx/smart-coding-study.conf:12) và cổng 8100 ở nginx/systemd, chỉ smoke test (phía server) bắt được lệch; thư mục tạm `/root/.smart-coding-study-deploy` không tự dọn nếu script chết giữa chừng
 (deploy/deploy.sh:40). Review chéo bằng model họ khác không chạy được (Codex timeout 2 lần).
+
+Hàng chờ duyệt (run content-review-queue, planning/crew/2026-10-11-content-review-queue/STATUS.md Backlog): `GET /api/admin/changes` không phân trang và `merge_pending` deepcopy mỗi mục chờ (O(k·N)); CLI `load_content --force` đổi thứ tự trong lúc có mục chờ thì approve áp lại thứ tự của draft; học viên đang mở app chỉ thấy bản duyệt khi tự refresh. Chi tiết `docs/modules/content-review.md`.
 
 Tài khoản, tiến độ và quản trị (run users-progress-admin, planning/crew/2026-10-11-users-progress-admin/STATUS.md Backlog; HTTPS đã có từ run testflight-prep):
 code học viên in giả dòng kết quả "passed" thì server vẫn ghi passed (backend/app/main.py:178-184); "xong bài" có thể lệch local/server khi token
