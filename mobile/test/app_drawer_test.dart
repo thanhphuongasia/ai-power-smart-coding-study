@@ -151,4 +151,75 @@ void main() {
     expect(before, Brightness.light);
     expect(after, Brightness.dark);
   });
+
+  testWidgets('400px: bottom-nav có "Design"; chạm sang /design rồi quay lại '
+      '4 tab cũ đúng màn (không lệch index)', (tester) async {
+    await _pumpApp(tester, 400);
+    final nav = find.byKey(const Key('bottom-nav'));
+    for (final label in ['Home', 'Luyện', 'Ôn tập', 'Tiến độ', 'Design']) {
+      expect(
+        find.descendant(of: nav, matching: find.text(label)),
+        findsOneWidget,
+        reason: label,
+      );
+    }
+    expect(find.byKey(const Key('sd-docs-screen')), findsNothing);
+
+    Future<void> tapTab(String label) async {
+      await tester.tap(find.descendant(of: nav, matching: find.text(label)));
+      await tester.pumpAndSettle();
+    }
+
+    await tapTab('Design');
+    expect(_location(), '/design');
+    expect(find.byKey(const Key('sd-docs-screen')), findsOneWidget);
+
+    await tapTab('Home');
+    expect(_location(), '/');
+    expect(find.text('Luyện tập hôm nay'), findsOneWidget);
+    await tapTab('Design');
+    await tapTab('Luyện');
+    expect(_location(), '/practice');
+    expect(find.byKey(const Key('practice-split-chunks')), findsOneWidget);
+    await tapTab('Design');
+    await tapTab('Ôn tập');
+    expect(_location(), '/review');
+    expect(find.byKey(const Key('review-empty')), findsOneWidget);
+    await tapTab('Design');
+    await tapTab('Tiến độ');
+    expect(_location(), '/stats');
+    expect(find.byKey(const Key('stats-heatmap')), findsOneWidget);
+    expect(find.byKey(const Key('sd-docs-screen')), findsNothing);
+  });
+
+  testWidgets('drawer 800px: mục thứ 5 "Design"; drawer-nav-0..3 vẫn là 4 mục '
+      'cũ', (tester) async {
+    await _pumpApp(tester, 800);
+    await _openDrawer(tester);
+    const labels = ['Home', 'Luyện', 'Ôn tập', 'Tiến độ', 'Design'];
+    const routes = ['/', '/practice', '/review', '/stats', '/design'];
+    for (var i = 0; i < labels.length; i++) {
+      expect(
+        find.descendant(
+          of: find.byKey(Key('drawer-nav-$i')),
+          matching: find.text(labels[i]),
+        ),
+        findsOneWidget,
+        reason: 'drawer-nav-$i',
+      );
+    }
+    expect(find.byKey(const Key('drawer-nav-5')), findsNothing);
+
+    // Mỗi mục dẫn đúng route (đi vòng qua Design để chắc không lệch).
+    for (final i in [4, 0, 4, 1, 4, 2, 4, 3]) {
+      // Lần đầu drawer còn mở từ phần kiểm nhãn; các lần sau đã tự đóng.
+      if (find.byKey(const Key('app-drawer')).evaluate().isEmpty) {
+        await _openDrawer(tester);
+      }
+      await tester.tap(find.byKey(Key('drawer-nav-$i')));
+      await tester.pumpAndSettle();
+      expect(_location(), routes[i], reason: 'drawer-nav-$i');
+    }
+    expect(find.byKey(const Key('app-drawer')), findsNothing);
+  });
 }

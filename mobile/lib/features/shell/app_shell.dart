@@ -1,4 +1,4 @@
-/// Khung 4 tab (Home / Luyện / Ôn tập / Tiến độ). Dưới [AppBreakpoint.nav]:
+/// Khung 5 tab (Home / Luyện / Ôn tập / Tiến độ / Design). Dưới [AppBreakpoint.nav]:
 /// bottom nav; từ ngưỡng đó: không bottom nav, có top bar ☰ + drawer. Màn chi
 /// tiết (theme, topic, bài tập, cell, admin) mở toàn màn, che bottom nav.
 library;
@@ -67,6 +67,11 @@ class AppShell extends ConsumerWidget {
               icon: Icon(Icons.insights_outlined),
               selectedIcon: Icon(Icons.insights),
               label: 'Tiến độ',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.account_tree_outlined),
+              selectedIcon: Icon(Icons.account_tree),
+              label: 'Design',
             ),
           ],
         ),

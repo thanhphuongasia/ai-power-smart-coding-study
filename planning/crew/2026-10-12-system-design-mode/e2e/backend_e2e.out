@@ -1,0 +1,16 @@
+OK   E1 import 200  [9 section, 26 card]
+OK   E1 section 1 mở, section 2 khoá
+OK   E1 PUT đánh dấu đọc
+OK   E1 tiến độ còn ở request mới
+OK   E2 nhập lại 200
+OK   E2 section chứa card sửa hết done
+OK   E2 các card khác còn đọc  [2/3]
+OK   E2 khôi phục thì section done lại (id theo nội dung)
+OK   E3 Phase 2 mở
+OK   E3 hai lần thử 201
+OK   E3 lịch sử còn cả hai, mới nhất trước  [{"items":[{"id":2,"n":2,"answer":"POST /bookings dùng Idempotency-Key; tìm chuyế]
+OK   E3 JSON thô không lộ rubric/từ khoá  [[]]
+OK   E4 bob không thấy lần thử của ann
+OK   E4 bob chưa đọc xong thì task khoá 409  [{"detail":"task_locked"}]
+OK   E4 section khoá ghi tiến độ bị 409
+KẾT QUẢ: TẤT CẢ OK

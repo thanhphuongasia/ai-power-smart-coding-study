@@ -230,3 +230,107 @@ class ContentChange(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     decided_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# --- Chế độ học System Design ----------------------------------------------------------------
+# Tài liệu SD đi đường riêng (không qua load_content, không qua hàng chờ duyệt): admin nhập .md
+# qua /api/admin/sd. Tiến độ và lần thử của học viên KHÔNG có FK tới bảng nội dung SD (chỉ FK
+# users): nhập lại tài liệu xoá-rồi-ghi section/task, FK cascade sẽ xoá sạch tiến độ.
+
+
+class SdDoc(Base):
+    __tablename__ = "sd_docs"
+    __table_args__ = (CheckConstraint("status IN ('draft','published')", name="ck_sd_docs_status"),)
+
+    # Slug của tài liệu, ổn định giữa các lần nhập lại.
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    title: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(10), default="draft", server_default="draft")
+    # Các card của phần "Bối cảnh" (Phase 2): [{id, kind, title, body}].
+    context: Mapped[list] = mapped_column(JSONB, default=list)
+    created_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SdSection(Base):
+    """Một section của tài liệu. `cards` là danh sách [{id, kind, title, body}], id = hash nội dung."""
+
+    __tablename__ = "sd_sections"
+    __table_args__ = (UniqueConstraint("doc_id", "position", name="uq_sd_sections_doc_position"),)
+
+    doc_id: Mapped[str] = mapped_column(ForeignKey("sd_docs.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer)
+    chapter: Mapped[str] = mapped_column(Text)
+    chapter_position: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(Text)
+    cards: Mapped[list] = mapped_column(JSONB, default=list)
+
+
+class SdTask(Base):
+    """Một task thực chiến. `rubric` = [{text, keywords}] CHỈ server đọc, không bao giờ ra client."""
+
+    __tablename__ = "sd_tasks"
+    __table_args__ = (UniqueConstraint("doc_id", "position", name="uq_sd_tasks_doc_position"),)
+
+    doc_id: Mapped[str] = mapped_column(ForeignKey("sd_docs.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(Text)
+    prompt: Mapped[str] = mapped_column(Text)
+    hints: Mapped[list] = mapped_column(JSONB, default=list)
+    rubric: Mapped[list] = mapped_column(JSONB, default=list)
+    # Section chứa đáp án mẫu (id section, không FK).
+    ref_section_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class SdProgress(Base):
+    """Các card đã đọc của một user trong một section. Không FK tới nội dung SD (xem đầu mục)."""
+
+    __tablename__ = "sd_progress"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    doc_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    section_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    read_cards: Mapped[list] = mapped_column(JSONB, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SdAttempt(Base):
+    """Một lần nộp bài thực chiến. Mỗi lần nộp một dòng, không ghi đè: `n` đếm theo (user, doc, task).
+
+    `auto_result` do server chấm từ khoá ngay khi nộp. `status='reviewed'` + `feedback` do Claude ghi
+    qua MCP; khi có bản reviewed thì app hiện bản đó.
+    """
+
+    __tablename__ = "sd_attempts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "doc_id", "task_id", "n", name="uq_sd_attempts_user_task_n"),
+        CheckConstraint("status IN ('auto','reviewed')", name="ck_sd_attempts_status"),
+        CheckConstraint("n >= 1", name="ck_sd_attempts_n"),
+        # Bản reviewed phải có feedback và thời điểm chấm; unique ở trên đã phục vụ lịch sử theo (user, doc, task).
+        CheckConstraint(
+            "status = 'auto' OR (feedback IS NOT NULL AND reviewed_at IS NOT NULL)", name="ck_sd_attempts_reviewed"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    doc_id: Mapped[str] = mapped_column(String(100))
+    task_id: Mapped[str] = mapped_column(String(100))
+    n: Mapped[int] = mapped_column(Integer)
+    answer: Mapped[str] = mapped_column(Text)
+    # {hits: [bool theo từng ý rubric], score: int}
+    auto_result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto", index=True)
+    feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # [{text, ok, note}] theo từng ý rubric, do người/Claude chấm.
+    verdicts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
