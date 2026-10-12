@@ -153,10 +153,19 @@ final sdRepositoryProvider = Provider<SdRepository>(
   (ref) => SdRepository(ref.watch(apiClientProvider)),
 );
 
+/// Riverpod 3 mặc định thử lại ngầm lỗi `Exception` (tới 10 lần, backoff) và trong lúc đó trạng thái vẫn
+/// là "đang tải": 401/404/5xx của server sẽ làm màn hình quay mãi thay vì báo lỗi. Lỗi HTTP từ server
+/// (`SdApiException`) hiện ngay để người dùng bấm "Thử lại"; lỗi mạng/timeout vẫn theo retry mặc định.
+Duration? sdRetry(int retryCount, Object error) => error is SdApiException
+    ? null
+    : ProviderContainer.defaultRetry(retryCount, error);
+
 final sdDocsProvider = FutureProvider.autoDispose<List<SdDocSummary>>(
   (ref) => ref.watch(sdRepositoryProvider).listDocs(),
+  retry: sdRetry,
 );
 
 final sdDocProvider = FutureProvider.autoDispose.family<SdDoc, String>(
   (ref, id) => ref.watch(sdRepositoryProvider).getDoc(id),
+  retry: sdRetry,
 );

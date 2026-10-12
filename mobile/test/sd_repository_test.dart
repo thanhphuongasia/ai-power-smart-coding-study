@@ -103,6 +103,7 @@ Map<String, dynamic> _attemptJson({int n = 1}) => {
 };
 
 void main() {
+  sdRetryTests();
   test('listDocs parse đúng và gọi GET /api/sd/docs', () async {
     final (repo, seen) = _repo(
       (_) => _json({
@@ -385,4 +386,21 @@ void main() {
     expect(doc.tasks.single.name, 'Thiết kế khoá');
     expect(attempt.items, hasLength(2));
   });
+}
+
+// --- retry của provider: lỗi HTTP từ server hiện ngay, không quay mãi ----------------------------
+
+void sdRetryTests() {
+  test('SdApiException không bị thử lại ngầm (hiện lỗi ngay)', () {
+    expect(sdRetry(0, SdApiException(401, null)), isNull);
+    expect(sdRetry(0, SdApiException(500, 'x')), isNull);
+  });
+
+  test('lỗi mạng vẫn theo retry mặc định của Riverpod', () {
+    expect(sdRetry(0, const SocketLikeError()), isNotNull);
+  });
+}
+
+class SocketLikeError implements Exception {
+  const SocketLikeError();
 }
