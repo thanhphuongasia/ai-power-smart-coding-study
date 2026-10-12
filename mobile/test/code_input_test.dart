@@ -841,6 +841,28 @@ void _ghostGroup() {
       await _teardown(tester, h);
     });
 
+    testWidgets('đáp án nhiều dòng: chip ghost-accept không rỗng sau dòng 1', (
+      tester,
+    ) async {
+      final h = _Harness();
+      await _pumpGhost(tester, h, answers: ['x = 1\ny = 2']);
+      _ctrl(tester).value = const TextEditingValue(
+        text: 'x = 1',
+        selection: TextSelection.collapsed(offset: 5),
+      );
+      await tester.pump();
+      // Ghost bắt đầu bằng '\n' → nhãn là dòng không rỗng đầu tiên.
+      expect(_spanText(tester), 'x = 1\ny = 2');
+      final chip = find.descendant(
+        of: find.byKey(const Key('ghost-accept')),
+        matching: find.byType(Text),
+      );
+      expect(tester.widget<Text>(chip).data, '⇥ y = 2');
+      await _tap(tester, 'ghost-accept');
+      expect(_ctrl(tester).text, 'x = 1\ny = 2');
+      await _teardown(tester, h);
+    });
+
     testWidgets('chip vocab chèn từ tại con trỏ', (tester) async {
       final h = _Harness();
       await _pumpGhost(tester, h);

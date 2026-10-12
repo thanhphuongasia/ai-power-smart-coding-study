@@ -48,10 +48,11 @@ Brightness _brightness(WidgetTester tester) =>
     Theme.of(tester.element(find.byKey(const Key('bottom-nav')))).brightness;
 
 void main() {
-  testWidgets('nút giao diện: hệ thống (sáng) → sáng → tối → hệ thống', (
+  testWidgets('nút giao diện: mặc định sáng → tối → hệ thống → sáng', (
     tester,
   ) async {
-    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    // Nền tảng đang tối: mặc định vẫn phải sáng (không theo hệ thống).
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     await _pumpApp(tester);
 
@@ -59,9 +60,10 @@ void main() {
     final button = find.byKey(const Key('theme-mode-button'));
     await tester.tap(button);
     await tester.pumpAndSettle();
-    expect(_brightness(tester), Brightness.light);
+    expect(_brightness(tester), Brightness.dark);
     await tester.tap(button);
     await tester.pumpAndSettle();
+    // Theo hệ thống: nền tảng đang tối.
     expect(_brightness(tester), Brightness.dark);
     await tester.tap(button);
     await tester.pumpAndSettle();

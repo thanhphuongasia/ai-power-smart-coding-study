@@ -297,13 +297,15 @@ class _CodeInputState extends State<CodeInput> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    _controller.ghostColor = context.palette.inkMuted.withValues(alpha: 0.5);
+    // Khối code luôn nền tối ở cả hai theme (INV-08) → chữ phụ lấy từ codeInk.
+    final palette = context.palette;
+    _controller.ghostColor = palette.codeInk.withValues(alpha: 0.4);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final bounded = constraints.maxHeight.isFinite;
         final codeField = CodeTheme(
-          data: CodeThemeData(styles: _codeStyles(scheme)),
+          data: CodeThemeData(styles: codeSyntaxStyles(palette)),
           child: CodeField(
             key: Key('${widget.keyPrefix}-field'),
             controller: _controller,
@@ -317,13 +319,11 @@ class _CodeInputState extends State<CodeInput> {
               showErrors: false,
               showFoldingHandles: false,
               textStyle: TextStyle(
-                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                color: palette.codeInk.withValues(alpha: 0.5),
               ),
             ),
-            background: Color.alphaBlend(
-              scheme.onSurface.withValues(alpha: 0.04),
-              scheme.surface,
-            ),
+            background: palette.codeSurface,
+            cursorColor: palette.codeInk,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             textStyle: const TextStyle(
               fontFamily: _mono,
@@ -355,7 +355,7 @@ class _CodeInputState extends State<CodeInput> {
                       fontSize: _fontSize,
                       height: _lineHeight,
                       fontStyle: FontStyle.italic,
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      color: palette.codeInk.withValues(alpha: 0.55),
                     ),
                   ),
                 ),
@@ -479,7 +479,12 @@ class _BarsPanel extends StatelessWidget {
     final onSuggestion = this.onSuggestion;
     final onSymbol = this.onSymbol;
     final palette = context.palette;
-    final ghostLabel = ghostText.split('\n').first.trim();
+    // Ghost có thể bắt đầu bằng '\n' (đáp án nhiều dòng, vừa gõ xong dòng 1)
+    // → nhãn lấy dòng KHÔNG rỗng đầu tiên.
+    final ghostLabel = ghostText
+        .split('\n')
+        .map((l) => l.trim())
+        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
     // Chạm vào 2 hàng này được tính là "bên trong" ô nhập → không mất
     // focus, bàn phím không sụp.
     return TextFieldTapRegion(
@@ -571,19 +576,24 @@ bool _isWordChar(String c) {
       u == 95; // _
 }
 
-Map<String, TextStyle> _codeStyles(ColorScheme scheme) => {
-  'root': TextStyle(
-    color: scheme.onSurface,
-    backgroundColor: scheme.surfaceContainer,
-  ),
-  'keyword': TextStyle(color: scheme.primary),
-  'built_in': TextStyle(color: scheme.primary),
-  'literal': TextStyle(color: scheme.primary),
-  'number': TextStyle(color: scheme.primary),
-  'string': TextStyle(color: scheme.onSurfaceVariant),
-  'comment': TextStyle(color: scheme.outline, fontStyle: FontStyle.italic),
-  'title': TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
-  'params': TextStyle(color: scheme.onSurface),
+// Màu tô cú pháp chọn cho nền TỐI của khối code (codeSurface), không đổi theo
+// theme sáng/tối của app (INV-08).
+const _synKeyword = Color(0xFF8AB4FF);
+const _synNumber = Color(0xFFF2B866);
+const _synString = Color(0xFF9BD6A8);
+const _synComment = Color(0xFF7D879E);
+
+/// Bảng tô cú pháp dùng chung cho editor và các khối code xem-chỉ-đọc.
+Map<String, TextStyle> codeSyntaxStyles(AppPalette p) => {
+  'root': TextStyle(color: p.codeInk, backgroundColor: p.codeSurface),
+  'keyword': const TextStyle(color: _synKeyword),
+  'built_in': const TextStyle(color: _synKeyword),
+  'literal': const TextStyle(color: _synKeyword),
+  'number': const TextStyle(color: _synNumber),
+  'string': const TextStyle(color: _synString),
+  'comment': const TextStyle(color: _synComment, fontStyle: FontStyle.italic),
+  'title': TextStyle(color: p.codeInk, fontWeight: FontWeight.w500),
+  'params': TextStyle(color: p.codeInk),
 };
 
 class _Bar extends StatelessWidget {

@@ -4,6 +4,8 @@
 /// Ô TODO mở lần lượt: ô sau khoá tới khi ô trước khớp đáp án mẫu; ô khớp tự
 /// thu gọn thành một dòng và ô kế mở ra. Chỉ một ô mở (accordion).
 /// Ô mở chỉ là bản xem trước; chạm vào → [CellEditorPage] toàn màn hình.
+/// Với `inlineEditor: true` (màn rộng) ô mở là editor ngay trong notebook và có
+/// dải bước A/B/C phía trên; chấm/lưu/gợi ý/Run vẫn đi đúng đường cũ (INV-06).
 library;
 
 import 'package:flutter/material.dart';
@@ -21,17 +23,28 @@ import '../../domain/progression.dart';
 import '../../shared/widgets.dart';
 import 'cell_editor_page.dart';
 import 'challenge_tab.dart' show LabelTag;
+import 'code_input.dart'
+    show CodeToolbar, CodeToolbarController, codeSyntaxStyles;
 import 'run_result_view.dart';
 import 'session_controller.dart';
 import 'session_providers.dart';
 
 class CodeTab extends ConsumerStatefulWidget {
-  const CodeTab({super.key, required this.exercise, this.preview = false});
+  const CodeTab({
+    super.key,
+    required this.exercise,
+    this.preview = false,
+    this.inlineEditor = false,
+  });
 
   final Exercise exercise;
 
   /// Admin xem trước: không có nút sang bài kế tiếp (không rời màn preview).
   final bool preview;
+
+  /// `true` → ô đang mở là editor inline (không push route) + dải bước.
+  /// `false` (mặc định) → chạm ô mở [CellEditorPage] như cũ.
+  final bool inlineEditor;
 
   @override
   ConsumerState<CodeTab> createState() => _CodeTabState();
@@ -40,6 +53,7 @@ class CodeTab extends ConsumerStatefulWidget {
 class _CodeTabState extends ConsumerState<CodeTab>
     with AutomaticKeepAliveClientMixin {
   final _scroll = ScrollController();
+  final _toolbar = CodeToolbarController();
   final Map<String, String> _cells = {};
 
   late final List<TemplateSegment> _segments;
@@ -113,6 +127,7 @@ class _CodeTabState extends ConsumerState<CodeTab>
   @override
   void dispose() {
     _scroll.dispose();
+    _toolbar.dispose();
     super.dispose();
   }
 
@@ -294,6 +309,7 @@ class _CodeTabState extends ConsumerState<CodeTab>
 
     return Column(
       children: [
+        if (widget.inlineEditor) _stepStrip(),
         Expanded(
           // Ít ô nên dựng hết một lượt (không lazy).
           child: SingleChildScrollView(
@@ -360,6 +376,8 @@ class _CodeTabState extends ConsumerState<CodeTab>
             ),
           ),
         ),
+        if (widget.inlineEditor && _open != null)
+          _inlineToolbar(_block(_open!)),
         Container(
           padding: const EdgeInsets.all(AppSpace.s2),
           decoration: BoxDecoration(
@@ -371,6 +389,97 @@ class _CodeTabState extends ConsumerState<CodeTab>
           child: showPassed ? _passedBar() : _runBar(progress),
         ),
       ],
+    );
+  }
+
+  /// Thanh phím dùng chung cho editor inline (cùng một controller với body).
+  Widget _inlineToolbar(Block b) {
+    final index = _exercise.blocks.indexOf(b);
+    return CodeToolbar(
+      controller: _toolbar,
+      knownIdentifiers: knownIdentifiersFor(_exercise, index),
+      vocab: b.vocab,
+      ghost: true,
+    );
+  }
+
+  /// Dải bước A/B/C — chỉ suy ra từ `_open`/`_isDone`/`_unlocked`, không có
+  /// state riêng. Chạm ô đã mở khoá → mở ô đó.
+  Widget _stepStrip() {
+    final p = context.palette;
+    return Container(
+      key: const Key('step-strip'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.s4,
+        vertical: AppSpace.s2,
+      ),
+      decoration: BoxDecoration(
+        color: p.surfaceRaised,
+        border: Border(
+          bottom: BorderSide(color: p.outline.withValues(alpha: 0.4)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final (i, b) in _exercise.blocks.indexed) ...[
+              if (i > 0) const SizedBox(width: AppSpace.s2),
+              _stepChip(b, i + 1),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepChip(Block b, int number) {
+    final p = context.palette;
+    final done = _isDone(b);
+    final current = _open == b.label;
+    final unlocked = _unlocked(b);
+    final color = done
+        ? p.success
+        : current
+        ? p.primary
+        : p.inkMuted;
+    final mark = done
+        ? Icon(Icons.check, size: 14, color: color)
+        : !unlocked
+        ? Icon(Icons.lock_outline, size: 14, color: color)
+        : Text(
+            '$number',
+            style: AppText.label.copyWith(fontSize: 12, color: color),
+          );
+    return Opacity(
+      opacity: unlocked ? 1 : 0.6,
+      child: InkWell(
+        key: Key('step-${b.label}'),
+        onTap: unlocked && !current ? () => _toggle(b.label) : null,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s2,
+            vertical: AppSpace.s1,
+          ),
+          decoration: BoxDecoration(
+            color: current ? p.primarySoft : null,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: color, width: current ? 2 : 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              mark,
+              const SizedBox(width: AppSpace.s1),
+              Text(
+                '${b.label} · ${b.title}',
+                style: AppText.label.copyWith(fontSize: 12, color: color),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -519,11 +628,17 @@ class _CodeTabState extends ConsumerState<CodeTab>
                     width: 2,
                   ),
                 ),
-                child: _CodePreview(
-                  key: Key('cell-$label-field'),
-                  code: _cells[label] ?? '',
-                  onTap: () => _openEditor(label),
-                ),
+                child: widget.inlineEditor && _open == label
+                    ? _inlineEditor(label)
+                    : _CodePreview(
+                        key: Key('cell-$label-field'),
+                        code: _cells[label] ?? '',
+                        // Inline: ô lỗi nhưng chưa mở → chạm để mở editor
+                        // ngay trong notebook, không push route.
+                        onTap: widget.inlineEditor
+                            ? () => _toggle(label)
+                            : () => _openEditor(label),
+                      ),
               ),
             ),
           ],
@@ -549,6 +664,25 @@ class _CodeTabState extends ConsumerState<CodeTab>
       ],
     );
   }
+
+  /// Editor inline: cùng [CellEditorBody] với route, cùng callback → cùng
+  /// `_isDone`/`_onCellChanged`/saveDraft (INV-06). Ô khớp thì `_onCellChanged`
+  /// tự `_advanceFrom` (mở ô kế, không pop).
+  Widget _inlineEditor(String label) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 96),
+    child: CellEditorBody(
+      key: ValueKey('inline-$label'),
+      exercise: _exercise,
+      label: label,
+      inline: true,
+      toolbar: _toolbar,
+      codeOf: (l) => _cells[l] ?? '',
+      onChanged: _onCellChanged,
+      isDone: (l) => _isDone(_block(l)),
+      nextAfter: _nextAfter,
+      onActivity: _activity,
+    ),
+  );
 
   Widget _note(String text, Key key, Color color) => Padding(
     padding: const EdgeInsets.only(left: 52, top: AppSpace.s1),
@@ -666,8 +800,8 @@ class _LockedCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final base = AppText.code.copyWith(color: p.ink);
-    final styles = _codeStyles(p);
+    final base = AppText.code.copyWith(color: p.codeInk);
+    final styles = codeSyntaxStyles(p);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -683,10 +817,7 @@ class _LockedCell extends StatelessWidget {
             key: const Key('locked-cell'),
             padding: const EdgeInsets.all(AppSpace.s2),
             decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                p.ink.withValues(alpha: 0.08),
-                p.surfaceRaised,
-              ),
+              color: p.codeSurface,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Column(
@@ -697,11 +828,17 @@ class _LockedCell extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.lock_outline, size: 12, color: p.inkMuted),
+                      Icon(
+                        Icons.lock_outline,
+                        size: 12,
+                        color: p.codeInk.withValues(alpha: 0.6),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'có sẵn',
-                        style: AppText.caption.copyWith(color: p.inkMuted),
+                        style: AppText.caption.copyWith(
+                          color: p.codeInk.withValues(alpha: 0.6),
+                        ),
                       ),
                     ],
                   ),
@@ -724,16 +861,6 @@ class _LockedCell extends StatelessWidget {
   }
 }
 
-Map<String, TextStyle> _codeStyles(AppPalette p) => {
-  'keyword': TextStyle(color: p.primary),
-  'built_in': TextStyle(color: p.primary),
-  'literal': TextStyle(color: p.primary),
-  'number': TextStyle(color: p.primary),
-  'string': TextStyle(color: p.inkMuted),
-  'comment': TextStyle(color: p.outline, fontStyle: FontStyle.italic),
-  'title': const TextStyle(fontWeight: FontWeight.w500),
-};
-
 /// Ô đang mở trong notebook: code (highlight + số dòng) chỉ để xem; chạm
 /// → màn soạn code toàn màn hình.
 class _CodePreview extends StatelessWidget {
@@ -745,7 +872,7 @@ class _CodePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final base = AppText.code.copyWith(color: p.ink);
+    final base = AppText.code.copyWith(color: p.codeInk);
     final empty = code.trim().isEmpty;
     final lines = empty ? 1 : '\n'.allMatches(code).length + 1;
     return InkWell(
@@ -755,7 +882,7 @@ class _CodePreview extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 56),
         padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
         decoration: BoxDecoration(
-          color: Color.alphaBlend(p.ink.withValues(alpha: 0.04), p.surface),
+          color: p.codeSurface,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: p.outline.withValues(alpha: 0.6)),
         ),
@@ -765,7 +892,7 @@ class _CodePreview extends StatelessWidget {
             Text(
               [for (var i = 1; i <= lines; i++) '$i'].join('\n'),
               textAlign: TextAlign.right,
-              style: base.copyWith(color: p.inkMuted.withValues(alpha: 0.6)),
+              style: base.copyWith(color: p.codeInk.withValues(alpha: 0.5)),
             ),
             const SizedBox(width: AppSpace.s2),
             Expanded(
@@ -773,7 +900,7 @@ class _CodePreview extends StatelessWidget {
                   ? Text(
                       '# chạm để viết code',
                       style: base.copyWith(
-                        color: p.inkMuted,
+                        color: p.codeInk.withValues(alpha: 0.6),
                         fontStyle: FontStyle.italic,
                       ),
                     )
@@ -782,12 +909,16 @@ class _CodePreview extends StatelessWidget {
                         style: base,
                         children: _spans(
                           hl.highlight.parse(code, language: 'python').nodes,
-                          _codeStyles(p),
+                          codeSyntaxStyles(p),
                         ),
                       ),
                     ),
             ),
-            Icon(Icons.open_in_full, size: 14, color: p.inkMuted),
+            Icon(
+              Icons.open_in_full,
+              size: 14,
+              color: p.codeInk.withValues(alpha: 0.6),
+            ),
           ],
         ),
       ),

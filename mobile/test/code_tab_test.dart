@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_coding_study/app/theme.dart';
 import 'package:smart_coding_study/data/judge_client.dart';
 import 'support/content_fixture.dart';
 import 'package:smart_coding_study/domain/merge.dart';
+import 'package:smart_coding_study/features/exercise/cell_editor_page.dart';
 import 'package:smart_coding_study/features/exercise/code_tab.dart';
 import 'package:smart_coding_study/features/exercise/session_controller.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
@@ -62,8 +64,11 @@ Future<_H> _pump(
   FakeJudge judge, {
   Map<String, String> drafts = const {},
   double keyboard = 0,
+  bool inline = false,
+  Brightness brightness = Brightness.light,
+  Size size = const Size(375, 667),
 }) async {
-  t.view.physicalSize = const Size(375, 667);
+  t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
   t.view.viewInsets = FakeViewPadding(bottom: keyboard);
   addTearDown(t.view.reset);
@@ -84,7 +89,7 @@ Future<_H> _pump(
         path: '/exercise/:id',
         builder: (c, s) => Scaffold(
           body: s.pathParameters['id'] == _id
-              ? CodeTab(exercise: _ex)
+              ? CodeTab(exercise: _ex, inlineEditor: inline)
               : Text('NEXT ${s.pathParameters['id']}'),
         ),
       ),
@@ -94,7 +99,7 @@ Future<_H> _pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
-        theme: buildAppTheme(brightness: Brightness.light),
+        theme: buildAppTheme(brightness: brightness),
         routerConfig: router,
       ),
     ),
@@ -464,5 +469,176 @@ void main() {
     await t.pump();
     await _openEditor(t, 'A');
     expect(t.takeException(), isNull);
+  });
+
+  group('inlineEditor', () {
+    Finder inlineField() => find.descendant(
+      of: find.byKey(const Key('editor-field')),
+      matching: find.byType(EditableText),
+    );
+
+    testWidgets('mặc định (false): chạm ô vẫn push route, không có dải bước', (
+      t,
+    ) async {
+      await _pump(t, FakeJudge((_) async => _passed));
+      expect(find.byKey(const Key('step-strip')), findsNothing);
+      expect(find.byKey(const Key('editor-field')), findsNothing);
+      await _openEditor(t, 'B');
+      expect(find.byKey(const Key('editor-done')), findsOneWidget);
+      expect(find.byKey(const Key('run-button')), findsNothing);
+    });
+
+    testWidgets('true: chạm ô không push route; editor nằm trong notebook', (
+      t,
+    ) async {
+      await _pump(t, FakeJudge((_) async => _passed), inline: true);
+      // Ô B đang mở: editor inline ngay trong notebook, notebook còn nguyên.
+      expect(find.byKey(const Key('editor-field')), findsOneWidget);
+      expect(find.byKey(const Key('cell-B-field')), findsNothing);
+      expect(find.byKey(const Key('editor-done')), findsNothing);
+      expect(find.byKey(const Key('run-button')), findsOneWidget);
+      expect(find.byKey(const Key('locked-cell')), findsWidgets);
+      for (final l in ['A', 'B', 'C']) {
+        expect(find.byKey(Key('step-$l')), findsOneWidget);
+      }
+      // Chạm ô A đã xong: mở inline tại chỗ, không có route mới.
+      await t.tap(find.byKey(const Key('cell-A-collapsed')));
+      await t.pump();
+      expect(find.byKey(const Key('cell-A-header')), findsOneWidget);
+      expect(find.byKey(const Key('editor-field')), findsOneWidget);
+      expect(find.byType(CellEditorPage), findsNothing);
+      expect(find.byKey(const Key('run-button')), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('gõ đúng đáp án: step đổi, ô kế mở, draft qua saveDraft', (
+      t,
+    ) async {
+      final h = await _pump(t, FakeJudge((_) async => _passed), inline: true);
+      IconData? markOf(String l) => t
+          .widgetList<Icon>(
+            find.descendant(
+              of: find.byKey(Key('step-$l')),
+              matching: find.byType(Icon),
+            ),
+          )
+          .firstOrNull
+          ?.icon;
+      expect(markOf('A'), Icons.check);
+      expect(markOf('B'), isNull); // đang làm: hiện số
+      expect(markOf('C'), Icons.lock_outline);
+
+      await t.enterText(
+        find.byKey(const Key('editor-field')),
+        'chunks.append(text[i:i + size])',
+      );
+      await t.pumpAndSettle();
+      expect(h.progress!.drafts['B'], 'chunks.append(text[i:i + size])');
+      expect(markOf('B'), Icons.check);
+      expect(markOf('C'), isNull);
+      expect(find.byKey(const Key('cell-B-collapsed')), findsOneWidget);
+      // Ô C mở ngay trong notebook, không pop route nào.
+      expect(t.widget<EditableText>(inlineField()).controller.text, '');
+      expect(find.byKey(const Key('cell-C-header')), findsOneWidget);
+
+      await t.enterText(find.byKey(const Key('editor-field')), 'return chunks');
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('editor-field')), findsNothing);
+      expect(h.progress!.drafts['C'], 'return chunks');
+      for (final l in ['A', 'B', 'C']) {
+        expect(find.byKey(Key('cell-$l-collapsed')), findsOneWidget);
+      }
+    });
+
+    testWidgets('chạm step ô đã mở khoá mở ô đó; ô khoá thì không', (t) async {
+      await _pump(t, FakeJudge((_) async => _passed), inline: true);
+      await t.tap(find.byKey(const Key('step-C'))); // C đang khoá
+      await t.pump();
+      expect(find.byKey(const Key('cell-C-locked')), findsOneWidget);
+      expect(find.byKey(const Key('cell-B-header')), findsOneWidget);
+
+      await t.tap(find.byKey(const Key('step-A')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('cell-A-header')), findsOneWidget);
+      expect(find.byKey(const Key('cell-B-collapsed')), findsOneWidget);
+      expect(find.byKey(const Key('editor-field')), findsOneWidget);
+    });
+
+    testWidgets('Run, Gợi ý dùng chung đường cũ khi inline', (t) async {
+      final judge = FakeJudge((_) async => _passed);
+      final h = await _pump(t, judge, inline: true, drafts: _solution());
+      await _run(t);
+      expect(judge.calls, hasLength(1));
+      expect(h.progress!.passed, isTrue);
+
+      await t.tap(find.byKey(const Key('edit-again')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('cell-B-collapsed')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('hint-button')));
+      await t.pump();
+      expect(h.progress!.hintsUsed['B'], 1);
+      expect(find.byKey(const Key('hint-B-0')), findsOneWidget);
+    });
+
+    testWidgets('ghost + vocab nối vào editor inline (chip nhận gợi ý)', (
+      t,
+    ) async {
+      final h = await _pump(t, FakeJudge((_) async => _passed), inline: true);
+      await t.enterText(find.byKey(const Key('editor-field')), 'chunks.');
+      await t.pump();
+      expect(find.byKey(const Key('ghost-accept')), findsOneWidget);
+      // Ghost chỉ phủ hiển thị: draft chưa chứa phần gợi ý (INV-04).
+      expect(h.progress!.drafts['B'], 'chunks.');
+      await t.tap(find.byKey(const Key('ghost-accept')));
+      await t.pumpAndSettle();
+      expect(h.progress!.drafts['B'], _ex.blocks[1].acceptedAnswers.first);
+    });
+
+    testWidgets('route cũng có ghost-accept (answers nối ở cả hai nhánh)', (
+      t,
+    ) async {
+      await _pump(t, FakeJudge((_) async => _passed));
+      await _openEditor(t, 'B');
+      await t.enterText(find.byKey(const Key('editor-field')), 'chunks.');
+      await t.pump();
+      expect(find.byKey(const Key('ghost-accept')), findsOneWidget);
+    });
+  });
+
+  group('nền khối code (INV-08)', () {
+    Color? fillOf(WidgetTester t, Finder f) {
+      final box = t.widget<Container>(f);
+      return (box.decoration as BoxDecoration).color;
+    }
+
+    for (final b in Brightness.values) {
+      testWidgets('codeSurface ở theme ${b.name}: ô khoá, xem trước, editor', (
+        t,
+      ) async {
+        await _pump(
+          t,
+          FakeJudge((_) async => _passed),
+          brightness: b,
+          drafts: {'B': 'x = 1'},
+        );
+        final palette = buildAppTheme(brightness: b).extension<AppPalette>()!;
+        expect(
+          fillOf(t, find.byKey(const Key('locked-cell')).first),
+          palette.codeSurface,
+        );
+        final preview = find.descendant(
+          of: find.byKey(const Key('cell-B-field')),
+          matching: find.byType(Container),
+        );
+        expect(fillOf(t, preview.first), palette.codeSurface);
+
+        await _openEditor(t, 'B');
+        final field = t.widget<CodeField>(
+          find.byKey(const Key('editor-field')),
+        );
+        expect(field.background, palette.codeSurface);
+      });
+    }
   });
 }
