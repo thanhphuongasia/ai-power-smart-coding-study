@@ -10,6 +10,9 @@ Quy ước (xem `content/sd/airline-reservation.md`):
   `###` đầu tiên) thành một section mang tên chapter.
 - Mỗi khối (đoạn/danh sách, bảng, khối code, trích dẫn `>`) là một card. `card.id` là hash nội dung nên
   sửa một card không đổi id của card khác (tiến độ đọc bám theo id này).
+- `section.id` là slug của TÊN section: đổi tên section = id mới = mất tiến độ đọc của section đó (hai section
+  trùng tên lấy hậu tố theo thứ tự xuất hiện, đổi thứ tự chúng thì tiến độ bị tráo). Đổi nội dung thì không sao.
+- Trần: 50 chương, 200 section, 200 card/section, 100 card bối cảnh, 3000 card/tài liệu, 12 task.
 
 Chỉ dùng thư viện chuẩn, một lượt qua các dòng: thời gian tuyến tính theo kích thước file.
 """

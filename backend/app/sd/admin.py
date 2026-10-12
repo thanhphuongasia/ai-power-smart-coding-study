@@ -4,6 +4,7 @@
   Nhập (hoặc nhập lại) một tài liệu .md. `id` bỏ trống → slug của tên tài liệu. `status` bỏ trống →
   giữ trạng thái cũ (tài liệu mới là `draft`). Nhập lại thay section/task trong MỘT transaction và KHÔNG
   chạm `sd_progress`/`sd_attempts`: tiến độ bám theo `card.id` (hash nội dung) nên card không đổi giữ nguyên.
+  Lưu ý: `section.id` là slug của tên section, đổi tên section thì tiến độ section đó mất (xem app/sd/parser.py).
 - GET  /api/admin/sd/docs               → {items: [{id, title, status, sections, cards, tasks}]}
 - PUT  /api/admin/sd/docs/{id}/status   {status} → {id, status} | 404
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select, text
@@ -159,7 +160,11 @@ def _set_status(doc_id: str, body: StatusIn, session: Session):
 
 
 @router.put("/docs/{doc_id}/status")
-async def put_status(doc_id: str, request: Request, session: Session = Depends(get_session)):
+async def put_status(
+    request: Request,
+    doc_id: str = Path(max_length=100, pattern=_SLUG),
+    session: Session = Depends(get_session),
+):
     try:
         body = await _parse(request, StatusIn)
     except _BadBody as exc:

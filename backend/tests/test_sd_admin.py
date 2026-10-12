@@ -167,6 +167,14 @@ def test_suffix_id_never_collides_with_an_existing_slug():
     assert len(set(ids)) == 3
 
 
+def test_renaming_a_section_changes_its_id_but_editing_text_does_not():
+    """Quy ước đã ghi ở docstring parser: id section theo TÊN. Test này giữ cho thay đổi sau có chủ đích."""
+    base = parse_markdown(MINI)["sections"][0]
+    renamed = parse_markdown(MINI.replace("### Mục A", "### Mục B"))["sections"][0]
+    edited = parse_markdown(MINI.replace("Đoạn một.", "Đoạn một sửa."))["sections"][0]
+    assert base["id"] != renamed["id"] and base["id"] == edited["id"]
+
+
 def test_keywords_are_lowercased_and_deduped():
     doc = parse_markdown(MINI.replace("alpha, Beta", "Alpha, alpha, BETA"))
     assert doc["tasks"][0]["rubric"][0]["keywords"] == ["alpha", "beta"]
@@ -265,6 +273,11 @@ def test_nul_in_markdown_is_422_not_500(admin):
     client, h = admin
     r = _import(client, h, MINI.replace("Đoạn một.", "a\x00b"))
     assert r.status_code == 422 and any("NUL" in e for e in r.json()["errors"])
+
+
+def test_status_route_rejects_malformed_doc_id(admin):
+    client, h = admin
+    assert client.put("/api/admin/sd/docs/Bad%20Id/status", json={"status": "draft"}, headers=h).status_code == 422
 
 
 def test_status_of_unknown_doc_is_404(admin):
