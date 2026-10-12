@@ -120,6 +120,53 @@ def test_bad_documents_report_what_is_wrong(md, needle):
     assert any(needle in m for m in e.value.errors), e.value.errors
 
 
+# --- trần và hiệu năng: đầu vào xấu nhất ≤1MB phải xử lý tuyến tính và bị từ chối nhanh --------
+
+
+def _timed(md):
+    import time
+
+    start = time.perf_counter()
+    try:
+        return parse_markdown(md), time.perf_counter() - start
+    except MdError as exc:
+        return exc, time.perf_counter() - start
+
+
+@pytest.mark.parametrize(
+    "md, needle",
+    [
+        ("# T\n\n## Bối cảnh\n\n" + "x\n\n" * 300_000 + "## C\n\n### S\n\nx\n", "quá 100 card"),  # 300k khối TRÙNG ở bối cảnh
+        ("# T\n\n## C\n\n### S\n\n" + "x\n\n" * 300_000, "quá 200 card"),  # 300k khối trùng trong một section
+        ("# T\n\n## C\n\n" + "### s\n\nx\n\n" * 90_000, "quá 200 section"),
+        ("# T\n\n" + "## c\n\n### s\n\nx\n\n" * 50_000, "quá 50 chương"),
+        ("# T\n\n## C\n\n### S\n\nx\n\n## Thực chiến\n\n" + "### t\n\nĐề: a\n\n" * 60_000, "quá 12 task"),
+    ],
+)
+def test_hostile_one_megabyte_documents_are_rejected_fast(md, needle):
+    assert len(md) <= 1_000_000
+    result, seconds = _timed(md)
+    assert isinstance(result, MdError) and any(needle in e for e in result.errors), result
+    assert seconds < 3, f"{seconds:.1f}s: parser phải tuyến tính"
+
+
+def test_total_card_budget_across_sections_is_enforced():
+    md = "# T\n\n## C\n\n" + "".join(f"### s{i}\n\n" + "".join(f"p{i}-{j}\n\n" for j in range(150)) for i in range(25))
+    result, _ = _timed(md)
+    assert isinstance(result, MdError) and any("quá" in e and "card" in e for e in result.errors)
+
+
+def test_many_duplicate_blocks_below_the_cap_still_get_distinct_ids():
+    cards = parse_markdown("# T\n\n## C\n\n### S\n\n" + "x\n\n" * 150)["sections"][0]["cards"]
+    assert len(cards) == 150 and len({c["id"] for c in cards}) == 150
+
+
+def test_suffix_id_never_collides_with_an_existing_slug():
+    md = "# T\n\n## C\n\n### Foo\n\na\n\n### Foo\n\nb\n\n### Foo 2\n\nc\n"
+    ids = [s["id"] for s in parse_markdown(md)["sections"]]
+    assert len(set(ids)) == 3
+
+
 def test_keywords_are_lowercased_and_deduped():
     doc = parse_markdown(MINI.replace("alpha, Beta", "Alpha, alpha, BETA"))
     assert doc["tasks"][0]["rubric"][0]["keywords"] == ["alpha", "beta"]

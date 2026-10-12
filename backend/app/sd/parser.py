@@ -24,6 +24,8 @@ MAX_CHAPTERS = 50
 MAX_SECTIONS = 200
 MAX_TASKS = 12
 MAX_CARDS_PER_SECTION = 200
+MAX_CONTEXT_CARDS = 100
+MAX_CARDS_TOTAL = 3000  # cả tài liệu: chặn JSONB phình vì hàng trăm nghìn khối rất ngắn
 MAX_CARD_CHARS = 20_000
 MAX_TITLE_CHARS = 200
 MAX_HINTS = 5
@@ -72,12 +74,16 @@ def _bad_text(s: str) -> bool:
     return False
 
 
-def _unique(base: str, seen: set[str]) -> str:
-    out, n = base, 1
-    while out in seen:
+def _unique(base: str, seen: dict[str, int]) -> str:
+    """Id duy nhất trong một phạm vi, thời gian O(1) mỗi lần gọi: đếm số lần thấy `base`, lần thứ n>1 thêm
+    hậu tố `-n`. (Dò hậu tố từng bước từng khiến 1MB khối trùng nhau chạy bậc hai, hàng chục giây.)"""
+    n = seen.get(base, 0) + 1
+    seen[base] = n
+    out = base if n == 1 else f"{base}-{n}"
+    while n > 1 and out in seen:  # hiếm: 'foo-2' đã là id của một mục khác
         n += 1
         out = f"{base}-{n}"
-    seen.add(out)
+    seen[out] = seen.get(out, 0) or 1
     return out
 
 
@@ -98,14 +104,16 @@ def _is_fence(line: str) -> str | None:
 Entry = tuple
 
 
-def _blocks(entries: list[Entry], errors: list[str], where: str) -> list[dict]:
-    """Chia một phạm vi thành card. `where` chỉ để ghi lỗi."""
+def _blocks(entries: list[Entry], errors: list[str], where: str, limit: int) -> list[dict]:
+    """Chia một phạm vi thành card, tối đa `limit` (vượt thì dừng ngay và báo lỗi). `where` chỉ để ghi lỗi."""
     cards: list[dict] = []
-    seen: set[str] = set()
+    seen: dict[str, int] = {}
     title = ""
     i, n = 0, len(entries)
 
     def add(kind: str, body: str, lineno: int, lang: str = "") -> None:
+        if len(cards) >= limit:
+            return
         body = body.strip("\n") if kind == "code" else body.strip()
         if not body.strip():
             return
@@ -118,6 +126,9 @@ def _blocks(entries: list[Entry], errors: list[str], where: str) -> list[dict]:
         cards.append(card)
 
     while i < n:
+        if len(cards) >= limit:
+            errors.append(f"{where}: quá {limit} card (giới hạn), dừng đọc tiếp")
+            break
         e = entries[i]
         if e[0] == "title":
             title = e[1]
@@ -280,6 +291,10 @@ def parse_markdown(md: str) -> dict:
     cur_chapter: dict | None = None
     cur_section: dict | None = None
     cur_task: dict | None = None
+    n_sections = 0
+
+    def too_many(what: str, limit: int, no: int) -> MdError:
+        return MdError([f"dòng {no}: quá {limit} {what} (giới hạn), dừng đọc tiếp"])
 
     for it in items:
         if it[0] == "heading":
@@ -302,17 +317,24 @@ def parse_markdown(md: str) -> dict:
                     region = "tasks"
                 else:
                     region = "chapter"
+                    if len(chapters) >= MAX_CHAPTERS:
+                        raise too_many("chương", MAX_CHAPTERS, no)
                     cur_chapter = {"name": text, "line": no, "intro": [], "sections": []}
                     chapters.append(cur_chapter)
                 continue
             if region == "context":
                 context.append(("title", text))
             elif region == "tasks" and level == 3:
+                if len(tasks_raw) >= MAX_TASKS:
+                    raise too_many("task", MAX_TASKS, no)
                 cur_task = {"name": text, "line": no, "entries": []}
                 tasks_raw.append(cur_task)
             elif region == "tasks" and cur_task is not None:
                 cur_task["entries"].append(("line", no, "#" * level + " " + text))
             elif region == "chapter" and level == 3:
+                n_sections += 1
+                if n_sections > MAX_SECTIONS:
+                    raise too_many("section", MAX_SECTIONS, no)
                 cur_section = {"name": text, "line": no, "entries": []}
                 cur_chapter["sections"].append(cur_section)
             elif region == "chapter":
@@ -340,7 +362,8 @@ def parse_markdown(md: str) -> dict:
 
     # Chapter → section (chapter có nội dung ngay dưới '##' thì thành một section mang tên chapter).
     sections: list[dict] = []
-    seen_sections: set[str] = set()
+    seen_sections: dict[str, int] = {}
+    budget = MAX_CARDS_TOTAL
     for ci, ch in enumerate(chapters):
         raw = []
         if any(e[0] == "line" and e[2].strip() for e in ch["intro"]):
@@ -349,11 +372,10 @@ def parse_markdown(md: str) -> dict:
         if not raw:
             errors.append(f"dòng {ch['line']}: chương «{ch['name']}» không có nội dung")
         for s in raw:
-            cards = _blocks(s["entries"], errors, f"section «{s['name']}»")
+            cards = _blocks(s["entries"], errors, f"section «{s['name']}»", min(MAX_CARDS_PER_SECTION, budget))
+            budget -= len(cards)
             if not cards:
                 errors.append(f"dòng {s['line']}: section «{s['name']}» không có card nào")
-            if len(cards) > MAX_CARDS_PER_SECTION:
-                errors.append(f"section «{s['name']}»: tối đa {MAX_CARDS_PER_SECTION} card")
             sections.append({
                 "id": _unique(slugify(s["name"]), seen_sections),
                 "position": len(sections),
@@ -362,19 +384,15 @@ def parse_markdown(md: str) -> dict:
                 "title": s["name"],
                 "cards": cards,
             })
-    if len(chapters) > MAX_CHAPTERS:
-        errors.append(f"tối đa {MAX_CHAPTERS} chương")
-    if len(sections) > MAX_SECTIONS:
-        errors.append(f"tối đa {MAX_SECTIONS} section")
     if not sections:
         errors.append("không có chương nào ('## Tên chương') kèm nội dung")
 
-    context_cards = _blocks(context, errors, "Bối cảnh")
+    context_cards = _blocks(context, errors, "Bối cảnh", min(MAX_CONTEXT_CARDS, max(budget, 0)))
 
     by_slug = {s["id"]: s["id"] for s in sections}
     by_title = {slugify(s["title"]): s["id"] for s in sections}
     tasks: list[dict] = []
-    seen_tasks: set[str] = set()
+    seen_tasks: dict[str, int] = {}
     for t in tasks_raw:
         parsed = _task(t["name"], t["entries"], errors)
         if parsed is None:
@@ -386,8 +404,6 @@ def parse_markdown(md: str) -> dict:
             if ref_id is None:
                 errors.append(f"task «{t['name']}»: «Đáp án mẫu: {ref}» không khớp section nào")
         tasks.append({"id": _unique(slugify(t["name"]), seen_tasks), "position": len(tasks), **parsed, "ref_section_id": ref_id})
-    if len(tasks) > MAX_TASKS:
-        errors.append(f"tối đa {MAX_TASKS} task")
 
     if errors:
         extra = len(errors) - MAX_ERRORS
