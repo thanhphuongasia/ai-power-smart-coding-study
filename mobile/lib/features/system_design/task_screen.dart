@@ -16,6 +16,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme.dart';
+import '../../data/api_client.dart' show currentUserProvider;
 import '../../data/sd_repository.dart';
 import '../../domain/sd_models.dart';
 import 'block_renderer.dart';
@@ -31,8 +32,10 @@ const Duration kSdDraftDebounce = Duration(milliseconds: 400);
 const Color _kErrorColor = Color(0xFFD64545);
 const Color _kOkColor = Color(0xFF2E9E4F);
 
-/// Khoá lưu bản nháp trong SharedPreferences.
-String sdDraftKey(String docId, String taskId) => 'sd-draft:$docId:$taskId';
+/// Khoá lưu bản nháp trong SharedPreferences. Có [userId] để đăng xuất rồi
+/// người khác đăng nhập cùng máy không thấy (hay nộp nhầm) nháp của người trước.
+String sdDraftKey(String userId, String docId, String taskId) =>
+    'sd-draft:$userId:$docId:$taskId';
 
 typedef _AttemptsKey = ({String docId, String taskId});
 
@@ -93,10 +96,14 @@ class SdTaskScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final doc = ref.watch(sdDocProvider(docId));
+    sdListenRefreshError(ref, context, docId);
+    // AuthUser chưa có id: dùng email làm định danh người dùng cho khoá nháp.
+    final userId = ref.watch(currentUserProvider)?.email;
     return Scaffold(
       key: const Key('sd-task-screen'),
       backgroundColor: kSdBarColor,
       body: doc.when(
+        skipError: true, // làm mới lỗi: giữ nội dung cũ, chỉ báo SnackBar
         loading: () => const SdPaperFrame(
           barCenter: SizedBox.shrink(),
           child: Center(child: CircularProgressIndicator(color: kSdGreen)),
@@ -144,7 +151,8 @@ class SdTaskScreen extends ConsumerWidget {
               ],
             ),
             child: _TaskBody(
-              key: ValueKey('${d.id}/$taskId/${d.tasks[i].unlocked}'),
+              key: ValueKey('$userId/${d.id}/$taskId/${d.tasks[i].unlocked}'),
+              userId: userId,
               docId: d.id,
               task: d.tasks[i],
               next: i + 1 < d.tasks.length ? d.tasks[i + 1] : null,
@@ -159,11 +167,14 @@ class SdTaskScreen extends ConsumerWidget {
 class _TaskBody extends ConsumerStatefulWidget {
   const _TaskBody({
     super.key,
+    required this.userId,
     required this.docId,
     required this.task,
     required this.next,
   });
 
+  /// null = chưa đăng nhập: không lưu, không khôi phục nháp.
+  final String? userId;
   final String docId;
   final SdTask task;
   final SdTask? next;
@@ -184,12 +195,18 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
   final _hintOpen = <int>{};
   final _attemptOpen = <int, bool>{}; // ghi đè mặc định (mới nhất mở sẵn)
 
-  String get _key => sdDraftKey(widget.docId, widget.task.id);
+  late final ProviderContainer _container;
+
+  String? get _key => widget.userId == null
+      ? null
+      : sdDraftKey(widget.userId!, widget.docId, widget.task.id);
   _AttemptsKey get _akey => (docId: widget.docId, taskId: widget.task.id);
 
   @override
   void initState() {
     super.initState();
+    // Container vẫn gọi được sau khi widget unmount (dispose không dùng `ref`).
+    _container = ProviderScope.containerOf(context, listen: false);
     if (widget.task.unlocked) {
       _text.addListener(_onChanged);
       unawaited(_restoreDraft());
@@ -200,8 +217,11 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
   void dispose() {
     _debounce?.cancel();
     // Ghi nốt bản nháp (kể cả khi chưa hết debounce). Không dùng `ref` ở đây.
-    if (widget.task.unlocked && (_draftReady || _text.text.isNotEmpty)) {
-      unawaited(_writeDraft(_key, _text.text));
+    final key = _key;
+    if (key != null &&
+        widget.task.unlocked &&
+        (_draftReady || _text.text.isNotEmpty)) {
+      unawaited(_writeDraft(key, _text.text));
     }
     _text.dispose();
     super.dispose();
@@ -221,9 +241,11 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
   }
 
   Future<void> _restoreDraft() async {
+    final key = _key;
+    if (key == null) return; // chưa đăng nhập: không đọc nháp
     String? saved;
     try {
-      saved = (await SharedPreferences.getInstance()).getString(_key);
+      saved = (await SharedPreferences.getInstance()).getString(key);
     } catch (_) {}
     if (!mounted) return;
     _draftReady = true;
@@ -239,6 +261,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
     if (_restoring) return;
     setState(() => _error = null);
     final key = _key;
+    if (key == null) return;
     _debounce?.cancel();
     _debounce = Timer(kSdDraftDebounce, () {
       unawaited(_writeDraft(key, _text.text));
@@ -261,8 +284,14 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
       );
       _debounce?.cancel();
       // Nộp thành công mới xoá nháp.
-      await _writeDraft(key, '');
-      if (!mounted) return;
+      if (key != null) await _writeDraft(key, '');
+      if (!mounted) {
+        // Rời màn khi đang gửi: lộ trình có thể đã GET trước lần nộp này →
+        // làm mới qua container để task kế không bị khoá sai.
+        _container.invalidate(sdDocProvider(widget.docId));
+        _container.invalidate(sdDocsProvider);
+        return;
+      }
       _restoring = true;
       _text.clear();
       _restoring = false;
@@ -291,7 +320,9 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
   void _goNext() {
     final next = widget.next;
     if (next != null && next.unlocked) {
-      context.pushReplacement('/design/${widget.docId}/tasks/${next.id}');
+      context.pushReplacement(
+        '/design/${Uri.encodeComponent(widget.docId)}/tasks/${Uri.encodeComponent(next.id)}',
+      );
     } else {
       Navigator.of(context).maybePop();
     }
@@ -442,6 +473,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
           Expanded(child: Text('LỊCH SỬ LẦN THỬ', style: sdKickerStyle())),
           TextButton(
             key: const Key('sd-task-refresh'),
+            style: sdPaperTextButtonStyle,
             onPressed: _refresh,
             child: const Text('Làm mới'),
           ),
@@ -475,6 +507,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
             ),
             TextButton(
               key: const Key('sd-attempts-retry'),
+              style: sdPaperTextButtonStyle,
               onPressed: () => ref.invalidate(_attemptsProvider(_akey)),
               child: const Text('Thử lại'),
             ),
@@ -494,7 +527,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
           label: 'Xem đáp án mẫu',
           primary: false,
           onPressed: () => context.push(
-            '/design/${widget.docId}/read?section=${Uri.encodeQueryComponent(task.refSectionId!)}',
+            '/design/${Uri.encodeComponent(widget.docId)}/read?section=${Uri.encodeComponent(task.refSectionId!)}',
           ),
         ),
       ],

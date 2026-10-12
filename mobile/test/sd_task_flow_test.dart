@@ -8,15 +8,23 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// Transitive của shared_preferences; test cần chặn store để điều khiển thời điểm đọc.
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/app/theme.dart';
+import 'package:smart_coding_study/data/api_client.dart';
+import 'package:smart_coding_study/data/auth_repository.dart';
 import 'package:smart_coding_study/data/sd_repository.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
+import 'package:smart_coding_study/features/system_design/block_renderer.dart'
+    show kPaperInk;
 import 'package:smart_coding_study/features/system_design/context_screen.dart';
 import 'package:smart_coding_study/features/system_design/reader_screen.dart';
 import 'package:smart_coding_study/features/system_design/sd_path_screen.dart';
@@ -115,6 +123,7 @@ class _Server {
   Map<String, dynamic> doc;
   List<Map<String, dynamic>> attempts = [];
   int docGets = 0;
+  int listGets = 0;
   int attemptGets = 0;
   final posts = <String>[];
 
@@ -124,6 +133,7 @@ class _Server {
   Future<http.Response> handle(http.Request r) async {
     final path = r.url.path;
     if (r.method == 'GET' && path == '/api/sd/docs') {
+      listGets++;
       return _json({
         'items': [
           {
@@ -174,11 +184,42 @@ class _Server {
 
 late GoRouter _router;
 
+/// Người dùng đang đăng nhập trong test (null = chưa đăng nhập). Reset ở setUp.
+const _kEmail = 'learner@example.com';
+String? _email = _kEmail;
+
+/// Phiên đăng nhập giả theo [_email].
+List<Override> _auth() => [
+  authControllerProvider.overrideWith(
+    () => FakeAuthController(
+      _email == null
+          ? null
+          : AuthSession(
+              token: 't',
+              user: AuthUser(email: _email!, roles: const ['learner']),
+            ),
+    ),
+  ),
+];
+
 Widget _app(_Server s) => ProviderScope(
   retry: (_, _) => null,
-  overrides: [sdRepositoryProvider.overrideWithValue(s.repo)],
+  overrides: [sdRepositoryProvider.overrideWithValue(s.repo), ..._auth()],
   child: MaterialApp.router(theme: buildAppTheme(), routerConfig: _router),
 );
+
+/// Store SharedPreferences chặn `getAll` tới khi [gate] xong: giữ việc khôi
+/// phục bản nháp ở trạng thái "chưa đọc xong".
+class _GatedStore extends InMemorySharedPreferencesStore {
+  _GatedStore(super.data, this.gate) : super.withData();
+  final Completer<void> gate;
+
+  @override
+  Future<Map<String, Object>> getAll() async {
+    await gate.future;
+    return super.getAll();
+  }
+}
 
 /// Dựng router nhỏ (3 route Phase 2 + trang đọc giả) rồi push [location].
 Future<void> _open(
@@ -238,7 +279,7 @@ Future<void> _type(WidgetTester tester, String text) async {
   await tester.pump(kSdDraftDebounce + const Duration(milliseconds: 50));
 }
 
-Future<String?> _draft([String key = 'sd-draft:doc1:t1']) async =>
+Future<String?> _draft([String key = 'sd-draft:$_kEmail:doc1:t1']) async =>
     (await SharedPreferences.getInstance()).getString(key);
 
 bool _enabled(WidgetTester tester, String key) =>
@@ -248,7 +289,10 @@ String _inputText(WidgetTester tester) =>
     tester.widget<TextField>(_k('sd-task-input')).controller!.text;
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    _email = _kEmail;
+    SharedPreferences.setMockInitialValues({});
+  });
 
   group('SdContextScreen', () {
     testWidgets('hiện card bối cảnh; nút mở task mở-chưa-xong đầu tiên', (
@@ -323,7 +367,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           retry: (_, _) => null,
-          overrides: [sdRepositoryProvider.overrideWithValue(repo)],
+          overrides: [sdRepositoryProvider.overrideWithValue(repo), ..._auth()],
           child: MaterialApp.router(
             theme: buildAppTheme(),
             routerConfig: _router,
@@ -440,8 +484,8 @@ void main() {
 
     testWidgets('nháp theo từng task: task khác không thấy', (tester) async {
       SharedPreferences.setMockInitialValues({
-        'sd-draft:doc1:t1': 'của t1',
-        'sd-draft:doc1:t9': 'của t9',
+        'sd-draft:$_kEmail:doc1:t1': 'của t1',
+        'sd-draft:$_kEmail:doc1:t9': 'của t9',
       });
       await _open(tester, _Server(), '/design/doc1/tasks/t1');
       expect(_inputText(tester), 'của t1');
@@ -705,7 +749,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           retry: (_, _) => null,
-          overrides: [sdRepositoryProvider.overrideWithValue(repo)],
+          overrides: [sdRepositoryProvider.overrideWithValue(repo), ..._auth()],
           child: MaterialApp.router(
             theme: buildAppTheme(),
             routerConfig: _router,
@@ -800,6 +844,342 @@ void main() {
       await _open(tester, s, '/design/doc1/tasks/t2');
       expect(_k('sd-task-next'), findsNothing);
     });
+  });
+
+  group('Correction T-10: riêng tư, route, màu, làm mới, rời màn', () {
+    ProviderContainer containerOf(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(SdTaskScreen)));
+
+    // M1
+    testWidgets(
+      'M1: đổi user → không thấy nháp của user trước, ghi vào khoá của mình',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'sd-draft:a@x.com:doc1:t1': 'nháp của A',
+        });
+        _email = 'b@x.com';
+        await _open(tester, _Server(), '/design/doc1/tasks/t1');
+        expect(_inputText(tester), ''); // không thấy nháp của A
+        await _type(tester, 'nháp của B');
+        expect(await _draft('sd-draft:b@x.com:doc1:t1'), 'nháp của B');
+        expect(await _draft('sd-draft:a@x.com:doc1:t1'), 'nháp của A');
+
+        // A đăng nhập lại cùng máy: nháp của A còn nguyên.
+        _router.pop();
+        await tester.pumpAndSettle();
+        _email = 'a@x.com';
+        await tester.pumpWidget(
+          const SizedBox(),
+        ); // bỏ ProviderScope cũ (phiên của B)
+        await _open(tester, _Server(), '/design/doc1/tasks/t1');
+        expect(_inputText(tester), 'nháp của A');
+      },
+    );
+
+    testWidgets('M1: chưa đăng nhập → không đọc, không ghi SharedPreferences', (
+      tester,
+    ) async {
+      final seed = {
+        'sd-draft:null:doc1:t1': 'nháp ma',
+        'sd-draft:doc1:t1': 'nháp cũ không user',
+      };
+      SharedPreferences.setMockInitialValues(Map.of(seed));
+      _email = null;
+      await _open(tester, _Server(), '/design/doc1/tasks/t1');
+      expect(_k('sd-task-input'), findsOneWidget); // vẫn viết được
+      expect(_inputText(tester), '');
+      await _type(tester, 'đang viết');
+      _router.pop();
+      await tester.pumpAndSettle();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getKeys(), seed.keys.toSet());
+      for (final e in seed.entries) {
+        expect(prefs.getString(e.key), e.value);
+      }
+    });
+
+    // M2
+    testWidgets('M2: id có dấu cách và "/" được mã hoá trong mọi location', (
+      tester,
+    ) async {
+      final doc = _doc(
+        tasks: [
+          _task('x/y', 1, ref: 's&1=2 x'),
+          _task('z/w', 2),
+        ],
+      )..['id'] = 'a b/c';
+      final s = _Server(doc: doc)..attempts = [_attempt(1)];
+      await _open(tester, s, '/design/doc1/context');
+      String uri() =>
+          _router.routerDelegate.currentConfiguration.last.matchedLocation;
+
+      await _tap(tester, _k('sd-context-start'));
+      expect(uri(), '/design/a%20b%2Fc/tasks/x%2Fy');
+      expect(find.byType(SdTaskScreen), findsOneWidget);
+
+      await _tap(tester, _k('sd-task-ref'));
+      expect(uri(), '/design/a%20b%2Fc/read');
+      expect(_k('page-read-s&1=2 x'), findsOneWidget);
+      _router.pop();
+      await tester.pumpAndSettle();
+
+      await _tap(tester, _k('sd-task-next'));
+      expect(uri(), '/design/a%20b%2Fc/tasks/z%2Fw');
+    });
+
+    // M3
+    Color? textColor(WidgetTester tester, String key) => tester
+        .widget<RichText>(
+          find.descendant(of: _k(key), matching: find.byType(RichText)),
+        )
+        .text
+        .style
+        ?.color;
+
+    testWidgets(
+      'M3: "Làm mới" và "Thử lại" trên tờ giấy có màu cố định ở theme tối',
+      (tester) async {
+        expect(buildAppTheme().brightness, Brightness.dark);
+        final s = _Server();
+        var fail = true;
+        final base = s.handle;
+        tester.view.physicalSize = const Size(400, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        _router = GoRouter(
+          initialLocation: '/design/doc1/tasks/t1',
+          routes: [
+            GoRoute(
+              path: '/design/:docId/tasks/:taskId',
+              builder: (_, st) => SdTaskScreen(
+                docId: st.pathParameters['docId']!,
+                taskId: st.pathParameters['taskId']!,
+              ),
+            ),
+          ],
+        );
+        final repo = SdRepository(
+          MockClient((r) async {
+            if (fail && r.url.path.endsWith('/attempts')) {
+              return http.Response('x', 500);
+            }
+            return base(r);
+          }),
+          baseUrl: Uri.parse('http://test'),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            retry: (_, _) => null,
+            overrides: [
+              sdRepositoryProvider.overrideWithValue(repo),
+              ..._auth(),
+            ],
+            child: MaterialApp.router(
+              theme: buildAppTheme(),
+              routerConfig: _router,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(textColor(tester, 'sd-task-refresh'), kPaperInk);
+        expect(textColor(tester, 'sd-attempts-retry'), kPaperInk);
+        // Không dùng màu primary của theme.
+        final primary = Theme.of(
+          tester.element(_k('sd-task-refresh')),
+        ).colorScheme.primary;
+        expect(primary, isNot(kPaperInk));
+      },
+    );
+
+    // M4
+    testWidgets('M4: làm mới doc lỗi → giữ nội dung cũ + SnackBar', (
+      tester,
+    ) async {
+      final s = _Server();
+      var failDoc = false;
+      final base = s.handle;
+      tester.view.physicalSize = const Size(400, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      _router = GoRouter(
+        initialLocation: '/design/doc1/tasks/t1',
+        routes: [
+          GoRoute(
+            path: '/design/:docId/tasks/:taskId',
+            builder: (_, st) => SdTaskScreen(
+              docId: st.pathParameters['docId']!,
+              taskId: st.pathParameters['taskId']!,
+            ),
+          ),
+        ],
+      );
+      final repo = SdRepository(
+        MockClient((r) async {
+          if (failDoc && RegExp(r'^/api/sd/docs/[^/]+$').hasMatch(r.url.path)) {
+            return http.Response('x', 500);
+          }
+          return base(r);
+        }),
+        baseUrl: Uri.parse('http://test'),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: (_, _) => null,
+          overrides: [sdRepositoryProvider.overrideWithValue(repo), ..._auth()],
+          child: MaterialApp.router(
+            theme: buildAppTheme(),
+            routerConfig: _router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _type(tester, 'đang viết dở');
+      expect(find.text('Đề của t1'), findsOneWidget);
+
+      failDoc = true;
+      await _tap(tester, _k('sd-task-refresh'));
+      expect(_k('sd-error'), findsNothing);
+      expect(find.text('Đề của t1'), findsOneWidget);
+      expect(_inputText(tester), 'đang viết dở');
+      expect(find.text('Không làm mới được'), findsOneWidget);
+    });
+
+    testWidgets('M4: lần tải ĐẦU lỗi → vẫn SdErrorView + Thử lại', (
+      tester,
+    ) async {
+      final s = _Server();
+      var fail = true;
+      final base = s.handle;
+      tester.view.physicalSize = const Size(400, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      _router = GoRouter(
+        initialLocation: '/design/doc1/tasks/t1',
+        routes: [
+          GoRoute(
+            path: '/design/:docId/tasks/:taskId',
+            builder: (_, st) => SdTaskScreen(
+              docId: st.pathParameters['docId']!,
+              taskId: st.pathParameters['taskId']!,
+            ),
+          ),
+        ],
+      );
+      final repo = SdRepository(
+        MockClient((r) async => fail ? http.Response('x', 500) : base(r)),
+        baseUrl: Uri.parse('http://test'),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: (_, _) => null,
+          overrides: [sdRepositoryProvider.overrideWithValue(repo), ..._auth()],
+          child: MaterialApp.router(
+            theme: buildAppTheme(),
+            routerConfig: _router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_k('sd-error'), findsOneWidget);
+      fail = false;
+      await _tap(tester, _k('sd-retry'));
+      expect(find.text('Đề của t1'), findsOneWidget);
+    });
+
+    // M5
+    testWidgets(
+      'M5: rời màn lúc đang gửi rồi hoàn tất → doc và danh sách được làm mới',
+      (tester) async {
+        final s = _Server();
+        final gate = Completer<void>();
+        s.onPost = (answer) async {
+          await gate.future;
+          final a = _attempt(1);
+          s.attempts.insert(0, a);
+          return _json({'attempt': a}, 201);
+        };
+        await _open(tester, s, '/design/doc1/tasks/t1');
+        final container = containerOf(tester);
+        // Giữ provider sống như màn lộ trình đang đứng sau.
+        final subDoc = container.listen(sdDocProvider('doc1'), (_, _) {});
+        final subDocs = container.listen(sdDocsProvider, (_, _) {});
+        addTearDown(subDoc.close);
+        addTearDown(subDocs.close);
+        await tester.pumpAndSettle();
+
+        await _type(tester, 'bài');
+        await tester.ensureVisible(_k('sd-task-submit'));
+        await tester.tap(_k('sd-task-submit'));
+        await tester.pump();
+        _router.pop(); // rời màn khi đang gửi
+        await tester.pumpAndSettle();
+        expect(find.byType(SdTaskScreen), findsNothing);
+        final docGets = s.docGets;
+        final listGets = s.listGets;
+
+        gate.complete();
+        await tester.pumpAndSettle();
+        expect(s.posts, ['bài']);
+        expect(s.docGets, greaterThan(docGets));
+        expect(s.listGets, greaterThan(listGets));
+        expect(await _draft(), isNull); // nộp xong thì nháp cũng được xoá
+      },
+    );
+
+    // Mutant sống 1
+    testWidgets('nộp xong tải lại sdDocsProvider (danh sách tài liệu)', (
+      tester,
+    ) async {
+      final s = _Server();
+      await _open(tester, s, '/design/doc1/tasks/t1');
+      final sub = containerOf(tester).listen(sdDocsProvider, (_, _) {});
+      addTearDown(sub.close);
+      await tester.pumpAndSettle();
+      final before = s.listGets;
+      expect(before, greaterThan(0));
+
+      await _type(tester, 'bài');
+      await _tap(tester, _k('sd-task-submit'));
+      expect(s.listGets, greaterThan(before));
+    });
+
+    // Mutant sống 2
+    testWidgets('nội dung toàn khoảng trắng/xuống dòng → không nộp được', (
+      tester,
+    ) async {
+      final s = _Server();
+      await _open(tester, s, '/design/doc1/tasks/t1');
+      await _type(tester, '  \n\n \t ');
+      expect(
+        find.text('7/8192'),
+        findsOneWidget,
+      ); // có nội dung nhưng toàn trắng
+      expect(_enabled(tester, 'sd-task-submit'), isFalse);
+      await _type(tester, '  a  ');
+      expect(_enabled(tester, 'sd-task-submit'), isTrue);
+    });
+
+    // Mutant sống 3
+    testWidgets(
+      'rời màn TRƯỚC khi khôi phục nháp xong → nháp cũ không bị xoá',
+      (tester) async {
+        const key = 'sd-draft:$_kEmail:doc1:t1';
+        final gate = Completer<void>();
+        SharedPreferences.setMockInitialValues({});
+        SharedPreferencesStorePlatform.instance = _GatedStore({
+          'flutter.$key': 'nháp quý',
+        }, gate);
+        await _open(tester, _Server(), '/design/doc1/tasks/t1');
+        expect(_k('sd-task-input'), findsOneWidget);
+        expect(_inputText(tester), ''); // chưa khôi phục xong
+
+        _router.pop();
+        await tester.pumpAndSettle();
+        gate.complete();
+        await tester.pumpAndSettle();
+        expect(await _draft(), 'nháp quý');
+      },
+    );
   });
 
   group('Router THẬT của app', () {

@@ -21,6 +21,25 @@ import 'sd_docs_screen.dart' show SdErrorView;
 const Color kSdBarColor = Color(0xFF0B1220);
 const Color kSdGreen = Color(0xFF58CC02);
 
+/// TextButton trên tờ giấy: màu cố định (giấy luôn trắng) để ở theme tối chữ
+/// không thành xanh nhạt trên nền trắng.
+final ButtonStyle sdPaperTextButtonStyle = TextButton.styleFrom(
+  foregroundColor: kPaperInk,
+  disabledForegroundColor: kPaperMuted,
+);
+
+/// Làm mới sdDocProvider lỗi mà đã có dữ liệu cũ: màn giữ nội dung cũ (dùng
+/// `skipError: true` ở `when`), chỉ báo nhỏ bằng SnackBar.
+void sdListenRefreshError(WidgetRef ref, BuildContext context, String docId) {
+  ref.listen<AsyncValue<SdDoc>>(sdDocProvider(docId), (_, next) {
+    if (next is AsyncError<SdDoc> && next.hasValue) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Không làm mới được')));
+    }
+  });
+}
+
 /// Kicker nhỏ in hoa phía trên tiêu đề.
 TextStyle sdKickerStyle() => const TextStyle(
   fontFamily: kSansFamily,
@@ -159,12 +178,14 @@ class SdContextScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final doc = ref.watch(sdDocProvider(docId));
+    sdListenRefreshError(ref, context, docId);
     return Scaffold(
       key: const Key('sd-context'),
       backgroundColor: kSdBarColor,
       body: SdPaperFrame(
         barCenter: const SizedBox.shrink(),
         child: doc.when(
+          skipError: true, // làm mới lỗi: giữ nội dung cũ
           loading: () =>
               const Center(child: CircularProgressIndicator(color: kSdGreen)),
           error: (e, _) => SdErrorView(
@@ -237,8 +258,9 @@ class _ContextBody extends StatelessWidget {
             SdPaperButton(
               key: const Key('sd-context-start'),
               label: 'Bắt đầu ${start.name}',
-              onPressed: () =>
-                  context.push('/design/${doc.id}/tasks/${start.id}'),
+              onPressed: () => context.push(
+                '/design/${Uri.encodeComponent(doc.id)}/tasks/${Uri.encodeComponent(start.id)}',
+              ),
             ),
           );
       }
