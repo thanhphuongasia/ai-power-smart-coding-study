@@ -1,7 +1,7 @@
 Worktree: /Users/phuongmacbook/Developer/Personal/Projects/ai-power-coding-study.worktrees/crew-2026-10-12-system-design-mode
 Branch:   crew/2026-10-12-system-design-mode
 Issue:    #31 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/31
-PR:       (điền sau khi mở)
+PR:       #32 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/32
 
 # Run: system-design-mode
 Trạng thái: P4 — xong code, review, cổng mối nối, e2e; chờ user merge PR (không tự merge)
