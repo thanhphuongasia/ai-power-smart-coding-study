@@ -296,7 +296,7 @@ class _TaskBodyState extends ConsumerState<_TaskBody> {
       _text.clear();
       _restoring = false;
       ref.read(_attemptsProvider(_akey).notifier).insert(attempt);
-      // Task kế có thể vừa mở khoá, tiến độ doc/danh sách đổi.
+      // Task vừa nộp chuyển sang done, tiến độ doc/danh sách đổi.
       ref.invalidate(sdDocProvider(widget.docId));
       ref.invalidate(sdDocsProvider);
       setState(() => _sending = false);
