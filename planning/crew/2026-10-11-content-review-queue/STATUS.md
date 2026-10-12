@@ -2,11 +2,11 @@ Worktree: (không dùng — thẳng trên main)
 Branch:   main
 Issue:    (không tạo)
 
-# Status: open
+# Status: done
 
 | Task | Trạng thái |
 |---|---|
-| T-01/T-02 backend (orchestrator, L4) | vòng 1 CẦN SỬA → sửa; vòng 2 CẦN SỬA (M1 xoá project có sơ đồ kẹt) + external timeout → sửa (kéo kèm mục xoá bài; reject kèm project mới mất module) → **vòng 3 (cuối) đang chạy** (crew-review + external timeout 900s) |
+| T-01/T-02 backend (orchestrator, L4) | vòng 1 CẦN SỬA → sửa; vòng 2 CẦN SỬA (M1 xoá project có sơ đồ kẹt) + external timeout → sửa (kéo kèm mục xoá bài; reject kèm project mới mất module) → vòng 3 (cuối) còn Major (đổi cha module) → user chọn chặn đầu vào (422 unsupported_move) → done |
 | T-03 MCP → pending | PASS với Minor (+ test file mới + bài) |
 | T-04 Dart repo/controller | vòng 2 PASS với Minor |
 | T-05a preview | vòng 2 PASS với Minor |
@@ -21,4 +21,7 @@ Kiểm: backend 623 passed, 2 skipped (DB scs_progressive_verify_test) · flutte
 - T-05a: containerOf(listen:false).
 - T-05b: hàng "Vị trí" có thể hiện "trước → sau" giống nhau (tiêu chí nhạy hơn LCS backend); SnackBar "kèm N mục" không nêu tên.
 
-Next action: chờ review vòng 3 backend → nếu còn Major: DỪNG hỏi user → seam reviewer → verify-seam → e2e → git fetch (không behind) → commit/push/deploy.
+Gate: verify-seam exit 0 (SEAM: 7/7 CÒN ĐÚNG) · e2e HTTP local 22/22 PASS · backend 626 passed, 2 skipped · flutter 491 passed.
+Commit b702b91 (main, đã push) · deploy: migration 0006 chạy trên VPS · smoke prod: /content 31 bài, hàng chờ rỗng; PUT sửa tiêu đề → 1 mục chờ, học viên không thấy; reject → rỗng.
+
+Next action: không còn — distill đã dispatch.
