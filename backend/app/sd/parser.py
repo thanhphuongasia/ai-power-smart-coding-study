@@ -10,6 +10,8 @@ Quy ước (xem `content/sd/airline-reservation.md`):
   `###` đầu tiên) thành một section mang tên chapter.
 - Mỗi khối (đoạn/danh sách, bảng, khối code, trích dẫn `>`) là một card. `card.id` là hash nội dung nên
   sửa một card không đổi id của card khác (tiến độ đọc bám theo id này).
+- `task.id` cũng là slug của TÊN task: đổi tên task = id mới = mất số lần thử và chuỗi mở khoá của task đó.
+- Văn bản được chuẩn hoá Unicode NFC trước khi băm: lưu file dạng NFC hay NFD không đổi id.
 - `section.id` là slug của TÊN section: đổi tên section = id mới = mất tiến độ đọc của section đó (hai section
   trùng tên lấy hậu tố theo thứ tự xuất hiện, đổi thứ tự chúng thì tiến độ bị tráo). Đổi nội dung thì không sao.
 - Trần: 50 chương, 200 section, 200 card/section, 100 card bối cảnh, 3000 card/tài liệu, 12 task.
@@ -68,7 +70,7 @@ def slugify(text: str) -> str:
     t = unicodedata.normalize("NFKD", text.replace("đ", "d").replace("Đ", "D"))
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
     t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:60].strip("-")
-    return t or "x-" + hashlib.sha1(text.strip().encode("utf-8")).hexdigest()[:8]
+    return t or "x-" + hashlib.sha1(unicodedata.normalize("NFC", text.strip()).encode("utf-8")).hexdigest()[:8]
 
 
 def _bad_text(s: str) -> bool:
@@ -366,7 +368,9 @@ def parse_markdown(md: str) -> dict:
     errors: list[str] = []
     if _bad_text(md):
         raise MdError(["tài liệu chứa ký tự NUL hoặc ký tự không hợp lệ (surrogate)"])
-    md = md.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n")
+    # NFC trước mọi thứ: cùng một chữ có thể lưu dạng tổ hợp (NFD, hay gặp khi sao chép từ macOS) hoặc dựng sẵn
+    # (NFC). Không chuẩn hoá thì hash card/slug đổi theo cách lưu file và tiến độ đọc bị mất mà không ai hay.
+    md = unicodedata.normalize("NFC", md).lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
 
     # Lượt 1: tách heading (ngoài khối code) khỏi dòng thường.
     items: list[tuple] = []

@@ -520,3 +520,33 @@ def test_reimport_with_explicit_status_changes_it_and_without_keeps_it(admin):
     assert _import(client, h, MINI, id="st", status="published").json()["status"] == "published"
     assert _import(client, h, MINI, id="st").json()["status"] == "published"
     assert _import(client, h, MINI, id="st", status="draft").json()["status"] == "draft"
+
+
+# --- review mối nối: chuẩn hoá Unicode ------------------------------------------------------------
+
+
+def test_nfd_and_nfc_files_produce_identical_ids(sample_md):
+    import unicodedata
+
+    nfc = parse_markdown(sample_md)
+    nfd = parse_markdown(unicodedata.normalize("NFD", sample_md))  # cả file dạng tổ hợp vẫn khớp nhãn `Đề:`...
+    assert nfd == nfc
+
+
+def test_cjk_and_cyrillic_slugs_are_stable_across_normalization_forms():
+    import unicodedata
+
+    for text in ("Дизайн системы", "한국어 설계", "ばが", "Đề bài"):
+        assert slugify(unicodedata.normalize("NFD", text)) == slugify(unicodedata.normalize("NFC", text))
+    a = parse_markdown("# ばが\n\n## C\n\n### 한국어\n\nx\n")
+    b = parse_markdown(__import__("unicodedata").normalize("NFD", "# ばが\n\n## C\n\n### 한국어\n\nx\n"))
+    assert a["sections"][0]["id"] == b["sections"][0]["id"] and a["sections"][0]["cards"] == b["sections"][0]["cards"]
+
+
+def test_reimport_of_nfd_copy_keeps_reader_progress(admin, db_session, sample_md):
+    import unicodedata
+
+    client, h = admin
+    doc_id = _import(client, h, sample_md).json()["id"]
+    again = _import(client, h, unicodedata.normalize("NFD", sample_md)).json()
+    assert (again["cards_added"], again["cards_removed"], again["id"]) == (0, 0, doc_id)
