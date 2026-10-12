@@ -8,6 +8,22 @@ deploy/deploy.sh
 
 Link: **https://codewithphuong.jacons-corp.com** (web + API cùng origin; link cũ `http://178.105.5.12:8090` chuyển hướng 308 sang đây). App iOS (TestFlight) gọi cùng origin — xem `deploy/IOS-TESTFLIGHT.md`.
 
+## Tự động khi merge main
+
+`.github/workflows/deploy.yml` chạy đúng `deploy/deploy.sh` mỗi lần push vào `main` (hoặc bấm tay
+ở tab Actions → Deploy VPS). Cần 4 secret của repo (Settings → Secrets and variables → Actions),
+thiết lập một lần:
+
+| Secret | Giá trị |
+|---|---|
+| `VPS_HOST` | IP/hostname của VPS |
+| `VPS_USER` | user SSH (`root`: `deploy.sh` ghi `/opt`, `/etc`, cài systemd/nginx) |
+| `VPS_SSH_KEY` | private key RIÊNG cho deploy (`ssh-keygen -t ed25519 -f deploy_key`, public key thêm vào `authorized_keys` của root trên VPS) |
+| `VPS_KNOWN_HOSTS` | output của `ssh-keyscan <VPS_HOST>` (ghim host key) |
+
+Key này có quyền root trên VPS dùng chung: không dùng lại key cá nhân, và nên bật required review
+cho PR vào `main` vì ai merge được là deploy được.
+
 ## Trên server có gì
 
 | Thứ | Ở đâu |
