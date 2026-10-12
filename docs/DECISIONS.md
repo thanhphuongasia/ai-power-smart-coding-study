@@ -662,3 +662,15 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: CLI `load_content --force` khi có mục chờ cùng thùng chứa thì approve áp lại thứ tự draft; duyệt xoá module có bài đã được admin xoá giờ thành công; hàng chờ chưa phân trang; học viên đang mở app chỉ thấy bản mới khi tự refresh. Vận hành: test backend cần `TEST_DATABASE_URL` DB riêng, vì process fuzz của reviewer trên DB test dùng chung giữ khoá làm suite chậm.
 
 **Nguồn**: backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/mcp_server.py:91-125; backend/app/tables.py:203-232; backend/app/main.py:219-236; mobile/lib/features/exercise/exercise_screen.dart:51-75; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
+
+### Màn Soạn bài tập: ô code là TextField + HighlightingController, 3 breakpoint, mọi mục mở mặc định
+
+**Quyết định** (run 2026-10-12-exercise-editor-redesign, PR #26, theo mockup đã duyệt): (1) ô code là một `TextField` giữ nguyên Key, controller là `HighlightingController extends TextEditingController` ghi đè `buildTextSpan` để tô màu bằng tokenizer Python/JSON, màu lấy từ `context.palette`; (2) bố cục theo `LayoutBuilder` với ngưỡng 1100 (mục lục | form | panel ghép thử) và 700 (form | panel; dưới 700 là một cột), panel ghép thử chỉ dựng ở một chỗ tại một thời điểm; (3) mọi mục và ô mở mặc định.
+
+**Vì sao**: (1) controller giữ `controller.text` là nguồn sự thật nên `_Form.toJson`, `_previewMerge` và so với `judge.solution` không đổi, không thêm package; (3) test cũ tìm Key trong Judge/Challenge/ô B, mục đóng thì widget rời cây và `find.byKey` rỗng. Lệch mockup có chủ ý (mockup đóng vài mục).
+
+**Phương án đã bỏ / lệch plan**: overlay chữ lên TextField và package editor (không dùng); `SurfaceCard` cho thẻ ô — dựng container riêng vì SurfaceCard bọc InkWell, chạm vùng trống sẽ đóng/mở (DEVIATIONS.md). Nút "Thu gọn tất cả" có trong plan nhưng chưa làm (state đóng/mở nằm trong widget).
+
+**Đánh đổi đã chấp nhận**: đóng riêng một thẻ ô thì lỗi nhãn không hiện chữ (INV-06 vỡ một phần, Minor); mục lục không tự mở mục đóng; chưa test biên 700/1100; chưa kiểm bằng mắt trên web.
+
+**Nguồn**: mobile/lib/features/admin/code_cell.dart:133-181; mobile/lib/features/admin/exercise_editor.dart:690-693,962-1004; planning/crew/2026-10-12-exercise-editor-redesign/PLAN.md (Quyết định thiết kế 1-5), DEVIATIONS.md, reviews/SEAM.md
