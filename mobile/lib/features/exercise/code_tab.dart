@@ -523,7 +523,6 @@ class _CodeTabState extends ConsumerState<CodeTab>
                   key: Key('cell-$label-field'),
                   code: _cells[label] ?? '',
                   label: label,
-                  title: b.title,
                   onTap: () => _openEditor(label),
                 ),
               ),
@@ -743,13 +742,11 @@ class _CodePreview extends StatelessWidget {
     super.key,
     required this.code,
     required this.label,
-    required this.title,
     required this.onTap,
   });
 
   final String code;
   final String label;
-  final String title;
   final VoidCallback onTap;
 
   @override
@@ -775,7 +772,7 @@ class _CodePreview extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '# TODO $label — $title',
+                    '# TODO $label',
                     style: base.copyWith(
                       color: p.outline,
                       fontStyle: FontStyle.italic,

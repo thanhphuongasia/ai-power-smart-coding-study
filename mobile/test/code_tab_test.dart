@@ -466,11 +466,11 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('ô trống hiện dòng # TODO <nhãn> — <tiêu đề>; bấm Điền code mở '
-      'editor', (t) async {
-    final title = _ex.blocks.firstWhere((b) => b.label == 'B').title;
+  testWidgets('ô trống hiện dòng # TODO <nhãn>; bấm Điền code mở editor', (
+    t,
+  ) async {
     await _pump(t, FakeJudge((_) async => _passed));
-    expect(find.text('# TODO B — $title'), findsOneWidget);
+    expect(find.text('# TODO B'), findsOneWidget);
     expect(find.text('Điền code'), findsWidgets);
 
     await t.tap(find.text('Điền code').first);
