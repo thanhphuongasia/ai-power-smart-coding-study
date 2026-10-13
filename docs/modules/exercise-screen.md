@@ -58,6 +58,14 @@ Tab Challenge có thêm mục "SƠ ĐỒ CLASS" sau phần ví dụ, chỉ hiệ
 
 Ký hiệu quan hệ: ◇ aggregation, ◆ composition, ⇢ dependency, → association (mobile/lib/features/exercise/class_diagram.dart:175-180).
 
+Ô TODO còn trống hiện một dòng comment giả `# TODO <nhãn> — <tiêu đề block>` (màu `outline`, in
+nghiêng — tông màu comment, không phải chữ mờ generic) kèm nút "Điền code" riêng ngay dưới; cả
+dòng comment, cả nút, cả chạm vào toàn bộ khung ô đều mở `CellEditorPage` qua cùng `onTap`
+(mobile/lib/features/exercise/code_tab.dart:749-806). Ô đã có code thì không đổi: số dòng bên
+trái + code tô màu syntax + icon mở rộng (code_tab.dart:807-833). Màn "Xem trước" của admin
+(`review_detail_screen.dart` → `ExerciseScreen(preview: true)`) hiện cùng giao diện này vì dùng
+chung `CodeTab`, không có đường render riêng cho preview.
+
 Quy tắc khoá một nơi: bài k trong `CodeFile` mở khi k = 0 hoặc bài k-1 đã passed; bài đã passed luôn mở;
 bài nằm ở nhiều file mở nếu mở ở bất kỳ file nào (mobile/lib/domain/progression.dart:22-33). `ExerciseRow`,
 `ExerciseScreen` đều qua `exerciseUnlockedProvider` (mobile/lib/features/exercise/session_providers.dart:45-52).
@@ -118,3 +126,5 @@ Không làm: nút "chép lời giải vào ô", khoá bài xuyên file/topic.
 - Sơ đồ class: mobile/lib/domain/class_scope.dart:24-55, mobile/lib/features/exercise/class_diagram.dart, challenge_tab.dart:36-105
 - Quyết định: docs/DECISIONS.md (các mục của run 2026-10-11-exercise-tabs-judge)
 - Run: planning/crew/2026-10-11-exercise-tabs-judge/PLAN.md, DEVIATIONS.md, reviews/SEAM.md
+- Ô TODO rỗng (comment + nút "Điền code"): mobile/lib/features/exercise/code_tab.dart:749-806;
+  run: planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md

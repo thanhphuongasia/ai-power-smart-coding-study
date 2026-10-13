@@ -633,6 +633,7 @@ class _CodeTabState extends ConsumerState<CodeTab>
                     : _CodePreview(
                         key: Key('cell-$label-field'),
                         code: _cells[label] ?? '',
+                        label: label,
                         // Inline: ô lỗi nhưng chưa mở → chạm để mở editor
                         // ngay trong notebook, không push route.
                         onTap: widget.inlineEditor
@@ -864,9 +865,15 @@ class _LockedCell extends StatelessWidget {
 /// Ô đang mở trong notebook: code (highlight + số dòng) chỉ để xem; chạm
 /// → màn soạn code toàn màn hình.
 class _CodePreview extends StatelessWidget {
-  const _CodePreview({super.key, required this.code, required this.onTap});
+  const _CodePreview({
+    super.key,
+    required this.code,
+    required this.label,
+    required this.onTap,
+  });
 
   final String code;
+  final String label;
   final VoidCallback onTap;
 
   @override
@@ -886,25 +893,58 @@ class _CodePreview extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: p.outline.withValues(alpha: 0.6)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              [for (var i = 1; i <= lines; i++) '$i'].join('\n'),
-              textAlign: TextAlign.right,
-              style: base.copyWith(color: p.codeInk.withValues(alpha: 0.5)),
-            ),
-            const SizedBox(width: AppSpace.s2),
-            Expanded(
-              child: empty
-                  ? Text(
-                      '# chạm để viết code',
-                      style: base.copyWith(
-                        color: p.codeInk.withValues(alpha: 0.6),
-                        fontStyle: FontStyle.italic,
+        child: empty
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '# TODO $label',
+                    style: base.copyWith(
+                      color: p.codeInk.withValues(alpha: 0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.s1),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      onPressed: onTap,
+                      icon: const Icon(Icons.edit, size: 14),
+                      label: const Text('Điền code'),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: p.primary,
+                        foregroundColor: p.onPrimary,
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.s2,
+                          vertical: AppSpace.s1,
+                        ),
+                        textStyle: const TextStyle(fontSize: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
                       ),
-                    )
-                  : Text.rich(
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    [for (var i = 1; i <= lines; i++) '$i'].join('\n'),
+                    textAlign: TextAlign.right,
+                    style: base.copyWith(
+                      color: p.codeInk.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.s2),
+                  Expanded(
+                    child: Text.rich(
                       TextSpan(
                         style: base,
                         children: _spans(
@@ -913,14 +953,14 @@ class _CodePreview extends StatelessWidget {
                         ),
                       ),
                     ),
-            ),
-            Icon(
-              Icons.open_in_full,
-              size: 14,
-              color: p.codeInk.withValues(alpha: 0.6),
-            ),
-          ],
-        ),
+                  ),
+                  Icon(
+                    Icons.open_in_full,
+                    size: 14,
+                    color: p.codeInk.withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
       ),
     );
   }

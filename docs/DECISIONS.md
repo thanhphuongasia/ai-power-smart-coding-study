@@ -802,3 +802,30 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: không còn ràng buộc thứ tự giữa các task; node "hiện tại" trên lộ trình vẫn đúng một (node mở chưa xong đầu tiên theo thứ tự section, bối cảnh, task). Dòng cũ ở mục quyết định gốc không sửa (append-only); mục này là bản hiệu lực cho phần task.
 
 **Nguồn**: backend/app/sd/learner.py:73-92; backend/app/sd/attempts.py:102-104; mobile/lib/features/system_design/sd_path_screen.dart:85-112, 232-237; mobile/lib/features/system_design/task_screen.dart:352-356; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 4, INV-01, INV-03), DEVIATIONS.md.
+
+### Ô TODO rỗng dùng chung một widget cho học viên và admin preview, không tách đường render riêng
+
+**Quyết định** (run 2026-10-13-todo-comment-fill-button, commit caaf83f): ô code còn trống hiện
+dòng comment giả `# TODO <nhãn> — <tiêu đề block>` (dùng thẳng `Block.title` có sẵn, không thêm
+field schema mới) + nút "Điền code" riêng, cả hai và cả việc chạm khung ô đều gọi đúng `onTap` mở
+`CellEditorPage` hiện có — không dựng khung nhập inline mới, không đổi đích đến. Vì admin "Xem
+trước" đã dựng bằng cách tái dùng `ExerciseScreen(preview: true)` (xem mục "Mọi sửa nội dung vào
+hàng chờ..." phía trên), sửa đúng một chỗ trong `_CodePreview` (code_tab.dart) là đủ cho cả hai
+nơi, không cần nhánh hiển thị riêng cho preview.
+
+**Vì sao**: giữ nguyên kiến trúc "preview = tái dùng y hệt màn thật" đã có; `CellEditorPage` (số
+dòng, gợi ý vocab, autocomplete) đã là đúng chỗ nhập, không có lý do thêm cách nhập thứ hai.
+
+**Đánh đổi đã chấp nhận**: bỏ icon `open_in_full` ở nhánh ô rỗng (không còn ý nghĩa "mở xem code
+đã viết" khi ô chưa có gì) — quyết định hợp lý nhưng review ghi nhận Minor vì hành động đó không
+được giải thích ở `DEVIATIONS.md`/`STATUS.md` lúc review, chỉ ghi trong commit message.
+
+**Lưu ý sau merge `ci/deploy-vps-on-merge` → `main` (2026-10-13)**: run `2026-10-12-issue29-reskin`
+(mục "Thay áo The Coach" phía trên) đã thêm `CodeTab(inlineEditor: bool)` — khi `true`, ô đang mở
+là editor ngay trong notebook (`_inlineEditor`), không còn render qua `_CodePreview`. Nhánh ô rỗng
+mô tả ở đây (`# TODO <nhãn>` + nút "Điền code") chỉ còn áp dụng khi `inlineEditor: false` (mặc
+định) hoặc cho ô lỗi chưa mở trong chế độ inline — đã merge tay (không phải worker), giữ cả hai
+tính năng, không có tài liệu INV riêng vì chỉ một task chạm vùng này.
+
+**Nguồn**: mobile/lib/features/exercise/code_tab.dart:522-523,749-806;
+planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
