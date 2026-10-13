@@ -662,3 +662,23 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: CLI `load_content --force` khi có mục chờ cùng thùng chứa thì approve áp lại thứ tự draft; duyệt xoá module có bài đã được admin xoá giờ thành công; hàng chờ chưa phân trang; học viên đang mở app chỉ thấy bản mới khi tự refresh. Vận hành: test backend cần `TEST_DATABASE_URL` DB riêng, vì process fuzz của reviewer trên DB test dùng chung giữ khoá làm suite chậm.
 
 **Nguồn**: backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/mcp_server.py:91-125; backend/app/tables.py:203-232; backend/app/main.py:219-236; mobile/lib/features/exercise/exercise_screen.dart:51-75; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
+
+### Ô TODO rỗng dùng chung một widget cho học viên và admin preview, không tách đường render riêng
+
+**Quyết định** (run 2026-10-13-todo-comment-fill-button, commit caaf83f): ô code còn trống hiện
+dòng comment giả `# TODO <nhãn> — <tiêu đề block>` (dùng thẳng `Block.title` có sẵn, không thêm
+field schema mới) + nút "Điền code" riêng, cả hai và cả việc chạm khung ô đều gọi đúng `onTap` mở
+`CellEditorPage` hiện có — không dựng khung nhập inline mới, không đổi đích đến. Vì admin "Xem
+trước" đã dựng bằng cách tái dùng `ExerciseScreen(preview: true)` (xem mục "Mọi sửa nội dung vào
+hàng chờ..." phía trên), sửa đúng một chỗ trong `_CodePreview` (code_tab.dart) là đủ cho cả hai
+nơi, không cần nhánh hiển thị riêng cho preview.
+
+**Vì sao**: giữ nguyên kiến trúc "preview = tái dùng y hệt màn thật" đã có; `CellEditorPage` (số
+dòng, gợi ý vocab, autocomplete) đã là đúng chỗ nhập, không có lý do thêm cách nhập thứ hai.
+
+**Đánh đổi đã chấp nhận**: bỏ icon `open_in_full` ở nhánh ô rỗng (không còn ý nghĩa "mở xem code
+đã viết" khi ô chưa có gì) — quyết định hợp lý nhưng review ghi nhận Minor vì hành động đó không
+được giải thích ở `DEVIATIONS.md`/`STATUS.md` lúc review, chỉ ghi trong commit message.
+
+**Nguồn**: mobile/lib/features/exercise/code_tab.dart:522-523,749-806;
+planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
