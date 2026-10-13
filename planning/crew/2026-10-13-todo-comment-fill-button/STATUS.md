@@ -22,8 +22,19 @@ PR: #40 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/
 - Validation thật: `flutter test test/code_tab_test.dart` → 17/17 pass (16 cũ + 1 mới).
   `flutter analyze lib/features/exercise/code_tab.dart` → No issues found!
 
-## Backlog (Minor chưa sửa ngay)
+## Xử lý review Codex trên PR #40 (2026-10-13, comment 6137279785)
 
-- `code_tab.dart` — bỏ icon `open_in_full` khi ô TODO rỗng (quyết định hợp lý của worker) nhưng
-  chưa có ghi chú quyết định ở đâu theo yêu cầu contract. Giải quyết bằng cách ghi rõ trong PR
-  body (P4), không cần sửa code.
+Cả 3 điểm đã trả lời (comment 6137427009), xem `DEVIATIONS.md` cho chi tiết quyết định:
+
+1. PR lẫn 5 bài RAG do `ci/deploy-vps-on-merge` chưa push lên origin lúc mở PR → đã push
+   (fast-forward), PR gọn lại đúng phạm vi.
+2. Title lặp 2 lần trên màn 375px → bỏ title khỏi dòng `# TODO <nhãn>`, chỉ còn nhãn. 17/17
+   test vẫn pass, `flutter analyze` sạch.
+3. Góp ý UX lớn (exact-match khoá ô, bài chia quá nhỏ) → ngoài phạm vi, tách issue #42
+   (https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/42), không sửa ở
+   đây.
+
+## Backlog
+
+(trống — Minor duy nhất của review T-01 đã được giải quyết gián tiếp qua việc sửa bỏ hẳn phần
+title khỏi dòng comment, không còn liên quan đến quyết định bỏ icon `open_in_full` nữa.)
