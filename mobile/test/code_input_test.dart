@@ -788,13 +788,13 @@ void _ghostGroup() {
       await _teardown(tester, h);
     });
 
-    testWidgets('ô trống → ghost là dòng đầu của đáp án, text vẫn rỗng', (
+    testWidgets('ô trống → không hiện ghost (chưa gõ gì thì không lộ đáp án)', (
       tester,
     ) async {
       final h = _Harness();
       await _pumpGhost(tester, h, answers: ['x = 1\ny = 2']);
       expect(_ctrl(tester).text, '');
-      expect(_spanText(tester), 'x = 1');
+      expect(_spanText(tester), '');
       expect(h.changes, isEmpty);
       await _teardown(tester, h);
     });
@@ -931,6 +931,10 @@ void _ghostGroup() {
         );
         expect(find.byKey(const Key('vocab-len')), findsOneWidget);
         await tester.showKeyboard(find.byKey(const Key('cell-A-field')));
+        await tester.pump();
+        // Ô trống thì chưa có ghost (issue #37) — gõ trước một tiền tố khớp
+        // đáp án để kiểm tra CodeToolbar dùng chung hiện đúng ghost-accept.
+        await tester.enterText(find.byKey(const Key('cell-A-field')), 'le');
         await tester.pump();
         expect(find.byKey(const Key('ghost-accept')), findsOneWidget);
         await tester.tap(find.byKey(const Key('vocab-len')));
