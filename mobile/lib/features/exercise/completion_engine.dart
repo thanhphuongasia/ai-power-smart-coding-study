@@ -216,7 +216,8 @@ List<Suggestion> vocabStrip(List<String> vocab, {int limit = 10}) {
 /// Phần còn lại của đáp án để vẽ chữ mờ sau con trỏ ([text] là toàn bộ text
 /// của ô, con trỏ ở cuối). Chỉ TÍNH, không ghi gì (INV-04).
 ///
-/// - Ô trống (hoặc chỉ khoảng trắng): dòng đầu của đáp án đầu tiên.
+/// - Ô trống (hoặc chỉ khoảng trắng): chuỗi rỗng — chưa gõ gì thì không gợi ý
+///   sẵn cả dòng đáp án, học viên phải tự bắt đầu gõ trước (issue #37).
 /// - Đã gõ một tiền tố (bỏ khoảng trắng đầu) của một đáp án: phần đuôi còn
 ///   lại của đáp án đầu tiên khớp.
 /// - Không khớp, hoặc đã gõ đủ: chuỗi rỗng.
@@ -227,7 +228,7 @@ String ghostFor(String text, List<String> answers) {
   ];
   if (usable.isEmpty) return '';
   final typed = text.trimLeft();
-  if (typed.isEmpty) return usable.first.split('\n').first;
+  if (typed.isEmpty) return '';
   for (final a in usable) {
     if (a.length > typed.length && a.startsWith(typed)) {
       return a.substring(typed.length);

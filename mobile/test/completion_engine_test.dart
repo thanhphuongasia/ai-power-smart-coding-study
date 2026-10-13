@@ -212,9 +212,9 @@ void _ghostTests() {
   });
 
   group('ghostFor', () {
-    test('ô trống → dòng đầu của đáp án đầu tiên', () {
-      expect(ghostFor('', ['for i in x:\n    pass', 'y']), 'for i in x:');
-      expect(ghostFor('   ', ['abc']), 'abc');
+    test('ô trống → rỗng, chưa gõ gì thì không lộ đáp án (issue #37)', () {
+      expect(ghostFor('', ['for i in x:\n    pass', 'y']), '');
+      expect(ghostFor('   ', ['abc']), '');
     });
 
     test('đã gõ tiền tố → phần còn lại', () {
