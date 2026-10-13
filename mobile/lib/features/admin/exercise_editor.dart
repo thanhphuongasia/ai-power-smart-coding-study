@@ -14,6 +14,8 @@ import '../../domain/merge.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets.dart';
 import 'admin_controller.dart';
+import 'code_cell.dart';
+import 'collapsible_section.dart';
 
 /// Chuỗi "a, b, c" → ['a','b','c'] (bỏ phần tử rỗng).
 List<String> _commaList(String text) => [
@@ -23,6 +25,9 @@ List<String> _commaList(String text) => [
 
 TextEditingController _ctl(Object? v) =>
     TextEditingController(text: v is String ? v : '');
+
+HighlightingController _hl(Object? v, CodeLanguage language) =>
+    HighlightingController(text: v is String ? v : '', language: language);
 
 Json _asJson(Object? v) => v is Json ? v : <String, dynamic>{};
 
@@ -47,7 +52,7 @@ class _BlockForm {
       vocab = _ctl(_strings(b['vocab']).join(', ')) {
     initVocabText = vocab.text;
     final answers = _strings(b['accepted_answers']);
-    this.answers.addAll(answers.map(_ctl));
+    this.answers.addAll(answers.map((a) => _hl(a, CodeLanguage.python)));
     final h = _strings(b['hints']);
     for (var i = 0; i < 3; i++) {
       hints.add(_ctl(i < h.length ? h[i] : ''));
@@ -118,16 +123,17 @@ class _Form {
       className = _ctl(base['class_name']),
       origParams = _strings(base['params']),
       params = _ctl(_strings(base['params']).join(', ')),
-      template = _ctl(base['template']),
+      template = _hl(base['template'], CodeLanguage.python),
       statement = _ctl(_asJson(base['challenge'])['statement']),
       motivation = _ctl(_asJson(base['challenge'])['motivation']),
       small = _example(_asJson(_asJson(base['challenge'])['small'])),
       project = _example(_asJson(_asJson(base['challenge'])['project'])),
-      solution = _ctl(_asJson(base['judge'])['solution']),
-      cases = TextEditingController(
+      solution = _hl(_asJson(base['judge'])['solution'], CodeLanguage.python),
+      cases = HighlightingController(
         text: const JsonEncoder.withIndent(
           '  ',
         ).convert(_asJson(base['judge'])['cases'] ?? <Object>[]),
+        language: CodeLanguage.json,
       ) {
     initParamsText = params.text;
     final raw = base['blocks'];
@@ -140,8 +146,8 @@ class _Form {
 
   static Map<String, TextEditingController> _example(Json e) => {
     'caption': _ctl(e['caption']),
-    'input': _ctl(e['input']),
-    'output': _ctl(e['output']),
+    'input': _hl(e['input'], CodeLanguage.python),
+    'output': _hl(e['output'], CodeLanguage.python),
     'note': _ctl(e['note']),
   };
 
@@ -415,27 +421,41 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
     TextEditingController c,
     String label, {
     int maxLines = 1,
-    bool mono = false,
-    String? errorText,
-    String? helper,
     List<TextInputFormatter>? formatters,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: AppSpace.s2),
     child: TextField(
       key: Key(key),
       controller: c,
-      minLines: maxLines == 1 ? 1 : maxLines,
+      minLines: 1,
       maxLines: maxLines == 1 ? 1 : null,
-      style: mono ? AppText.code : AppText.body,
+      style: AppText.body,
       inputFormatters: formatters,
       onChanged: (_) => _changed(),
       decoration: InputDecoration(
         labelText: label,
-        helperText: helper,
-        errorText: errorText,
         isDense: true,
         border: const OutlineInputBorder(),
       ),
+    ),
+  );
+
+  /// Ô code (gutter, tô màu). [key] nằm trên chính TextField.
+  Widget _codeCell(
+    String key,
+    TextEditingController c,
+    String label,
+    CodeLanguage language, {
+    int minLines = 3,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpace.s2),
+    child: CodeCell(
+      key: Key(key),
+      controller: c,
+      language: language,
+      label: label,
+      minLines: minLines,
+      onChanged: (_) => _changed(),
     ),
   );
 
@@ -448,14 +468,20 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
     children: [
       SectionLabel(title),
       _text('$prefix-caption', e['caption']!, 'Mô tả'),
-      _text(
+      _codeCell(
         '$prefix-input',
         e['input']!,
         'Input (code gọi)',
-        maxLines: 2,
-        mono: true,
+        CodeLanguage.python,
+        minLines: 2,
       ),
-      _text('$prefix-output', e['output']!, 'Output', maxLines: 2, mono: true),
+      _codeCell(
+        '$prefix-output',
+        e['output']!,
+        'Output',
+        CodeLanguage.python,
+        minLines: 2,
+      ),
       _text('$prefix-note', e['note']!, 'Ghi chú (trống = không có)'),
     ],
   );
@@ -466,129 +492,139 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
     return Padding(
       key: ObjectKey(b),
       padding: const EdgeInsets.only(bottom: AppSpace.s4),
-      child: SurfaceCard(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.s4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 72,
-                    child: TextField(
-                      key: ValueKey('label-${b.keyId}'),
-                      controller: b.label,
-                      inputFormatters: [_UpperCaseLetter()],
-                      onChanged: (_) => _changed(),
-                      decoration: const InputDecoration(
-                        labelText: 'Nhãn',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpace.s4),
-                  Expanded(
-                    child: Text(
-                      b.idFor(_form!.exerciseId),
-                      style: AppText.caption.copyWith(color: p.inkMuted),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    key: Key('block-$l-remove'),
-                    icon: Icon(Icons.delete_outline, color: p.danger),
-                    tooltip: 'Xoá ô $l',
-                    onPressed: () {
-                      b.dispose();
-                      _form!.blocks.remove(b);
-                      _changed();
-                    },
-                  ),
-                ],
-              ),
-              if (_form!.labelError(b) != null)
-                Padding(
+      child: CollapsibleCard(
+        badge: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: p.surfaceRaised,
+            shape: BoxShape.circle,
+            border: Border.all(color: p.outline),
+          ),
+          child: Text(l, style: AppText.label.copyWith(color: p.ink)),
+        ),
+        title: b.title.text.isEmpty ? 'Ô $l' : b.title.text,
+        subtitle: b.idFor(_form!.exerciseId),
+        actions: [
+          IconButton(
+            key: Key('block-$l-remove'),
+            icon: Icon(Icons.delete_outline, color: p.danger),
+            tooltip: 'Xoá ô $l',
+            onPressed: () {
+              b.dispose();
+              _form!.blocks.remove(b);
+              _changed();
+            },
+          ),
+        ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 72,
+                child: Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.s2),
-                  child: Text(
-                    _form!.labelError(b)!,
-                    key: Key('label-error-${b.keyId}'),
-                    style: AppText.caption.copyWith(color: p.danger),
+                  child: TextField(
+                    key: ValueKey('label-${b.keyId}'),
+                    controller: b.label,
+                    inputFormatters: [_UpperCaseLetter()],
+                    onChanged: (_) => _changed(),
+                    decoration: const InputDecoration(
+                      labelText: 'Nhãn',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
-              _text('block-$l-title', b.title, 'Tiêu đề'),
-              _text('block-$l-prompt', b.prompt, 'Đề (prompt)', maxLines: 2),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Thụt lề (indent_level)', style: AppText.body),
-                  ),
-                  const SizedBox(width: AppSpace.s4),
-                  DropdownButton<int>(
-                    key: Key('block-$l-indent'),
-                    value: b.indent.clamp(0, 4),
-                    items: [
-                      for (var i = 0; i <= 4; i++)
-                        DropdownMenuItem(value: i, child: Text('$i')),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      b.indent = v;
-                      _changed();
-                    },
-                  ),
-                ],
               ),
-              const SectionLabel('Đáp án chấp nhận (ô đầu = đáp án chuẩn)'),
-              for (var i = 0; i < b.answers.length; i++)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _text(
-                        'block-$l-answer-$i',
-                        b.answers[i],
-                        i == 0 ? 'Đáp án chuẩn' : 'Đáp án ${i + 1}',
-                        maxLines: 2,
-                        mono: true,
-                      ),
-                    ),
-                    IconButton(
+            ),
+            if (_form!.labelError(b) != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.s2),
+                child: Text(
+                  _form!.labelError(b)!,
+                  key: Key('label-error-${b.keyId}'),
+                  style: AppText.caption.copyWith(color: p.danger),
+                ),
+              ),
+            _text('block-$l-title', b.title, 'Tiêu đề'),
+            _text('block-$l-prompt', b.prompt, 'Đề (prompt)', maxLines: 2),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Thụt lề (indent_level)', style: AppText.body),
+                ),
+                const SizedBox(width: AppSpace.s4),
+                DropdownButton<int>(
+                  key: Key('block-$l-indent'),
+                  value: b.indent.clamp(0, 4),
+                  items: [
+                    for (var i = 0; i <= 4; i++)
+                      DropdownMenuItem(value: i, child: Text('$i')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    b.indent = v;
+                    _changed();
+                  },
+                ),
+              ],
+            ),
+            const SectionLabel('Đáp án chấp nhận (ô đầu = đáp án chuẩn)'),
+            for (var i = 0; i < b.answers.length; i++)
+              Column(
+                key: ValueKey(b.answers[i]),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _codeCell(
+                    'block-$l-answer-$i',
+                    b.answers[i],
+                    i == 0 ? 'Đáp án chuẩn' : 'Đáp án ${i + 1}',
+                    CodeLanguage.python,
+                    minLines: 2,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
                       key: Key('block-$l-answer-$i-remove'),
-                      icon: const Icon(Icons.remove_circle_outline),
-                      tooltip: 'Xoá đáp án',
+                      icon: const Icon(Icons.remove_circle_outline, size: 18),
+                      label: const Text('Xoá đáp án'),
                       onPressed: () {
                         b.answers.removeAt(i).dispose();
                         _changed();
                       },
                     ),
-                  ],
-                ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  key: Key('block-$l-answer-add'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Thêm đáp án'),
-                  onPressed: () {
-                    b.answers.add(TextEditingController());
-                    _changed();
-                  },
-                ),
+                  ),
+                ],
               ),
-              _text('block-$l-expected', b.expectedOutput, 'Output mong đợi'),
-              _text(
-                'block-$l-explanation',
-                b.explanation,
-                'Giải thích',
-                maxLines: 2,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('block-$l-answer-add'),
+                icon: const Icon(Icons.add),
+                label: const Text('Thêm đáp án'),
+                onPressed: () {
+                  b.answers.add(
+                    HighlightingController(language: CodeLanguage.python),
+                  );
+                  _changed();
+                },
               ),
-              for (var i = 0; i < 3; i++)
-                _text('block-$l-hint-$i', b.hints[i], 'Gợi ý ${i + 1}'),
-              _text('block-$l-vocab', b.vocab, 'Từ gợi ý (cách nhau dấu phẩy)'),
-            ],
-          ),
+            ),
+            _text('block-$l-expected', b.expectedOutput, 'Output mong đợi'),
+            _text(
+              'block-$l-explanation',
+              b.explanation,
+              'Giải thích',
+              maxLines: 2,
+            ),
+            for (var i = 0; i < 3; i++)
+              _text('block-$l-hint-$i', b.hints[i], 'Gợi ý ${i + 1}'),
+            _text('block-$l-vocab', b.vocab, 'Từ gợi ý (cách nhau dấu phẩy)'),
+          ],
         ),
       ),
     );
@@ -649,6 +685,261 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
     );
   }
 
+  // --- Layout -------------------------------------------------------------
+
+  static const _wideBreakpoint = 1100.0;
+  static const _mediumBreakpoint = 700.0;
+  static const _panelWidth = 360.0;
+  static const _tocWidth = 200.0;
+
+  /// Neo cuộn của từng mục (mục lục ở layout rộng).
+  final _sectionKeys = <String, GlobalKey>{
+    'basic': GlobalKey(),
+    'template': GlobalKey(),
+    'challenge': GlobalKey(),
+    'blocks': GlobalKey(),
+    'judge': GlobalKey(),
+  };
+
+  static const _sectionTitles = <String, String>{
+    'basic': 'Cơ bản',
+    'template': 'Template',
+    'challenge': 'Challenge',
+    'blocks': 'Các ô (blocks)',
+    'judge': 'Judge',
+  };
+
+  void _jumpTo(String id) {
+    final ctx = _sectionKeys[id]!.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  String _firstLine(String s) {
+    final t = s.trim().split('\n').first;
+    return t.length > 60 ? '${t.substring(0, 60)}…' : t;
+  }
+
+  /// Các mục của form; mọi mục mở mặc định (test và người dùng đều thấy ngay).
+  List<Widget> _sections(_Form f, String? casesError) {
+    final warn = f.warnings.isNotEmpty;
+    final labelErrors = [
+      for (final b in f.blocks)
+        if (f.labelError(b) != null) f.labelError(b)!,
+    ];
+    Widget section(
+      String id,
+      Widget child, {
+      String? summary,
+      SectionStatus status = SectionStatus.ok,
+    }) => CollapsibleSection(
+      key: _sectionKeys[id],
+      title: _sectionTitles[id]!,
+      summary: summary,
+      status: status,
+      child: child,
+    );
+
+    return [
+      section(
+        'basic',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _text('ex-title', f.title, 'Tiêu đề'),
+            _text('ex-function', f.function, 'Tên hàm (function_name)'),
+            _text('ex-class', f.className, 'Tên class (trống = hàm tự do)'),
+            _text('ex-params', f.params, 'Tham số (cách nhau dấu phẩy)'),
+          ],
+        ),
+        summary: f.title.text,
+      ),
+      section(
+        'template',
+        _codeCell(
+          'ex-template',
+          f.template,
+          'Template (ô TODO: "# TODO A")',
+          CodeLanguage.python,
+          minLines: 8,
+        ),
+        summary: '${f.template.text.split('\n').length} dòng',
+      ),
+      section(
+        'challenge',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _text('ex-statement', f.statement, 'Đề bài', maxLines: 3),
+            _text('ex-motivation', f.motivation, 'Động lực', maxLines: 3),
+            _example('ex-small', 'Ví dụ nhỏ', f.small),
+            _example('ex-project', 'Ví dụ dự án', f.project),
+          ],
+        ),
+        summary: _firstLine(f.statement.text),
+      ),
+      section(
+        'blocks',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final b in f.blocks) _blockCard(b),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GhostButton(
+                key: const Key('block-add'),
+                label: 'Thêm ô',
+                onPressed: !f.canAddBlock
+                    ? null
+                    : () {
+                        f.addBlock();
+                        _changed();
+                      },
+              ),
+            ),
+          ],
+        ),
+        summary: labelErrors.isNotEmpty
+            ? labelErrors.first
+            : '${f.blocks.length} ô',
+        status: f.hasLabelError
+            ? SectionStatus.error
+            : (warn ? SectionStatus.warn : SectionStatus.ok),
+      ),
+      section(
+        'judge',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _codeCell(
+              'ex-solution',
+              f.solution,
+              'Lời giải (solution)',
+              CodeLanguage.python,
+              minLines: 8,
+            ),
+            _codeCell(
+              'ex-cases',
+              f.cases,
+              'Cases (mảng JSON)',
+              CodeLanguage.json,
+              minLines: 8,
+            ),
+            if (casesError != null)
+              Text(
+                casesError,
+                key: const Key('ex-cases-error'),
+                style: AppText.caption.copyWith(color: context.palette.danger),
+              ),
+          ],
+        ),
+        summary:
+            casesError ?? 'solution ${f.solution.text.split('\n').length} dòng',
+        status: casesError != null ? SectionStatus.error : SectionStatus.ok,
+      ),
+    ];
+  }
+
+  Widget _toc() {
+    final p = context.palette;
+    return SizedBox(
+      width: _tocWidth,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpace.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionLabel('Mục lục'),
+            for (final e in _sectionTitles.entries)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: Key('toc-${e.key}'),
+                  style: TextButton.styleFrom(foregroundColor: p.ink),
+                  onPressed: () => _jumpTo(e.key),
+                  child: Text(e.value),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _previewPanel(_Form f) {
+    final p = context.palette;
+    return Container(
+      width: _panelWidth,
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: p.outline)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpace.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionLabel('Ghép thử (đáp án chuẩn của mọi ô)'),
+            _preview(f),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Một bộ Huỷ/Áp dụng duy nhất cho mọi layout (INV-04).
+  Widget _actionBar(_Form f, String? casesError) {
+    final p = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: p.outline)),
+      ),
+      padding: const EdgeInsets.all(AppSpace.s4),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_applyError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.s2),
+                  child: Text(
+                    _applyError!,
+                    style: AppText.caption.copyWith(color: p.danger),
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: GhostButton(
+                      key: const Key('exercise-cancel'),
+                      label: 'Huỷ',
+                      onPressed: () => context.pop(),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.s4),
+                  Expanded(
+                    child: PrimaryButton(
+                      key: const Key('exercise-apply'),
+                      label: 'Áp dụng',
+                      onPressed: casesError == null && !f.hasLabelError
+                          ? _apply
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(adminProvider);
@@ -667,123 +958,54 @@ class _State extends ConsumerState<ExerciseEditorScreen> {
       body = Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              key: const Key('exercise-editor'),
-              padding: const EdgeInsets.all(AppSpace.s4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (s.dirty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpace.s4),
-                      child: Text(
-                        'Nội dung đã sửa, chưa lưu lên server '
-                        '(lưu ở màn Soạn nội dung).',
-                        key: const Key('exercise-dirty'),
-                        style: AppText.caption.copyWith(color: p.inkMuted),
-                      ),
-                    ),
-                  const SectionLabel('Cơ bản'),
-                  _text('ex-title', f.title, 'Tiêu đề'),
-                  _text('ex-function', f.function, 'Tên hàm (function_name)'),
-                  _text(
-                    'ex-class',
-                    f.className,
-                    'Tên class (trống = hàm tự do)',
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final wide = c.maxWidth >= _wideBreakpoint;
+                final medium = c.maxWidth >= _mediumBreakpoint;
+                // Chỉ MỘT nhánh chạy → _preview dựng đúng một chỗ (INV-03).
+                final sections = _sections(f, casesError);
+                Widget form(List<Widget> tail) => SingleChildScrollView(
+                  key: const Key('exercise-editor'),
+                  padding: const EdgeInsets.all(AppSpace.s4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (s.dirty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpace.s4),
+                          child: Text(
+                            'Nội dung đã sửa, chưa lưu lên server '
+                            '(lưu ở màn Soạn nội dung).',
+                            key: const Key('exercise-dirty'),
+                            style: AppText.caption.copyWith(color: p.inkMuted),
+                          ),
+                        ),
+                      for (final w in sections) ...[
+                        w,
+                        const SizedBox(height: AppSpace.s4),
+                      ],
+                      ...tail,
+                    ],
                   ),
-                  _text('ex-params', f.params, 'Tham số (cách nhau dấu phẩy)'),
-                  const SectionLabel('Template (ô TODO: "# TODO A")'),
-                  _text(
-                    'ex-template',
-                    f.template,
-                    'Template',
-                    maxLines: 8,
-                    mono: true,
-                  ),
-                  const SectionLabel('Challenge'),
-                  _text('ex-statement', f.statement, 'Đề bài', maxLines: 3),
-                  _text('ex-motivation', f.motivation, 'Động lực', maxLines: 3),
-                  _example('ex-small', 'Ví dụ nhỏ', f.small),
-                  _example('ex-project', 'Ví dụ dự án', f.project),
-                  const SectionLabel('Các ô (blocks)'),
-                  for (final b in f.blocks) _blockCard(b),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GhostButton(
-                      key: const Key('block-add'),
-                      label: 'Thêm ô',
-                      onPressed: !f.canAddBlock
-                          ? null
-                          : () {
-                              f.addBlock();
-                              _changed();
-                            },
-                    ),
-                  ),
-                  const SectionLabel('Judge'),
-                  _text(
-                    'ex-solution',
-                    f.solution,
-                    'Lời giải (solution)',
-                    maxLines: 8,
-                    mono: true,
-                  ),
-                  _text(
-                    'ex-cases',
-                    f.cases,
-                    'Cases (mảng JSON)',
-                    maxLines: 8,
-                    mono: true,
-                  ),
-                  if (casesError != null)
-                    Text(
-                      casesError,
-                      key: const Key('ex-cases-error'),
-                      style: AppText.caption.copyWith(color: p.danger),
-                    ),
+                );
+                if (medium) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (wide) _toc(),
+                      Expanded(child: form(const [])),
+                      _previewPanel(f),
+                    ],
+                  );
+                }
+                return form([
                   const SectionLabel('Ghép thử (đáp án chuẩn của mọi ô)'),
                   _preview(f),
-                ],
-              ),
+                ]);
+              },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpace.s4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_applyError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpace.s2),
-                    child: Text(
-                      _applyError!,
-                      style: AppText.caption.copyWith(color: p.danger),
-                    ),
-                  ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GhostButton(
-                        key: const Key('exercise-cancel'),
-                        label: 'Huỷ',
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpace.s4),
-                    Expanded(
-                      child: PrimaryButton(
-                        key: const Key('exercise-apply'),
-                        label: 'Áp dụng',
-                        onPressed: casesError == null && !f.hasLabelError
-                            ? _apply
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          _actionBar(f, casesError),
         ],
       );
     }

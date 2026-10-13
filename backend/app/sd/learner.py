@@ -1,0 +1,205 @@
+"""API học viên cho chế độ System Design, dưới `/api/sd` (cần đăng nhập).
+
+- GET /api/sd/docs                                   → {items: [tóm tắt tài liệu ĐÃ PUBLISH + tiến độ của tôi]}
+- GET /api/sd/docs/{id}                              → tài liệu: section (kèm card, đã đọc, done, unlocked),
+  bối cảnh (chỉ khi Phase 2 mở) và task (kèm unlocked, done, số lần thử).
+- PUT /api/sd/docs/{id}/sections/{sid}/progress      {read_cards} → {read, done, next_section_id, phase2_unlocked}
+  | 404 | 409 section_locked. Chỉ THÊM card đã đọc (không bao giờ bỏ); id lạ (card đã bị sửa/xoá khi nhập lại) bỏ qua.
+
+Trạng thái khoá/xong chỉ tính ở đây (server), client chỉ vẽ:
+- section mở khi là section đầu hoặc section liền trước đã `done`; `done` = mọi card HIỆN HÀNH đã đọc.
+- Phase 2 mở khi mọi section `done`; khi đó MỌI task mở cùng lúc (không khoá tuần tự), làm task nào trước cũng được.
+  Task `done` khi có ≥1 lần thử.
+
+Không bao giờ trả `rubric`/từ khoá của task: chúng là dữ liệu chấm, chỉ server đọc.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from sqlalchemy import func, select, text
+from sqlalchemy.orm import Session
+
+from app.auth import CurrentUser, current_user
+from app.db import get_session
+from app.tables import SdAttempt, SdDoc, SdProgress, SdSection, SdTask
+
+router = APIRouter(prefix="/api/sd")
+
+MAX_READ_IDS = 200  # = MAX_CARDS_PER_SECTION của parser: không thể đọc nhiều hơn số card có thể có
+_CardId = Annotated[str, StringConstraints(max_length=20)]
+
+
+class ProgressIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    read_cards: list[_CardId] = Field(max_length=MAX_READ_IDS)
+
+
+def _published(session: Session, doc_id: str) -> SdDoc:
+    doc = session.get(SdDoc, doc_id)
+    if doc is None or doc.status != "published":
+        raise HTTPException(status_code=404, detail="doc_not_found")
+    return doc
+
+
+def _sections_state(sections: list[SdSection], read_by_section: dict[str, set[str]]) -> list[dict]:
+    """Section theo thứ tự + trạng thái. Mở khoá tuần tự: chỉ section liền trước `done` mới mở section sau."""
+    out, prev_done = [], True
+    for s in sections:
+        ids = [c["id"] for c in s.cards]
+        have = read_by_section.get(s.id, set())
+        read = [i for i in ids if i in have]
+        done = bool(ids) and len(read) == len(ids)
+        out.append(
+            {
+                "id": s.id,
+                "position": s.position,
+                "chapter": s.chapter,
+                "chapter_position": s.chapter_position,
+                "title": s.title,
+                "cards": s.cards,
+                "read": read,
+                "done": done,
+                "unlocked": prev_done,
+            }
+        )
+        prev_done = done
+    return out
+
+
+def _tasks_state(tasks: list[SdTask], attempts: dict[str, int], phase2: bool) -> list[dict]:
+    out = []
+    for t in tasks:
+        n = attempts.get(t.id, 0)
+        unlocked = phase2  # task không khoá tuần tự: Phase 2 mở là mọi task mở
+        out.append(
+            {
+                "id": t.id,
+                "position": t.position,
+                "name": t.name,
+                "unlocked": unlocked,
+                "done": n >= 1,
+                "attempts": n,
+                # Đề và gợi ý chỉ lộ khi task đã mở; rubric/từ khoá không bao giờ ra khỏi server.
+                "prompt": t.prompt if unlocked else None,
+                "hints": t.hints if unlocked else [],
+                "ref_section_id": t.ref_section_id if unlocked else None,
+            }
+        )
+    return out
+
+
+def _load(session: Session, user_id: int, doc_ids: list[str]):
+    """Gom theo lô (không N+1): section, task, tiến độ đọc và số lần thử của user cho các tài liệu."""
+    sections: dict[str, list[SdSection]] = {d: [] for d in doc_ids}
+    for s in session.scalars(select(SdSection).where(SdSection.doc_id.in_(doc_ids)).order_by(SdSection.position)):
+        sections[s.doc_id].append(s)
+    tasks: dict[str, list[SdTask]] = {d: [] for d in doc_ids}
+    for t in session.scalars(select(SdTask).where(SdTask.doc_id.in_(doc_ids)).order_by(SdTask.position)):
+        tasks[t.doc_id].append(t)
+    read: dict[str, dict[str, set[str]]] = {d: {} for d in doc_ids}
+    for p in session.scalars(select(SdProgress).where(SdProgress.user_id == user_id, SdProgress.doc_id.in_(doc_ids))):
+        read[p.doc_id][p.section_id] = set(p.read_cards)
+    attempts: dict[str, dict[str, int]] = {d: {} for d in doc_ids}
+    rows = session.execute(
+        select(SdAttempt.doc_id, SdAttempt.task_id, func.count())
+        .where(SdAttempt.user_id == user_id, SdAttempt.doc_id.in_(doc_ids))
+        .group_by(SdAttempt.doc_id, SdAttempt.task_id)
+    )
+    for d, t, n in rows:
+        attempts[d][t] = n
+    return sections, tasks, read, attempts
+
+
+@router.get("/docs")
+def list_docs(user: CurrentUser = Depends(current_user), session: Session = Depends(get_session)) -> dict:
+    docs = session.scalars(select(SdDoc).where(SdDoc.status == "published").order_by(SdDoc.created_at, SdDoc.id)).all()
+    ids = [d.id for d in docs]
+    sections, tasks, read, attempts = _load(session, user.id, ids)
+    items = []
+    for d in docs:
+        sec = _sections_state(sections[d.id], read[d.id])
+        phase1 = bool(sec) and all(s["done"] for s in sec)
+        tsk = _tasks_state(tasks[d.id], attempts[d.id], phase1)
+        items.append(
+            {
+                "id": d.id,
+                "title": d.title,
+                "sections": len(sec),
+                "sections_done": sum(s["done"] for s in sec),
+                "cards": sum(len(s["cards"]) for s in sec),
+                "cards_read": sum(len(s["read"]) for s in sec),
+                "phase2_unlocked": phase1,
+                "tasks": len(tsk),
+                "tasks_done": sum(t["done"] for t in tsk),
+            }
+        )
+    return {"items": items}
+
+
+@router.get("/docs/{doc_id}")
+def get_doc(doc_id: str, user: CurrentUser = Depends(current_user), session: Session = Depends(get_session)) -> dict:
+    doc = _published(session, doc_id)
+    sections, tasks, read, attempts = _load(session, user.id, [doc_id])
+    sec = _sections_state(sections[doc_id], read[doc_id])
+    phase2 = bool(sec) and all(s["done"] for s in sec)
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "sections": sec,
+        "phase2_unlocked": phase2,
+        "context": doc.context if phase2 else [],
+        "tasks": _tasks_state(tasks[doc_id], attempts[doc_id], phase2),
+    }
+
+
+@router.put("/docs/{doc_id}/sections/{section_id}/progress")
+def put_progress(
+    doc_id: str,
+    section_id: str,
+    body: ProgressIn,
+    user: CurrentUser = Depends(current_user),
+    session: Session = Depends(get_session),
+) -> dict:
+    _published(session, doc_id)
+    # Hai PUT đồng thời của cùng user/section: tuần tự hoá để hợp (union) không làm mất card của nhau.
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"sd_prog:{user.id}:{doc_id}:{section_id}"}
+    )
+    sections, _, read, _ = _load(session, user.id, [doc_id])
+    state = _sections_state(sections[doc_id], read[doc_id])
+    target = next((s for s in state if s["id"] == section_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="section_not_found")
+    if not target["unlocked"]:
+        raise HTTPException(status_code=409, detail="section_locked")
+
+    valid = {c["id"] for c in target["cards"]}
+    row = session.get(SdProgress, (user.id, doc_id, section_id))
+    merged = list(row.read_cards) if row else []
+    seen = set(merged)
+    for cid in body.read_cards:
+        if cid in valid and cid not in seen:
+            merged.append(cid)
+            seen.add(cid)
+    if row is None:
+        session.add(SdProgress(user_id=user.id, doc_id=doc_id, section_id=section_id, read_cards=merged))
+    else:
+        row.read_cards = merged
+    session.commit()
+
+    read[doc_id][section_id] = seen
+    state = _sections_state(sections[doc_id], read[doc_id])
+    i = next(k for k, s in enumerate(state) if s["id"] == section_id)
+    now = state[i]
+    nxt = state[i + 1]["id"] if now["done"] and i + 1 < len(state) else None
+    return {
+        "section_id": section_id,
+        "read": now["read"],
+        "done": now["done"],
+        "next_section_id": nxt,
+        "phase2_unlocked": all(s["done"] for s in state),
+    }

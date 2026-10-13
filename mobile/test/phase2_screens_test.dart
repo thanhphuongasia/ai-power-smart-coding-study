@@ -48,10 +48,11 @@ Brightness _brightness(WidgetTester tester) =>
     Theme.of(tester.element(find.byKey(const Key('bottom-nav')))).brightness;
 
 void main() {
-  testWidgets('nút giao diện: hệ thống (sáng) → sáng → tối → hệ thống', (
+  testWidgets('nút giao diện: mặc định sáng → tối → hệ thống → sáng', (
     tester,
   ) async {
-    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    // Nền tảng đang tối: mặc định vẫn phải sáng (không theo hệ thống).
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     await _pumpApp(tester);
 
@@ -59,9 +60,10 @@ void main() {
     final button = find.byKey(const Key('theme-mode-button'));
     await tester.tap(button);
     await tester.pumpAndSettle();
-    expect(_brightness(tester), Brightness.light);
+    expect(_brightness(tester), Brightness.dark);
     await tester.tap(button);
     await tester.pumpAndSettle();
+    // Theo hệ thống: nền tảng đang tối.
     expect(_brightness(tester), Brightness.dark);
     await tester.tap(button);
     await tester.pumpAndSettle();
@@ -115,6 +117,36 @@ void main() {
       ),
       findsWidgets,
     );
+  });
+
+  testWidgets('bottom nav có tab Design ở cuối; chạm vào /design và 4 tab '
+      'cũ vẫn đúng màn', (tester) async {
+    await _pumpApp(tester);
+    final nav = find.byKey(const Key('bottom-nav'));
+    Future<void> tapTab(String label) async {
+      await tester.tap(find.descendant(of: nav, matching: find.text(label)));
+      await tester.pumpAndSettle();
+    }
+
+    expect(
+      find.descendant(of: nav, matching: find.text('Design')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sd-docs-screen')), findsNothing);
+    await tapTab('Design');
+    expect(find.byKey(const Key('sd-docs-screen')), findsOneWidget);
+
+    await tapTab('Luyện');
+    expect(find.byKey(const Key('practice-split-chunks')), findsOneWidget);
+    await tapTab('Design');
+    await tapTab('Ôn tập');
+    expect(find.byKey(const Key('review-empty')), findsOneWidget);
+    await tapTab('Design');
+    await tapTab('Tiến độ');
+    expect(find.byKey(const Key('stats-heatmap')), findsOneWidget);
+    await tapTab('Home');
+    expect(find.text('Luyện tập hôm nay'), findsOneWidget);
+    expect(find.byKey(const Key('sd-docs-screen')), findsNothing);
   });
 
   testWidgets('Ôn tập: seed chưa có thẻ đến hạn; lật thẻ, chấm → hết thẻ', (

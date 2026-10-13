@@ -87,9 +87,10 @@ mobile/lib/domain/answer_checker.dart:11-90.
 
 ### Bundle font thay vì dùng gói `google_fonts`
 
-**Quyết định**: hai font family (IBM Plex Sans, JetBrains Mono) được bundle sẵn dạng `.ttf`
-trong `mobile/assets/fonts/` và khai trực tiếp trong `pubspec.yaml`, thay vì dùng gói
-`google_fonts` như PLAN.md ban đầu định.
+**Quyết định**: hai font family (nay là Nunito và JetBrains Mono; Nunito thay IBM Plex Sans từ
+commit 4643ceb, run 2026-10-12-issue29-reskin) được bundle sẵn dạng `.ttf` trong
+`mobile/assets/fonts/` và khai trực tiếp trong `pubspec.yaml`, thay vì dùng gói `google_fonts`
+như PLAN.md ban đầu định.
 
 **Vì sao**: `google_fonts` tải font qua mạng lúc chạy lần đầu — test chạy trong môi trường
 không có mạng (CI, sandbox) dễ fail, và đi ngược hướng "app hoạt động không cần mạng" mà phase 1
@@ -663,6 +664,145 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 
 **Nguồn**: backend/app/review.py:1-571; backend/app/admin_api.py:94-174; backend/app/mcp_server.py:91-125; backend/app/tables.py:203-232; backend/app/main.py:219-236; mobile/lib/features/exercise/exercise_screen.dart:51-75; planning/crew/2026-10-11-content-review-queue/PLAN.md (Thiết kế, INV-01..07), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
 
+### Màn Soạn bài tập: ô code là TextField + HighlightingController, 3 breakpoint, mọi mục mở mặc định
+
+**Quyết định** (run 2026-10-12-exercise-editor-redesign, PR #26, theo mockup đã duyệt): (1) ô code là một `TextField` giữ nguyên Key, controller là `HighlightingController extends TextEditingController` ghi đè `buildTextSpan` để tô màu bằng tokenizer Python/JSON, màu lấy từ `context.palette`; (2) bố cục theo `LayoutBuilder` với ngưỡng 1100 (mục lục | form | panel ghép thử) và 700 (form | panel; dưới 700 là một cột), panel ghép thử chỉ dựng ở một chỗ tại một thời điểm; (3) mọi mục và ô mở mặc định.
+
+**Vì sao**: (1) controller giữ `controller.text` là nguồn sự thật nên `_Form.toJson`, `_previewMerge` và so với `judge.solution` không đổi, không thêm package; (3) test cũ tìm Key trong Judge/Challenge/ô B, mục đóng thì widget rời cây và `find.byKey` rỗng. Lệch mockup có chủ ý (mockup đóng vài mục).
+
+**Phương án đã bỏ / lệch plan**: overlay chữ lên TextField và package editor (không dùng); `SurfaceCard` cho thẻ ô — dựng container riêng vì SurfaceCard bọc InkWell, chạm vùng trống sẽ đóng/mở (DEVIATIONS.md). Nút "Thu gọn tất cả" có trong plan nhưng chưa làm (state đóng/mở nằm trong widget).
+
+**Đánh đổi đã chấp nhận**: đóng riêng một thẻ ô thì lỗi nhãn không hiện chữ (INV-06 vỡ một phần, Minor); mục lục không tự mở mục đóng; chưa test biên 700/1100; chưa kiểm bằng mắt trên web.
+
+**Nguồn**: mobile/lib/features/admin/code_cell.dart:133-181; mobile/lib/features/admin/exercise_editor.dart:690-693,962-1004; planning/crew/2026-10-12-exercise-editor-redesign/PLAN.md (Quyết định thiết kế 1-5), DEVIATIONS.md, reviews/SEAM.md
+
+### Thay áo "The Coach": breakpoint một nguồn, drawer không phải Scaffold.drawer, khối code luôn tối
+
+**Quyết định** (run 2026-10-12-issue29-reskin, issue #29): app đổi giao diện và thêm bố cục web rộng, không đổi backend/domain.
+(1) **Sáng là mặc định**, tối vẫn chọn được; lựa chọn chưa được lưu (mở lại app về sáng).
+(2) **Ngưỡng bề rộng một nguồn**: `AppBreakpoint.nav = 700` (bỏ bottom nav, dùng top bar + ☰ + drawer) và `split = 900` (màn luyện chia đôi); mọi so sánh bề rộng dùng nó.
+(3) **Drawer mở bằng `showGeneralDialog` trên root navigator**, không phải `Scaffold.drawer`, kèm marker `InAppShell` để `ScreenHeader` biết đã có ☰ của shell mà không thêm ☰ thứ hai.
+(4) **`codeSurface`/`codeInk` luôn tối** ở cả hai theme; mọi khối code (editor, xem trước ô, lời giải, "Code đã ghép") dùng cặp này.
+(5) **Nunito là font variable** (một file 277KB), trọng số chọn bằng `fontWeight` + `FontVariation('wght', n)`; chữ nút in đậm w900 + giãn chữ, không `toUpperCase`.
+(6) **Ghost text (chữ mờ gợi ý) chỉ phủ hiển thị trong `buildTextSpan`** của controller, không bao giờ ghi vào `controller.text`; nhận bằng Tab hoặc chạm chip.
+(7) **`CodeTab(inlineEditor: bool)`**: ≥900px ô đang mở là editor ngay trong notebook và có dải bước A/B/C; mặc định false giữ hành vi cũ (route `CellEditorPage`). Dải bước và editor inline sống trong `CodeTab`, không lộ state sang `exercise_screen`.
+
+**Vì sao**: (2) lúc đầu không có breakpoint nào; nav đổi ở 700 mà màn luyện đổi ở nơi khác thì ở bề rộng giữa không có cách điều hướng hoặc hiện cả hai. (3) màn chi tiết (theme/topic/exercise) mở trên root navigator nên không có `AppShell` quanh chúng, ☰ không thể chỉ đặt trong shell; dialog cũng không để widget nào trong cây khi chưa mở, tránh `find.text` trùng ở test 800x600. (4) khối code nền theo theme làm theme sáng có hai khối code lệch màu nhau; reviewer mối nối bắt được ở "Code đã ghép" (T-07). (6) nếu ghost ghi vào text thì draft lưu chữ gợi ý và ô báo "đúng" khi chưa gõ gì. (7) hai layout cùng đi qua `_isDone`/`_onCellChanged`/`_run` để "ô đúng" có một nơi quyết định.
+
+**Phương án đã bỏ / lệch plan**: plan định bundle 4 TTF static Nunito, thực tế google/fonts chỉ có bản variable, dùng `FontVariation` (chạy được nên không phải quay lại IBM Plex); lưu lựa chọn sáng/tối qua `shared_preferences`, màn Cài đặt riêng, vẽ lại `_LessonPath`, nút micro — hoãn.
+
+**Đánh đổi đã chấp nhận**: đổi bề rộng qua 900 giữa chừng dựng lại `CodeTab` nên mất focus và kết quả Run đang hiện (draft còn); ghost bị ẩn khi IME đang composing (Android); các khối code còn nền theo theme (`example-box` ở challenge_tab, `_CodeBox` ở review_screen) và tương phản vài cặp màu dưới AA 4.5:1 chưa sửa; chưa xem bằng mắt Nunito variable, bóng nút, animation drawer, ghost/IME trên thiết bị thật.
+
+**Nguồn**: mobile/lib/app/theme.dart:3,24-25,45-46,84-87; mobile/lib/app/theme_mode.dart:9; mobile/lib/features/shell/app_drawer.dart:25-54; mobile/lib/features/shell/app_shell.dart:22; mobile/lib/features/exercise/code_input.dart:725-746; mobile/lib/features/exercise/code_tab.dart:37-47,77; mobile/lib/features/exercise/exercise_screen.dart:292-298,448-458; mobile/pubspec.yaml:64-76; planning/crew/2026-10-12-issue29-reskin/PLAN.md (Quyết định thiết kế, INV-01..10), DEVIATIONS.md, STATUS.md, reviews/SEAM.md.
+
+### System Design: bảng `sd_*` riêng, ngoài `load_content` và hàng chờ duyệt; tiến độ không FK tới nội dung
+
+**Quyết định** (run 2026-10-12-system-design-mode, issue #31): chế độ học System Design có 5 bảng riêng `sd_docs/sd_sections/sd_tasks/sd_progress/sd_attempts` (migration `0007`), API riêng (`/api/admin/sd`, `/api/sd`) và đường nhập riêng (`POST /api/admin/sd/docs`). Không đi qua `load_content`, không vào `content_changes`. Tài liệu có `status` (`draft`/`published`), học viên chỉ thấy `published`. `sd_progress` và `sd_attempts` chỉ FK `users`, không FK tới `sd_sections`/`sd_tasks`.
+
+**Vì sao**: nội dung SD là tài liệu để đọc và viết, không phải bài chấm bằng test, nên không cần luật nội dung hay hàng chờ duyệt theo mục của chế độ code. Nhập lại tài liệu xoá rồi ghi lại section/task trong một transaction; nếu tiến độ FK vào đó thì `ON DELETE CASCADE` xoá sạch tiến độ và lần thử của mọi học viên.
+
+**Phương án đã bỏ**: nhét SD vào cây project/module/file/lesson (ép tài liệu dài vào shape bài code); cho tiến độ FK tới nội dung rồi dùng `ON DELETE SET NULL`/khoá hoãn (phức tạp hơn mà vẫn mất liên kết khi id đổi).
+
+**Đánh đổi đã chấp nhận**: không có ràng buộc DB bắt id mồ côi, nên mọi phép tính phải bỏ qua id không còn trong nội dung (server làm việc đó khi tính `done`); admin gõ sai slug vẫn qua DB. Tài liệu SD không có quy trình duyệt riêng (chỉ nút `draft`/`published`).
+
+**Nguồn**: backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:22-97; backend/app/sd/admin.py:1-12; planning/crew/2026-10-12-system-design-mode/PLAN.md (Quyết định thiết kế 1, INV-01).
+
+### System Design: id card là hash NFC của nội dung, id section/task là slug của tên
+
+**Quyết định** (run 2026-10-12-system-design-mode): `card.id = sha1(kind + nội dung chuẩn hoá)[:8]` sau khi chuẩn hoá toàn bộ file về Unicode NFC (văn bản gộp khoảng trắng; code/diagram chỉ bỏ khoảng trắng cuối dòng). `section.id` và `task.id` là slug ASCII của TÊN (trùng tên thì hậu tố `-2`, `-3`; tên không có chữ/số ASCII thì `x-` + hash NFC của tên). Tiến độ đọc bám theo `card.id`.
+
+**Vì sao**: sửa một card chỉ nên làm mất dấu "đã đọc" của chính card đó, không của cả section. Hash nội dung cho đúng tính chất này mà không cần admin gán id tay. NFC là bắt buộc: reviewer mối nối nhập lại cùng một nội dung lưu dạng NFD (hay gặp khi sao chép từ macOS) thì 22/26 id card đổi, học viên chỉ còn 1/9 section `done` và Phase 2 khoá lại.
+
+**Phương án đã bỏ**: id tự tăng theo vị trí (chèn một card làm lệch mọi id sau); admin tự ghi id trong markdown (dễ quên, dễ trùng); không chuẩn hoá Unicode.
+
+**Đánh đổi đã chấp nhận**: đổi tên section mất tiến độ đọc section đó, đổi tên task mất số lần thử và chuỗi mở khoá (BK-1); hai section trùng tên bị tráo tiến độ nếu đổi thứ tự; hash 8 hex trong cùng một section được `_unique` xử lý va chạm bằng hậu tố.
+
+**Nguồn**: backend/app/sd/parser.py:67-73, 100-106, 371-373, 491, 515; planning/crew/2026-10-12-system-design-mode/DEVIATIONS.md (reviewer mối nối, INV-01), reviews/SEAM.md.
+
+### System Design: server tính khoá/mở, client chỉ vẽ
+
+**Quyết định** (run 2026-10-12-system-design-mode): `done` và `unlocked` của section, `phase2_unlocked` và `unlocked`/`done` của task chỉ tính ở backend, trong mỗi response. Section mở khi section liền trước `done` (mọi card hiện hành đã đọc); Phase 2 mở khi mọi section `done`; task mở khi task liền trước có ≥1 lần thử. PUT tiến độ vào section khoá trả 409. Đề, gợi ý của task chưa mở không ra khỏi server; rubric và từ khoá không bao giờ ra. Widget `DuoPath` nhận trạng thái và chỉ vẽ.
+
+**Vì sao**: có hai nơi cùng tính luật khoá thì sớm muộn lệch nhau (app mở mà PUT bị 409, hoặc ngược lại). Luật ở một nơi cũng là cách giữ rubric ở server.
+
+**Đánh đổi đã chấp nhận**: mỗi `GET /api/sd/docs` đọc card của mọi tài liệu để tính `done` chính xác (đo lại khi có tài liệu lớn); client vẫn có vài chỗ suy ra (mở khoá cục bộ qua `next_section_id`; "Bối cảnh xong" suy từ `tasksDone > 0`), và BK-2/BK-3/BK-4 là hệ quả của việc app và server không luôn đồng bộ.
+
+**Nguồn**: backend/app/sd/learner.py:47-92, 159-205; mobile/lib/features/system_design/duo_path.dart:1-8; planning/crew/2026-10-12-system-design-mode/PLAN.md (Quyết định thiết kế 4, INV-04), reviews/SEAM.md.
+
+### System Design: chấm từ khoá ngay + chấm sâu qua MCP, không gọi LLM trực tiếp; chấp nhận rủi ro dư prompt injection
+
+**Quyết định** (run 2026-10-12-system-design-mode): khi học viên nộp bài, server chấm từ khoá ngay bằng `KeywordEvaluator` (không phân biệt hoa/thường và dấu). Chấm sâu là việc của Claude qua 3 tool MCP `sd_list_attempts`, `sd_get_attempt`, `sd_submit_feedback`; bản `reviewed` thay bản `auto` trong cùng một response. Backend không giữ khoá LLM. Tool MCP là dữ liệu học viên nên không qua hàng chờ duyệt, nhưng vẫn `authorize_sub` mỗi lần và không có tool xoá. Câu trả lời của học viên là đầu vào không tin cậy với Claude: kèm `answer_notice`, `INSTRUCTIONS`, docstring; ghi đè bản đã chấm cần `replace=true`. Khoá ngoại lệ cố ý: KHÔNG làm token một lần buộc `sd_submit_feedback` với `sd_get_attempt` vừa đọc.
+
+**Vì sao**: Claude chat đã nối sẵn qua MCP và là người chấm tốt hơn khớp từ khoá; gọi LLM trực tiếp cần giữ khoá API và trả tiền mỗi lần nộp. Token một lần là over-engineering khi số admin là 1 và công cụ là nội bộ.
+
+**Đánh đổi đã chấp nhận**: rủi ro dư prompt injection ở lớp ngôn ngữ (văn bản học viên có thể cố điều khiển Claude khi chấm); điểm ✓/✗ từng ý cho phép học viên dò từ khoá (tối đa 20 lần/ngày/task); từ khoá ngắn có thể khớp thừa; chấm sâu chỉ xảy ra khi admin mở chat và nhờ Claude chấm (không tự động).
+
+**Nguồn**: backend/app/sd/evaluator.py:1-39; backend/app/sd/attempts.py:53-75, 176-180, 273-309; backend/app/mcp_server.py:54-62, 251-296; planning/crew/2026-10-12-system-design-mode/PLAN.md (Quyết định thiết kế 5, 7, INV-03, INV-06), DEVIATIONS.md (F4, INV-06 làm rõ).
+
+### Parser đầu vào lớn: mọi trần, mọi vòng lặp tuyến tính (rule hostile-input-budget)
+
+**Quyết định** (run 2026-10-12-system-design-mode): parser markdown nhận file tới 1MB từ request admin phải chạy tuyến tính theo kích thước file trong mọi nhánh. Trần (50 chương, 200 section, 200 card/section, 3000 card/tài liệu, 12 task, 300 dòng/task, độ dài từng phần) được kiểm TRƯỚC khi nối/thêm; không regex có hai lượng từ liền kề trên cùng lớp ký tự; dedupe id bằng `dict` đếm; chuẩn hoá NFC ở cổng vào; mỗi vòng lặp có test thời gian cho đầu vào xấu nhất. Quy tắc tổng quát nằm ở `.claude/rules/engineering/hostile-input-budget.md`.
+
+**Vì sao**: reviewer L4 tìm được ba lỗi cùng họ qua ba vòng, mỗi vòng một chỗ: `_unique` dò hậu tố từng bước (60KB card trùng nhau mất 27 giây), regex heading lồng nhau chạy bậc ba (`# a` + 4000 khoảng trắng mất 40 giây), và nối chuỗi rubric/gợi ý bậc hai vượt trần đã khai. Một request 1MB đủ để một thread giữ GIL hàng chục giây, làm chậm cả API.
+
+**Đánh đổi đã chấp nhận**: parser viết bằng cắt chuỗi và một lượt quét, dài hơn regex; trần cứng từ chối tài liệu cực lớn (3000 card); không có script kiểm rule này, reviewer L4 phải tự đo.
+
+**Nguồn**: backend/app/sd/parser.py:28-45, 87-97, 112-124, 171-254, 257-363; .claude/rules/engineering/hostile-input-budget.md; planning/crew/2026-10-12-system-design-mode/DEVIATIONS.md (T-02 vòng 2/3).
+
+### System Design (Flutter): bản nháp cục bộ khoá theo người dùng, mã hoá id trong route
+
+**Quyết định** (run 2026-10-12-system-design-mode): bản nháp câu trả lời lưu cục bộ bằng `SharedPreferences`, khoá `sd-draft:<email>:<docId>:<taskId>`, ghi sau debounce 400ms, ghi nốt khi rời màn, xoá sau khi nộp thành công. Mọi id đưa vào path (route của app và URL gọi API) đi qua `Uri.encodeComponent`; repository từ chối id rỗng, `.` hoặc `..` bằng `ArgumentError` trước khi gửi request.
+
+**Vì sao**: nháp không có server, nên nếu khoá chỉ theo tài liệu/task thì người đăng nhập sau trên cùng máy thấy (và có thể nộp nhầm) nháp của người trước. `AuthUser` chưa có `id` nên dùng email làm định danh. `Uri.encodeComponent` không mã hoá dấu chấm và `Uri.resolve` chuẩn hoá `..` làm path trượt lên cấp trên, nên phải chặn từ đầu.
+
+**Đánh đổi đã chấp nhận**: đổi email thì mất nháp cũ; nháp không đồng bộ giữa thiết bị; một nháp không bao giờ bị dọn nếu người dùng không quay lại task đó.
+
+**Nguồn**: mobile/lib/features/system_design/task_screen.dart:30-38, 218-287; mobile/lib/data/sd_repository.dart:50-60; planning/crew/2026-10-12-system-design-mode/DEVIATIONS.md (review T-10, T-08/T-09).
+
+### System Design (Flutter): chữ serif Source Serif 4 cho tờ giấy đọc, tách khỏi Nunito của app
+
+**Quyết định** (run 2026-10-12-system-design-mode): màn đọc và màn bối cảnh dùng tờ giấy trắng chữ serif trên thanh trên tối, luôn trắng cả dark mode (hằng riêng của màn, không sửa `AppPalette`). Font là Source Serif 4 (OFL) bundle trong `mobile/assets/fonts/` và khai trong `pubspec.yaml`, cùng cách Nunito.
+
+**Vì sao**: font app là Nunito, không có serif; tài liệu dài đọc dễ hơn trên tờ giấy kiểu sách. Google Fonts chỉ phát hành bản biến thiên `SourceSerif4[opsz,wght].ttf`, nên dùng `SourceSerif4-Variable.ttf` kèm `SourceSerif4-OFL.txt` thay vì file Regular như plan. Không sửa `AppPalette` để tránh vỡ `theme_test`.
+
+**Đánh đổi đã chấp nhận**: thêm ≈1.2MB vào app; tờ giấy luôn trắng nên màn đọc lệch với dark mode của phần còn lại; màn đọc không có cài đặt cỡ chữ.
+
+**Nguồn**: mobile/pubspec.yaml:77-81; mobile/lib/features/system_design/block_renderer.dart:11-12; planning/crew/2026-10-12-system-design-mode/PLAN.md (Phát hiện P0/P1), DEVIATIONS.md.
+
+### E2E cho tính năng Flutter: chạy app web thật cùng origin với backend, không chỉ widget test
+
+**Quyết định** (run 2026-10-12-system-design-mode): ngoài widget test, orchestrator build `flutter build web --dart-define=API_URL=http://127.0.0.1:8791` và chạy backend thật + Postgres riêng + web tĩnh trên cùng một origin (`web_e2e_server.py`), mở Chrome khung điện thoại 390px, đi qua luồng bằng chuột/bàn phím thật và chụp ảnh. Kịch bản, script dựng và ảnh nằm trong thư mục e2e của run.
+
+**Vì sao**: lần chạy này bắt được lỗi widget test không thấy: bảng trong màn đọc rộng hơn khung điện thoại, cột phải bị cắt chữ (sửa ở `block_renderer.dart`: bảng co theo bề rộng, chữ xuống dòng). Cùng origin để khỏi cấu hình CORS và đúng như production sau nginx.
+
+**Đánh đổi đã chấp nhận**: tốn thời gian dựng; chạy bằng tay (Chrome qua điều khiển, chưa có script tự động lặp lại); chạy trên web chứ không phải thiết bị iOS/Android thật.
+
+**Nguồn**: planning/crew/2026-10-12-system-design-mode/e2e/web_e2e.md:1-16; planning/crew/2026-10-12-system-design-mode/e2e/web_e2e_server.py; planning/crew/2026-10-12-system-design-mode/STATUS.md.
+
+### System Design: màn đọc vuốt snap theo card bằng ScrollPhysics, không dùng PageView
+
+**Quyết định** (run 2026-10-12-sd-reader-hotfix, issue #35): màn đọc giữ `SingleChildScrollView` và gắn `SdCardSnapPhysics`. Fling (vận tốc ≥ 300 px/s) đi tới mốc card kế tiếp theo chiều vuốt, nhưng không xa hơn 0,9 chiều cao viewport so với vị trí hiện tại. Kéo chậm (dưới ngưỡng) cuộn tự do. Luật "đã đọc" giữ nguyên (mép dưới card đi qua mép dưới viewport); physics chặn việc bỏ qua nên card chưa hiện không bị đánh dấu. Bảng mốc (`_anchors()`) đo từ layout thật mỗi lần cần và dùng chung cho snap và menu mục lục; menu nhảy section đặt cờ `_menuJumps` để lúc cuộn không đánh dấu card nào.
+
+**Vì sao**: người dùng thử trên điện thoại thấy một cú vuốt trôi qua nhiều card, và card bị bỏ qua cũng bị tính là đã đọc. `PageView` (một card một trang) bị bỏ vì card cao hơn màn hình sẽ không đọc trọn được; chặn 0,9 viewport cho phép card dài đọc bằng nhiều lần vuốt mà không để lọt nội dung.
+
+**Phương án đã bỏ**: `PageView`; đổi luật "đã đọc" sang đo khác (physics đã đủ chặn, giữ luật cũ là đổi ít nhất).
+
+**Đánh đổi đã chấp nhận**: chỉ kiểm bằng widget test (`tester.fling`), chưa thử trên thiết bị thật; cuộn con lăn/trackpad trên web không có code riêng, chưa xác minh hành vi; bảng mốc đo lại mỗi lần thả tay (O(số card), không dựng widget).
+
+**Nguồn**: mobile/lib/features/system_design/card_snap_physics.dart:14-18, 37-90; mobile/lib/features/system_design/reader_screen.dart:287-325, 329-350, 426-450; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 1, 2, INV-02, INV-04).
+
+### System Design: bỏ khoá tuần tự của task, mọi task mở khi Phase 1 xong (thay thế phần "task" của quyết định "server tính khoá/mở")
+
+**Quyết định** (run 2026-10-12-sd-reader-hotfix, issue #35): **thay thế** luật "task mở khi task liền trước có ≥1 lần thử" ở mục "System Design: server tính khoá/mở, client chỉ vẽ" (run 2026-10-12-system-design-mode). Từ nay `unlocked = phase2` cho mọi task: Phase 2 mở (mọi section `done`) thì mọi task mở cùng lúc, làm task nào trước cũng được. `done` vẫn là `attempts >= 1`. Đề, gợi ý, `ref_section_id` vẫn chỉ trả khi task mở. POST lần thử dùng chung `_tasks_state` nên 201 với task bất kỳ khi Phase 2 mở, 409 `task_locked` khi chưa. Các phần khác của quyết định cũ không đổi: section vẫn khoá tuần tự, Phase 2 vẫn chỉ mở khi Phase 1 xong, server vẫn là nơi duy nhất tính khoá/mở. Client bỏ thông báo "Làm task trước để mở khoá"; task chỉ khoá khi Phase 2 khoá ("Đọc xong Phase 1 để mở Thực chiến").
+
+**Vì sao**: user dùng thử không muốn bị buộc làm theo thứ tự task. Luật nằm một chỗ ở server nên đổi một dòng (`_tasks_state`), client và POST attempt đi theo mà không cần migration hay đổi schema.
+
+**Phương án đã bỏ**: giữ khoá tuần tự và chỉ nới ở UI (sẽ lệch với 409 của server, đúng loại lỗi mà quyết định "server tính khoá/mở" sinh ra để chặn).
+
+**Đánh đổi đã chấp nhận**: không còn ràng buộc thứ tự giữa các task; node "hiện tại" trên lộ trình vẫn đúng một (node mở chưa xong đầu tiên theo thứ tự section, bối cảnh, task). Dòng cũ ở mục quyết định gốc không sửa (append-only); mục này là bản hiệu lực cho phần task.
+
+**Nguồn**: backend/app/sd/learner.py:73-92; backend/app/sd/attempts.py:102-104; mobile/lib/features/system_design/sd_path_screen.dart:85-112, 232-237; mobile/lib/features/system_design/task_screen.dart:352-356; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 4, INV-01, INV-03), DEVIATIONS.md.
+
 ### Ô TODO rỗng dùng chung một widget cho học viên và admin preview, không tách đường render riêng
 
 **Quyết định** (run 2026-10-13-todo-comment-fill-button, commit caaf83f): ô code còn trống hiện
@@ -679,6 +819,13 @@ dòng, gợi ý vocab, autocomplete) đã là đúng chỗ nhập, không có l�
 **Đánh đổi đã chấp nhận**: bỏ icon `open_in_full` ở nhánh ô rỗng (không còn ý nghĩa "mở xem code
 đã viết" khi ô chưa có gì) — quyết định hợp lý nhưng review ghi nhận Minor vì hành động đó không
 được giải thích ở `DEVIATIONS.md`/`STATUS.md` lúc review, chỉ ghi trong commit message.
+
+**Lưu ý sau merge `ci/deploy-vps-on-merge` → `main` (2026-10-13)**: run `2026-10-12-issue29-reskin`
+(mục "Thay áo The Coach" phía trên) đã thêm `CodeTab(inlineEditor: bool)` — khi `true`, ô đang mở
+là editor ngay trong notebook (`_inlineEditor`), không còn render qua `_CodePreview`. Nhánh ô rỗng
+mô tả ở đây (`# TODO <nhãn>` + nút "Điền code") chỉ còn áp dụng khi `inlineEditor: false` (mặc
+định) hoặc cho ô lỗi chưa mở trong chế độ inline — đã merge tay (không phải worker), giữ cả hai
+tính năng, không có tài liệu INV riêng vì chỉ một task chạm vùng này.
 
 **Nguồn**: mobile/lib/features/exercise/code_tab.dart:522-523,749-806;
 planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.

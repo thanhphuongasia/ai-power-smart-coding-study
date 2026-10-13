@@ -48,11 +48,11 @@ class ExerciseRow extends ConsumerWidget {
     } else if (isDone) {
       statusText = 'Đã xong';
       statusIcon = Icons.check_circle;
-      statusColor = context.palette.primary;
+      statusColor = context.palette.success;
     } else if (isStarted) {
       statusText = 'Đang dở';
       statusIcon = Icons.timelapse;
-      statusColor = context.palette.ink;
+      statusColor = context.palette.primary;
     } else {
       statusText = 'Mới';
       statusIcon = Icons.circle_outlined;

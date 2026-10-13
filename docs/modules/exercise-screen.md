@@ -14,7 +14,7 @@ không tính điểm.
 
 ## Dùng khi nào
 
-Router mở `ExerciseScreen` ở `/exercise/:exerciseId` (mobile/lib/app/router.dart:85). Điểm vào: dòng
+Router mở `ExerciseScreen` ở `/exercise/:exerciseId` (mobile/lib/app/router.dart:126). Điểm vào: dòng
 bài ở Topic detail (`ExerciseRow`), thẻ "Tiếp tục" ở Home, nút "Bài tiếp theo" sau khi pass, và mở
 thẳng route. Bài chưa mở khoá hiện `_LockedView` thay cho 3 tab
 (mobile/lib/features/exercise/exercise_screen.dart:36-40).
@@ -79,6 +79,15 @@ bài nằm ở nhiều file mở nếu mở ở bất kỳ file nào (mobile/lib
 (mobile/lib/features/exercise/exercise_screen.dart:228-233); idle mở hộp thoại, timeout tự thoát và
 báo "Đã lưu tiến độ" (mobile/lib/features/exercise/exercise_screen.dart:205-219).
 
+Hai bố cục theo bề rộng (từ run 2026-10-12-issue29-reskin):
+
+| Bề rộng | Bố cục | Mở ô |
+|---|---|---|
+| < 900px | `TabBar` 3 tab như trên (Key `exercise-tabs`, text `Code n/m`) | route `CellEditorPage` |
+| ≥ 900px | ẩn `TabBar`; cột trái 42% tab Đề / Lời giải, cột phải 58% `CodeTab(inlineEditor: true)` | editor inline trong notebook + dải bước A/B/C |
+
+(mobile/lib/features/exercise/exercise_screen.dart:292-298,448-458; mobile/lib/features/exercise/code_tab.dart:37-47). Ngưỡng 900 lấy từ `AppBreakpoint.split`. Ghost text của editor chỉ phủ hiển thị qua `buildTextSpan`, không đổi `controller.text`, nên `_isDone` và draft không thấy chữ gợi ý (mobile/lib/features/exercise/code_input.dart:725-746, code_tab.dart:77).
+
 ## Ranh giới & đánh đổi
 
 Ghép ô làm ở client (Dart) một chỗ duy nhất thay vì ở backend, để ánh xạ dòng lỗi → ô chỉ có một nơi.
@@ -103,6 +112,8 @@ Không làm: nút "chép lời giải vào ô", khoá bài xuyên file/topic.
   (planning/crew/2026-10-11-exercise-tabs-judge/STATUS.md:28-31).
 - Sơ đồ: `classScope` bỏ sót `def` một dòng/nhiều dòng (0 bài dính), đếm cả `self.x` trong comment/string, chạy lại mỗi build; key hàng quan hệ trùng nếu hai quan hệ cùng cặp; test highlight chỉ kiểm key, chưa test kiểu dài/dark/375px riêng (planning/crew/2026-10-11-class-diagram/STATUS.md, Backlog).
 - Backlog T-07 chưa có câu trả lời: ô đã xem lời giải bị ôn mỗi ngày mãi (STATUS.md:41).
+
+- Đổi cỡ cửa sổ qua 900 giữa chừng dựng lại `CodeTab`: mất focus và kết quả Run đang hiện, draft còn (mobile/lib/features/exercise/exercise_screen.dart:292-298; planning/crew/2026-10-12-issue29-reskin/reviews/SEAM.md). Ghost text bị ẩn khi IME đang composing trên Android (chưa kiểm trên thiết bị thật).
 
 ## Nguồn
 

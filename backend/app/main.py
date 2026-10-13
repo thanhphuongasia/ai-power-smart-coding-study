@@ -34,6 +34,9 @@ from app.mcp_auth import router as mcp_auth_router
 from app.progress import PassRecorder, get_pass_recorder
 from app.progress import router as progress_router
 from app.runner import CodeRunner, RunnerUnavailable, runner_from_env
+from app.sd.admin import router as sd_admin_router
+from app.sd.attempts import router as sd_attempts_router
+from app.sd.learner import router as sd_learner_router
 
 logger = logging.getLogger("judge")
 
@@ -62,6 +65,9 @@ app.include_router(content_router)
 app.include_router(auth_router)
 app.include_router(progress_router)
 app.include_router(admin_router)
+app.include_router(sd_admin_router)
+app.include_router(sd_learner_router)
+app.include_router(sd_attempts_router)
 app.include_router(mcp_auth_router)
 # ASGI thô (không qua FastAPI): cổng JWT phải chạy trước khi SDK MCP đọc body.
 app.router.add_route("/mcp", mcp_server.McpGate(), include_in_schema=False)

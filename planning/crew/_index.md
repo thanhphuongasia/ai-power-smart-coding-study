@@ -16,4 +16,8 @@
 | 2026-10-11-mcp-content | MCP server cho claude.ai sửa nội dung, OAuth qua identity-service (#24) | done (main bbf751d + identity 85625e2, deploy) — chờ cấp quyền sub |
 | 2026-10-11-oop-bank-progressive | BankAccount: notebook tiến dần, không lộ đáp án | done (main 501547c) |
 | 2026-10-11-content-review-queue | Hàng chờ duyệt nội dung (preview, approve/reject từng mục) | done (main b702b91) |
-| 2026-10-13-todo-comment-fill-button | Ô TODO rỗng hiện # TODO <nhãn> — <tiêu đề> + nút Điền code (CodeTab, dùng chung admin preview) (#39) | done — PR #40 chờ merge |
+| 2026-10-12-exercise-editor-redesign | Thiết kế lại màn Soạn bài tập: code cell Jupyter, mục đóng/mở, responsive 3 cột (#25) | PR #26 mở, chờ user merge (done sau merge) |
+| 2026-10-12-issue29-reskin | Thay áo The Coach + responsive web (#29) | PR #30 mở, chờ user merge (done sau merge) |
+| 2026-10-12-system-design-mode | Chế độ học System Design: nhập .md, lộ trình kiểu Duolingo, đọc liền mạch, Thực chiến + MCP feedback (#31) | PR mở, chờ user merge (done sau merge) |
+| 2026-10-12-sd-reader-hotfix | Hotfix #35: màn đọc vuốt từng card, menu mục lục, task không khoá tuần tự | PR mở, chờ user merge (done sau merge) |
+| 2026-10-13-todo-comment-fill-button | Ô TODO rỗng hiện # TODO <nhãn> — <tiêu đề> + nút Điền code (CodeTab, dùng chung admin preview) (#39) | done — PR #40 đã merge vào ci/deploy-vps-on-merge |

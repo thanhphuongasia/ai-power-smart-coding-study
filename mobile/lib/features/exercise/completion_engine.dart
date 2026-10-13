@@ -33,8 +33,24 @@ class Suggestion {
 
 /// Keyword + builtin Python người học cần trong các block ngắn.
 const List<String> _keywords = [
-  'def', 'return', 'for', 'in', 'if', 'elif', 'else', 'while', 'range',
-  'len', 'append', 'print', 'True', 'False', 'None', 'and', 'or', 'not',
+  'def',
+  'return',
+  'for',
+  'in',
+  'if',
+  'elif',
+  'else',
+  'while',
+  'range',
+  'len',
+  'append',
+  'print',
+  'True',
+  'False',
+  'None',
+  'and',
+  'or',
+  'not',
 ];
 
 /// Gọi hàm → chèn kèm `(`; widget tự thêm `)` và đặt con trỏ ở giữa.
@@ -42,7 +58,16 @@ const Set<String> _callables = {'range', 'len', 'print', 'append'};
 
 /// Keyword luôn có gì đó đứng sau → chèn kèm dấu cách để gõ tiếp ngay.
 const Set<String> _spaceAfter = {
-  'def', 'return', 'for', 'in', 'if', 'elif', 'while', 'and', 'or', 'not',
+  'def',
+  'return',
+  'for',
+  'in',
+  'if',
+  'elif',
+  'while',
+  'and',
+  'or',
+  'not',
 };
 
 final RegExp _wordBeforeCursor = RegExp(r'[A-Za-z0-9_]+$');
@@ -117,8 +142,7 @@ List<Suggestion> _byPrefix(
   List<String> vocab,
 ) {
   final lower = word.toLowerCase();
-  bool matches(String c) =>
-      c != word && c.toLowerCase().startsWith(lower);
+  bool matches(String c) => c != word && c.toLowerCase().startsWith(lower);
 
   final groups = <SuggestionKind, List<String>>{
     SuggestionKind.known: known,
@@ -168,11 +192,9 @@ class _Collector {
 
   void add(String label, SuggestionKind kind) {
     if (label.isEmpty || !_seen.add(label)) return;
-    items.add(Suggestion(
-      label: label,
-      insertText: _insertTextFor(label),
-      kind: kind,
-    ));
+    items.add(
+      Suggestion(label: label, insertText: _insertTextFor(label), kind: kind),
+    );
   }
 
   void addAll(Iterable<String> labels, SuggestionKind kind) {
@@ -180,4 +202,37 @@ class _Collector {
       add(l, kind);
     }
   }
+}
+
+/// Dải từ gợi ý luôn hiện: không phụ thuộc ngữ cảnh, giữ thứ tự gốc, bỏ từ
+/// trùng/rỗng, cắt còn [limit] từ. Mỗi từ chèn giống chip gợi ý thường
+/// (`range` → `range(`).
+List<Suggestion> vocabStrip(List<String> vocab, {int limit = 10}) {
+  if (limit <= 0) return const [];
+  final out = _Collector()..addAll(vocab, SuggestionKind.vocab);
+  return out.items.length > limit ? out.items.sublist(0, limit) : out.items;
+}
+
+/// Phần còn lại của đáp án để vẽ chữ mờ sau con trỏ ([text] là toàn bộ text
+/// của ô, con trỏ ở cuối). Chỉ TÍNH, không ghi gì (INV-04).
+///
+/// - Ô trống (hoặc chỉ khoảng trắng): chuỗi rỗng — chưa gõ gì thì không gợi ý
+///   sẵn cả dòng đáp án, học viên phải tự bắt đầu gõ trước (issue #37).
+/// - Đã gõ một tiền tố (bỏ khoảng trắng đầu) của một đáp án: phần đuôi còn
+///   lại của đáp án đầu tiên khớp.
+/// - Không khớp, hoặc đã gõ đủ: chuỗi rỗng.
+String ghostFor(String text, List<String> answers) {
+  final usable = [
+    for (final a in answers)
+      if (a.trim().isNotEmpty) a.trimLeft(),
+  ];
+  if (usable.isEmpty) return '';
+  final typed = text.trimLeft();
+  if (typed.isEmpty) return '';
+  for (final a in usable) {
+    if (a.length > typed.length && a.startsWith(typed)) {
+      return a.substring(typed.length);
+    }
+  }
+  return '';
 }

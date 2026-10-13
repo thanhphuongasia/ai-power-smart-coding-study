@@ -186,4 +186,51 @@ void main() {
       ]);
     });
   });
+
+  _ghostTests();
+}
+
+void _ghostTests() {
+  group('vocabStrip', () {
+    test('giữ thứ tự gốc, bỏ trùng và rỗng', () {
+      final r = vocabStrip(['len', 'range', 'len', '', 'append']);
+      expect(r.map((s) => s.label), ['len', 'range', 'append']);
+      expect(r.every((s) => s.kind == SuggestionKind.vocab), isTrue);
+    });
+
+    test('cắt theo limit; limit <= 0 → rỗng', () {
+      expect(vocabStrip(['a', 'b', 'c'], limit: 2).map((s) => s.label), [
+        'a',
+        'b',
+      ]);
+      expect(vocabStrip(['a'], limit: 0), isEmpty);
+    });
+
+    test('từ gọi hàm chèn kèm dấu mở ngoặc như chip thường', () {
+      expect(vocabStrip(['range']).single.insertText, 'range(');
+    });
+  });
+
+  group('ghostFor', () {
+    test('ô trống → rỗng, chưa gõ gì thì không lộ đáp án (issue #37)', () {
+      expect(ghostFor('', ['for i in x:\n    pass', 'y']), '');
+      expect(ghostFor('   ', ['abc']), '');
+    });
+
+    test('đã gõ tiền tố → phần còn lại', () {
+      expect(ghostFor('len(te', ['len(text)']), 'xt)');
+      expect(ghostFor('  len(', ['len(text)']), 'text)');
+    });
+
+    test('chọn đáp án khớp tiền tố, không phải đáp án đầu', () {
+      expect(ghostFor('b', ['abc', 'bcd']), 'cd');
+    });
+
+    test('lệch tiền tố, đã gõ đủ, hoặc không có đáp án → rỗng', () {
+      expect(ghostFor('lex', ['len(text)']), '');
+      expect(ghostFor('len(text)', ['len(text)']), '');
+      expect(ghostFor('a', const []), '');
+      expect(ghostFor('', ['', '  ']), '');
+    });
+  });
 }

@@ -71,6 +71,18 @@
     "date": "2026-10-12",
     "run": "2026-10-11-content-review-queue"
   },
+  "d095ac8": {
+    "date": "2026-10-12",
+    "run": "2026-10-12-exercise-editor-redesign"
+  },
+  "f4b47b2": {
+    "date": "2026-10-12",
+    "run": "2026-10-12-issue29-reskin"
+  },
+  "f772e39": {
+    "date": "2026-10-12",
+    "run": "2026-10-12-system-design-mode"
+  },
   "caaf83f": {
     "date": "2026-10-13",
     "run": "2026-10-13-todo-comment-fill-button"

@@ -107,6 +107,27 @@ void main() {
     expect(find.byKey(const Key('reveal-A')), findsNothing);
   });
 
+  testWidgets('Solution: khối code lời giải nền codeSurface (INV-08)', (
+    t,
+  ) async {
+    await _pump(t, 'clean-text');
+    await t.tap(find.text('Solution'));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const Key('reveal-A')));
+    await t.tap(find.byKey(const Key('reveal-A')));
+    await t.pump();
+    final box = t.widget<Container>(
+      find.descendant(
+        of: find.byKey(const Key('solution-code-A')),
+        matching: find.byType(Container),
+      ),
+    );
+    final palette = buildAppTheme(
+      brightness: Brightness.light,
+    ).extension<AppPalette>()!;
+    expect((box.decoration as BoxDecoration).color, palette.codeSurface);
+  });
+
   testWidgets('bài khoá mở thẳng route → màn khoá, không có tab', (t) async {
     await _pump(t, 'overlap-chunks');
     expect(find.byKey(const Key('locked-title')), findsOneWidget);

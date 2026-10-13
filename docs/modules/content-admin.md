@@ -67,14 +67,14 @@ Quy trình sửa nội dung bằng file: `export_content` → sửa file → `lo
 
 Đưa nội dung mới từ repo lên VPS (vì deploy chỉ nạp `--if-empty` nên không tự cập nhật nội dung): (1) export DB của VPS ra file và so với `backend/content/content.json` cũ trong repo, để biết admin đã sửa gì trên VPS mà bản repo chưa có; (2) `deploy.sh` đưa code mới (gồm harness) lên; (3) chạy `load_content --force` trên VPS với `content.json` mới; (4) kiểm `/content` trả đúng số theme/bài. Bỏ bước 1 thì `--force` ghi đè mất chỉnh sửa của admin (run planning/crew/2026-10-11-python-oop-bank/, STATUS.md; chưa có script cho chuỗi này, làm tay). Ngoại lệ ở bước 2: khi `origin/main` có commit chưa merge vào nhánh local, KHÔNG chạy `deploy.sh`, vì rsync `--delete` xoá code của phiên khác đã deploy lên VPS; nếu chỉ đổi dữ liệu thì `scp` riêng `content.json` rồi `load_content --force <path>` (run planning/crew/2026-10-11-oop-bank-progressive/, DEVIATIONS.md). Khi chạy pytest, DB test dùng chung có thể bị phiên song song nâng migration, nên đặt `TEST_DATABASE_URL` trỏ DB riêng. Không có `--if-empty` hay `--force` thì lệnh từ chối chạy (exit 2), nên không còn cách "vô tình ghi đè" (backend/app/load_content.py:398-400).
 
-Màn Admin trong app đi từng tầng (drill-down: chạm một thẻ để xuống tầng sâu hơn, mỗi tầng một màn riêng), thay cho cây phẳng nhiều icon trước đây. Bốn route go_router đều đăng ký ở `mobile/lib/app/router.dart:88-110`, và mỗi tầng được `push` từ tầng trên nên nút back lùi đúng một tầng:
+Màn Admin trong app đi từng tầng (drill-down: chạm một thẻ để xuống tầng sâu hơn, mỗi tầng một màn riêng), thay cho cây phẳng nhiều icon trước đây. Bốn route go_router đều đăng ký ở `mobile/lib/app/router.dart:129-151`, và mỗi tầng được `push` từ tầng trên nên nút back lùi đúng một tầng:
 
 | Tầng | Route | Màn | Hiện gì |
 | --- | --- | --- | --- |
 | 1 | `/admin` | `AdminScreen` | thẻ project (theme): tên, mô tả, "N module · M bài", nút sơ đồ class (dialog JSON), menu ⋯ "Đổi tên / mô tả"; nút lớn "Thêm project" |
 | 2 | `/admin/theme/:themeId` | `AdminThemeScreen` | thẻ module cấp 1 (sub-module đếm gộp), menu ⋯ đổi tên/mô tả, nút "Thêm module" |
 | 3 | `/admin/module/:moduleId` | `AdminModuleScreen` | mỗi file là một nhóm (⋯ "Đổi tên"), bài là thẻ nhỏ (tiêu đề, `class.hàm`, số ô), ⋯ trên thẻ bài là "Xoá" (có xác nhận); "Thêm bài" cuối mỗi file, "Thêm file", sub-module là thẻ, "Thêm module con" |
-| 4 | `/admin/exercise/:id` | `ExerciseEditorScreen` | form sửa một bài (không đổi so với trước) |
+| 4 | `/admin/exercise/:id` | `ExerciseEditorScreen` | form sửa một bài, bố cục co giãn theo bề rộng (xem mục "Màn Soạn bài tập" dưới) |
 
 **Breadcrumb**: mỗi màn có một hàng ngắn kiểu "Projects / Airline / Flight"; chạm một mục là quay về cấp đó. `adminGoToLevel` pop đúng số tầng nếu stack đúng là chuỗi đã đi xuống, còn không (mở thẳng URL sâu, refresh web) thì `go` thẳng tới route cấp đó (mobile/lib/features/admin/admin_widgets.dart:117-130).
 
@@ -103,6 +103,24 @@ final template = cls == null
 
 Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Gửi duyệt thành công thì `AdminController.save` KHÔNG nạp lại `contentProvider` (nội dung học viên chưa đổi, mobile/lib/features/admin/admin_controller.dart:517-519); chỉ khi admin duyệt một mục (`_decide`) mới gọi `contentProvider.notifier.refresh()` để Home của admin thấy bản mới ngay (mobile/lib/features/admin/admin_controller.dart:629-631).
 
+**Màn Soạn bài tập** (`ExerciseEditorScreen`, run 2026-10-12-exercise-editor-redesign, PR #26) chia thành ba khối widget. Ô code là một `TextField` bình thường mà controller tô màu chữ, không phải editor tự vẽ:
+
+```dart
+class HighlightingController extends TextEditingController {
+  // buildTextSpan: tokenize(text, language) -> TextSpan có màu từ context.palette
+```
+(mobile/lib/features/admin/code_cell.dart:133-181)
+
+`HighlightingController` ghi đè `buildTextSpan` (hàm Flutter dựng các đoạn chữ có style để vẽ) và chỉ đổi style, không đổi chuỗi, nên `controller.text` vẫn là nguồn sự thật cho `toJson`, "ghép thử" và so với `judge.solution`. `CodeCell` bọc TextField đó thêm gutter số dòng, nút Chép/Thu gọn, footer "N dòng" và dòng lỗi; Key do caller truyền được gắn vào chính TextField (`fieldKey`) để test cũ `find.byKey` + `enterText` chạy nguyên (code_cell.dart:201-226). Tokenizer `tokenize` là hàm thuần, hiểu comment, chuỗi, keyword, số, `# TODO` (nổi nền) cho Python và key/chuỗi/số/`true false null` cho JSON (code_cell.dart:46-60).
+
+| Bề rộng (LayoutBuilder) | Bố cục | file:dòng |
+| --- | --- | --- |
+| ≥ 1100 | mục lục neo (200px) · form · panel ghép thử (360px) | mobile/lib/features/admin/exercise_editor.dart:690-693, 962-998 |
+| 700 đến < 1100 | form · panel ghép thử | mobile/lib/features/admin/exercise_editor.dart:993-998 |
+| < 700 | một cột, ghép thử chèn ở cuối form | mobile/lib/features/admin/exercise_editor.dart:1001-1004 |
+
+Mỗi nhánh loại trừ nhau nên `merge-preview` được dựng đúng một lần ở mọi bề rộng; thanh Huỷ/Áp dụng nằm ngoài `LayoutBuilder` nên chỉ có một bộ, cùng điều kiện vô hiệu (`casesError == null && !hasLabelError`, exercise_editor.dart:408,929). Các mục dùng `CollapsibleSection`, ô A/B/C dùng `CollapsibleCard` (tiêu đề + tóm tắt một dòng khi đóng + chấm trạng thái, mobile/lib/features/admin/collapsible_section.dart:8-135). Dữ liệu nằm trong `_Form`/`_BlockForm` (controller), không trong cây widget, nên đóng mục hay đổi bố cục không mất dữ liệu và `toJson`/preview/cảnh báo vẫn tính trên mục đang đóng (exercise_editor.dart:119-168). Màn không đổi `AdminController`, hành vi Áp dụng/Huỷ, `toJson`, `_previewMerge`.
+
 ## Ranh giới & đánh đổi
 
 | Chọn | Thay vì | Vì sao |
@@ -113,6 +131,8 @@ Tham số mặc định (`run`, `Draft`) giữ hành vi cho caller cũ. Gửi du
 | Lưu = gửi vào hàng chờ, học viên chỉ thấy bản đã duyệt | ghi thẳng như trước | admin/Claude sửa nháp được mà không lộ cho học viên (`docs/modules/content-review.md`) |
 | `409` theo `admin_version` (của bản nháp) | ghi đè "người lưu sau thắng" | hai admin không âm thầm xoá việc của nhau |
 | Editor vẫn gửi cả bộ nội dung; server diff ra từng mục | gửi từng mục từ client | app giữ nguyên thao tác sửa; kiểm cả bộ luật liên bài (id toàn cục, sơ đồ) trên bản nháp |
+| Ô code = `TextField` + `HighlightingController` (tô màu qua `buildTextSpan`) | overlay chữ lên TextField, hoặc thêm package editor | giữ nguyên Key và `controller.text` nên 20+ test cũ và `toJson` không đổi; không thêm dependency (`docs/DECISIONS.md`) |
+| Mọi mục và ô mở mặc định | đóng bớt như mockup | mục đóng thì widget rời cây, `find.byKey` của test cũ rỗng |
 | Server KHÔNG chạy lời giải mẫu khi Lưu | chạy `judge.solution` qua harness | tránh thực thi code ở server admin; việc đó là của nút Run trên máy chấm |
 | Server cho module rỗng (không có luật "mỗi module có ≥1 bài") | port nguyên luật Dart | admin xoá bài cuối của module hoặc dựng khung trước sẽ bị chặn; test Dart vẫn giữ luật trên `content.json` (DEVIATIONS.md) |
 
@@ -125,6 +145,8 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 - Luật nội dung có hai bản cài (Dart `mergeCells` cho preview/test, Python `content_rules.py` cho server); không có test so trực tiếp hai bản nên có thể trôi dần. Server là nguồn quyết định (backend/app/content_rules.py:8-11).
 - Form editor chỉ cảnh báo 4 trong 12 luật; "Tải lại" ở banner 409 không có hộp xác nhận; sửa trong lúc đang tải lại bị ghi đè; field lạ trong `challenge.small/project` mất khi "Áp dụng"; chưa rõ lý do khi `replaceExercise` trả false (STATUS.md Backlog).
 - UI drill-down: web luôn mở lại Home khi tải trang nên deep link `/admin/...` chưa dùng được (có từ trước); đếm số bài/lỗi tính lại mỗi lần build, chưa đo; test chưa phân biệt nhánh pop/go của breadcrumb trên stack sâu (planning/crew/2026-10-11-admin-ux-levels/reviews/T-02.md Backlog).
+- Màn Soạn bài tập: đóng RIÊNG một thẻ ô (mục vẫn mở) thì lỗi nhãn trống/trùng không hiện chữ, chỉ còn chấm đỏ ở mục và nút Áp dụng xám (đóng cả MỤC thì summary hiện lỗi). Mục lục chỉ cuộn tới header, không tự mở mục đóng; chưa có nút "Thu gọn/Mở tất cả" (state nằm trong widget); chưa test biên 700/1100 và đổi cỡ giữa chừng; Huỷ/Áp dụng luôn ở thanh dưới kể cả layout rộng. Chưa kiểm bằng mắt trên web ở 3 bề rộng (STATUS.md Backlog, planning/crew/2026-10-12-exercise-editor-redesign/).
+- `CodeCell`: tô màu mất khi IME đang composing; `lineEnd` O(n²) với dòng cực dài; `_charWidth = 8.6` hardcode theo JetBrains Mono 14px (code_cell.dart:229); không nhận `"""` nhiều dòng; toolbar tràn khi cell rộng dưới 252px; ô `cases` không viền đỏ khi lỗi.
 - Admin đổi nhãn ô thì lịch ôn khoá theo `block.id` cũ thành mồ côi (SEAM #3).
 - Backend: giữ kết nối DB khi đọc body admin; chưa có test tranh khoá bằng hai kết nối thật; phép kiểm chéo CPU của sơ đồ được đo <1s ở payload xấu nhất bằng test hiệu năng, nhưng run đóng sau 3 vòng review (vòng 3 vẫn CẦN SỬA, orchestrator sửa rồi đóng, không có vòng 4; user duyệt).
 - Admin duyệt xong, học viên đang mở bài giữ nội dung cũ tới lần tải kế; bài bị xoá thì `/run` trả 404.
@@ -132,4 +154,4 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 
 ## Nguồn
 
-backend/app/admin_api.py:1-174; backend/app/review.py:399-436,487-514; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-60; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:88-110; planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.
+backend/app/admin_api.py:1-174; backend/app/review.py:399-436,487-514; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-63; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:129-151; mobile/lib/features/admin/code_cell.dart:12-60,133-226,229; mobile/lib/features/admin/collapsible_section.dart:8-135; mobile/lib/features/admin/exercise_editor.dart:119-168,408,690-693,929,962-1004; planning/crew/2026-10-12-exercise-editor-redesign/ (PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md INV-01..06); planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.

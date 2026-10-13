@@ -26,20 +26,20 @@ backend: `DATABASE_URL`, `CODE_RUNNER`, `JUDGE0_URL`, `JUDGE0_TOKEN` (backend/.e
 
 `/run` tra `function` + `cases` của bài bằng một session DB ngắn, đóng ngay trước khi chờ máy chấm
 (để nhiều `/run` đồng thời không chiếm hết pool kết nối của `/content`, backend/app/content_api.py:156-182).
-Backend ghép payload JSON `{code, function, class_name, cases}` (backend/app/main.py:118-125), gửi `harness.py` làm chương trình và payload làm
+Backend ghép payload JSON `{code, function, class_name, cases}` (backend/app/main.py:124-131), gửi `harness.py` làm chương trình và payload làm
 stdin cho runner. Harness compile code người học với tên file `solution.py` (để số dòng lỗi là số
 dòng của code đã gửi), chạy từng case rồi in đúng một dòng `__JUDGE_RESULT__{json}`.
 
 | Tình huống | Backend trả | Nơi xử lý |
 |---|---|---|
-| Bài không có trong DB | 404 `exercise_not_found` | backend/app/main.py:114-116 |
-| DB chưa nạp nội dung lần nào | 503 `content_not_loaded` (cả `/run` và `/content`) | backend/app/main.py:76-78, backend/app/content_api.py:141-149 |
-| DB không kết nối được | 503 `database_unavailable` | backend/app/main.py:69-73 |
-| Body sai / `code` > 8000 ký tự | 422 `invalid_request` (không lặp lại input) | backend/app/main.py:56-66 |
-| Máy chấm hỏng, 429, 5xx, mã trạng thái lạ | 503 `runner_unavailable` (body không chứa token) | backend/app/main.py:126-128, backend/app/runner.py:107-125 |
-| Máy chấm báo quá giờ (Judge0 status 5) | 200 `status: timeout` | backend/app/main.py:131-132 |
-| Harness in kết quả | 200 `passed` / `failed` / `error` + `tests[]` | backend/app/main.py:134-141 |
-| Harness bị dừng trước khi in (hết bộ nhớ...) | 200 `error` kind `runtime`, `line: null` | backend/app/main.py:142-151 |
+| Bài không có trong DB | 404 `exercise_not_found` | backend/app/main.py:120-122 |
+| DB chưa nạp nội dung lần nào | 503 `content_not_loaded` (cả `/run` và `/content`) | backend/app/main.py:82-84, backend/app/content_api.py:141-149 |
+| DB không kết nối được | 503 `database_unavailable` | backend/app/main.py:75-79 |
+| Body sai / `code` > 8000 ký tự | 422 `invalid_request` (không lặp lại input) | backend/app/main.py:59-72 |
+| Máy chấm hỏng, 429, 5xx, mã trạng thái lạ | 503 `runner_unavailable` (body không chứa token) | backend/app/main.py:132-134, backend/app/runner.py:107-125 |
+| Máy chấm báo quá giờ (Judge0 status 5) | 200 `status: timeout` | backend/app/main.py:137-138 |
+| Harness in kết quả | 200 `passed` / `failed` / `error` + `tests[]` | backend/app/main.py:140-147 |
+| Harness bị dừng trước khi in (hết bộ nhớ...) | 200 `error` kind `runtime`, `line: null` | backend/app/main.py:148-157 |
 
 Case test có hai dạng, hiển thị được "input / mong đợi / nhận được":
 
@@ -66,7 +66,7 @@ method mà có case không phải dạng `call`) bị chặn lúc nạp nội du
 (backend/app/load_content.py:49-67,111-117). Tổng quan xem docs/ARCHITECTURE.md mục "Chấm bài method".
 
 Hợp đồng đáp ứng: `status`, `error {kind, line, message}`, `tests [{call, expected, actual, passed}]`,
-`stdout`, `duration_ms`; `expected`/`actual` là `repr()` (backend/app/main.py:81-99).
+`stdout`, `duration_ms`; `expected`/`actual` là `repr()` (backend/app/main.py:87-105).
 
 `GET /content` (backend/app/content_api.py:169-171) trả `{version, themes, exercises}`, response_model
 `ContentPayload` không có trường `judge` (backend/app/content_schema.py:80-85). Luồng đầy đủ
@@ -81,7 +81,7 @@ host Judge0 (đổi `JUDGE0_URL`) hay viết `DockerRunner` mới (cùng `CodeRu
 Không làm: quản lý tài khoản (nằm ở `docs/modules/auth-progress.md`), chống gian lận (code người học chạy cùng tiến trình với harness nên
 có thể in dòng kết quả giả — review external gắn Critical, bị bác vì đã khai trong PLAN), hàng chờ
 có timeout tổng. `/run` vẫn công khai: không token thì chấm như khách. Có Bearer hợp lệ và máy chấm trả `passed` thì
-server ghi `passed=true` vào tiến độ của user đó (backend/app/main.py:131-146, 178-184); token sai/hết hạn cũng chấm
+server ghi `passed=true` vào tiến độ của user đó (backend/app/main.py:137-152, 184-190); token sai/hết hạn cũng chấm
 như khách, không trả 401. Ghi tiến độ lỗi chỉ log, kết quả chấm vẫn trả về.
 
 Giới hạn tài nguyên mỗi lần chạy gửi kèm: `cpu_time_limit=2`, `wall_time_limit=5`,
@@ -116,7 +116,7 @@ Bài chấm output in ra: bài như `display_info` kiểm chuỗi in ra, nên ca
 
 ## Nguồn
 
-- API, middleware, ánh xạ kết quả: backend/app/main.py:23-153
+- API, middleware, ánh xạ kết quả: backend/app/main.py:23-159
 - `CodeRunner`, `Judge0Runner`, `runner_from_env`: backend/app/runner.py:20-136
 - Harness: backend/app/harness.py:1-180; case kịch bản backend/app/harness.py:48-87; kiểm lúc nạp backend/app/load_content.py:49-67
 - Nội dung + lời giải tham chiếu: nguồn soạn backend/content/content.json; nạp backend/app/load_content.py:74-205; bảng backend/app/tables.py:18-108; đọc backend/app/content_api.py:42-171
