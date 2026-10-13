@@ -465,4 +465,17 @@ void main() {
     await _openEditor(t, 'A');
     expect(t.takeException(), isNull);
   });
+
+  testWidgets('ô trống hiện dòng # TODO <nhãn>; bấm Điền code mở editor', (
+    t,
+  ) async {
+    await _pump(t, FakeJudge((_) async => _passed));
+    expect(find.text('# TODO B'), findsOneWidget);
+    expect(find.text('Điền code'), findsWidgets);
+
+    await t.tap(find.text('Điền code').first);
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('editor-title')), findsOneWidget);
+    expect(find.byKey(const Key('editor-field')), findsOneWidget);
+  });
 }
