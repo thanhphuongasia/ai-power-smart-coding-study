@@ -5,7 +5,8 @@ Branch:   crew/2026-10-13-todo-comment-fill-button
 Issue:    #39 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/39
 
 Trạng thái: open
-Next action: P4 — commit, push, mở PR
+Next action: chờ user review/merge PR
+PR: #40 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/40
 
 ## Task
 
