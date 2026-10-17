@@ -37,6 +37,30 @@ class SdCourse {
     );
   }
 
+  /// Parse lỏng: course chỉ là thông tin nhóm, nên dữ liệu lệch không được làm
+  /// hỏng cả danh sách. Thiếu/sai kiểu `id`/`title` → null (bỏ course);
+  /// `skills` sai kiểu → []; phần tử skill không phải chuỗi bị bỏ;
+  /// `domain` sai kiểu → null.
+  static SdCourse? tryFromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final id = json['id'];
+    final title = json['title'];
+    if (id is! String || title is! String) return null;
+    final skills = json['skills'];
+    final domain = json['domain'];
+    return SdCourse(
+      id: id,
+      title: title,
+      skills: skills is List
+          ? [
+              for (final s in skills)
+                if (s is String) s,
+            ]
+          : const [],
+      domain: domain is String ? domain : null,
+    );
+  }
+
   final String id;
   final String title;
   final List<String> skills;
@@ -71,7 +95,10 @@ class SdDocSummary {
       phase2Unlocked: jsonField<bool>(json, 'phase2_unlocked', w),
       tasks: _int(json, 'tasks', w),
       tasksDone: _int(json, 'tasks_done', w),
-      courseId: _opt<String>(json, 'course_id', w),
+      // course_id chỉ để nhóm: sai kiểu → coi như null (doc vào nhóm "Khác").
+      courseId: json['course_id'] is String
+          ? json['course_id'] as String
+          : null,
     );
   }
 

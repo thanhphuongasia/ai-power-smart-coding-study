@@ -83,6 +83,17 @@ void main() {
     expect(find.byKey(const Key('sd-course-other')), findsNothing);
   });
 
+  testWidgets('doc có courseId nhưng course == null → nhóm "Khác"', (
+    tester,
+  ) async {
+    final orphan = _doc('a', _c1).withCourse(null);
+    await _pump(tester, [_doc('b', _c1), orphan]);
+    final ho = tester.getTopLeft(find.byKey(const Key('sd-course-other'))).dy;
+    final ya = tester.getTopLeft(find.byKey(const Key('sd-doc-a'))).dy;
+    expect(orphan.courseId, 'c1');
+    expect(ho < ya, isTrue);
+  });
+
   testWidgets('không có course: list phẳng, không header', (tester) async {
     await _pump(tester, [_doc('a'), _doc('b')]);
     expect(find.byKey(const Key('sd-doc-a')), findsOneWidget);

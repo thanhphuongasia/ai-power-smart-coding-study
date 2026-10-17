@@ -78,17 +78,14 @@ class SdRepository {
     const what = 'GET /api/sd/docs';
     final root = await _send(() => _http.get(_uri('/api/sd/docs')), 200, what);
     // Server cũ không gửi `courses`/`course_id` → không course, list phẳng.
+    // Course chỉ là thông tin nhóm: dữ liệu lệch thì bỏ qua, không làm lỗi cả list.
     final rawCourses = root['courses'];
-    if (rawCourses != null && rawCourses is! List) {
-      throw FormatException('$what: "courses" không phải list');
-    }
     final byId = <String, SdCourse>{};
-    for (final c in (rawCourses as List?) ?? const []) {
-      if (c is! Map<String, dynamic>) {
-        throw FormatException('$what: courses chứa phần tử không phải object');
+    if (rawCourses is List) {
+      for (final c in rawCourses) {
+        final course = SdCourse.tryFromJson(c);
+        if (course != null) byId[course.id] = course;
       }
-      final course = SdCourse.fromJson(c);
-      byId[course.id] = course;
     }
     return [
       for (final e in _items(root, what))

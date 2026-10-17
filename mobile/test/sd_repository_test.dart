@@ -168,9 +168,61 @@ void main() {
     },
   );
 
-  test('listDocs: courses sai kiểu → FormatException', () async {
-    final (repo, _) = _repo((_) => _json({'items': [], 'courses': 'x'}));
-    await expectLater(repo.listDocs(), throwsFormatException);
+  test('listDocs: courses sai kiểu → coi như rỗng, items vẫn ra', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 'c1')],
+        'courses': 'x',
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs.single.courseId, 'c1');
+    expect(docs.single.course, isNull);
+  });
+
+  test(
+    'listDocs: course hỏng bị bỏ qua, course còn lại vẫn nhóm đúng',
+    () async {
+      final (repo, _) = _repo(
+        (_) => _json({
+          'items': [docJson('a', 'c1'), docJson('b', 'c2'), docJson('c', 'c3')],
+          'courses': [
+            'không phải object',
+            {'id': 'c2'}, // thiếu title
+            {'id': 5, 'title': 'id sai kiểu'},
+            {
+              'id': 'c1',
+              'title': 'Khoá 1',
+              'skills': ['python', 3, null],
+              'domain': 42,
+            },
+            {'id': 'c3', 'title': 'Khoá 3', 'skills': 'x'},
+          ],
+        }),
+      );
+      final docs = await repo.listDocs();
+      expect(docs.map((d) => d.id), ['a', 'b', 'c']);
+      expect(docs[0].course?.title, 'Khoá 1');
+      expect(docs[0].course?.skills, ['python']);
+      expect(docs[0].course?.domain, isNull);
+      expect(docs[1].course, isNull);
+      expect(docs[2].course?.skills, isEmpty);
+    },
+  );
+
+  test('listDocs: course_id sai kiểu → null, không làm lỗi list', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 7), docJson('b', 'c1')],
+        'courses': [
+          {'id': 'c1', 'title': 'Khoá 1'},
+        ],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs[0].courseId, isNull);
+    expect(docs[0].course, isNull);
+    expect(docs[1].course?.id, 'c1');
   });
 
   test('listDocs parse đúng và gọi GET /api/sd/docs', () async {
