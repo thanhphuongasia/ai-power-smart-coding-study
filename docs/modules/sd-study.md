@@ -8,7 +8,7 @@ Chế độ code của app dạy bằng bài tập có test; System Design khôn
 
 ## Dùng khi nào
 
-Admin nhập hoặc nhập lại tài liệu bằng `POST /api/admin/sd/docs` (hiện chưa có màn admin trong app, STATUS.md). Học viên vào từ tab thứ 5 "Design" của app, chọn tài liệu, đi theo lộ trình. Claude (qua claude.ai, đã được cấp quyền `mcp_access`) gọi 3 tool `sd_*` để chấm. Đụng vào module này khi đổi quy ước markdown (sửa `parser.py` và mọi tài liệu đã nhập, vì id card/section/task sinh từ nội dung/tên), thêm kiểu chấm mới (cắm một `Evaluator`), hoặc thêm tab điều hướng (3 nơi phải khớp index, xem phần Flutter).
+Admin nhập hoặc nhập lại tài liệu bằng `POST /api/admin/sd/docs`, bằng 7 tool MCP `sd_*` doc (qua Claude, xem mục 8) hoặc bằng CLI `python -m app.sd.import_file` (hiện chưa có màn admin trong app, STATUS.md). Học viên vào từ tab thứ 5 "Design" của app, chọn tài liệu, đi theo lộ trình. Claude (qua claude.ai, đã được cấp quyền `mcp_access`) gọi 3 tool `sd_*` để chấm và 7 tool để quản lý tài liệu. Đụng vào module này khi đổi quy ước markdown (sửa `parser.py` và mọi tài liệu đã nhập, vì id card/section/task sinh từ nội dung/tên), thêm kiểu chấm mới (cắm một `Evaluator`), hoặc thêm tab điều hướng (3 nơi phải khớp index, xem phần Flutter).
 
 ## Cách hoạt động
 
@@ -32,13 +32,13 @@ Nguồn của bảng: backend/app/sd/parser.py:3-17, 47-56, 207-253, 422-455. G�
 
 | Bảng | Khoá | Chứa | Ràng buộc đáng nhớ |
 |---|---|---|---|
-| `sd_docs` | `id` (slug) | tên, `status` (`draft`/`published`), `context` (card bối cảnh, JSONB) | CHECK status — backend/app/tables.py:241-255 |
+| `sd_docs` | `id` (slug) | tên, `status` (`draft`/`published`/`archived`), `context` (card bối cảnh, JSONB), `source_md` (markdown gốc lần nhập gần nhất, NULL = nhập trước migration 0008) | CHECK status — backend/app/tables.py:241-255 |
 | `sd_sections` | `(doc_id, id)` | `position`, `chapter`, `title`, `cards` JSONB `[{id, kind, title, body}]` | FK `doc_id` → `sd_docs` CASCADE — backend/app/tables.py:258-270 |
 | `sd_tasks` | `(doc_id, id)` | `prompt`, `hints`, `rubric` JSONB `[{text, keywords}]`, `ref_section_id` | rubric chỉ server đọc — backend/app/tables.py:273-287 |
 | `sd_progress` | `(user_id, doc_id, section_id)` | `read_cards` (list id card đã đọc) | chỉ FK `users`; KHÔNG FK tới nội dung — backend/app/tables.py:290-301 |
 | `sd_attempts` | `id`; unique `(user_id, doc_id, task_id, n)` | `answer`, `auto_result`, `status` (`auto`/`reviewed`), `feedback`, `verdicts`, `reviewed_by/at` | CHECK: `reviewed` phải có feedback và `reviewed_at` — backend/app/tables.py:304-336 |
 
-Migration `0007` (sau `0006`), downgrade xoá cả 5 bảng: backend/migrations/versions/0007_system_design.py:22-97. Lý do không FK: nhập lại tài liệu xoá rồi ghi lại section/task; FK cascade sẽ xoá sạch tiến độ và lần thử (backend/app/tables.py:236-238).
+Migration `0007` (sau `0006`), downgrade xoá cả 5 bảng: backend/migrations/versions/0007_system_design.py:22-97. Migration `0008` thêm cột `source_md` và nới CHECK status cho `archived`; downgrade đưa doc `archived` về `draft` và MẤT markdown gốc đã lưu: backend/migrations/versions/0008_sd_source_archive.py:21-33. Lý do không FK: nhập lại tài liệu xoá rồi ghi lại section/task; FK cascade sẽ xoá sạch tiến độ và lần thử (backend/app/tables.py:236-238).
 
 Id ổn định giữa các lần nhập lại, vì tiến độ bám theo chúng:
 
@@ -56,11 +56,11 @@ Admin (`require_admin` ở cấp router, nên route thêm sau không thể quên
 
 | Route | Việc |
 |---|---|
-| `POST /api/admin/sd/docs` | nhập/nhập lại; trả `{id, sections, cards, tasks, cards_added, cards_removed, ...}` — backend/app/sd/admin.py:57-124 |
-| `GET /api/admin/sd/docs` | danh sách kèm đếm — backend/app/sd/admin.py:127-150 |
-| `PUT /api/admin/sd/docs/{id}/status` | `draft` ↔ `published` — backend/app/sd/admin.py:153-172 |
+| `POST /api/admin/sd/docs` | nhập/nhập lại (mode `upsert`, luôn lưu `source_md`); trả `{id, sections, cards, tasks, cards_added, cards_removed, ...}` — backend/app/sd/admin.py:53-71 → backend/app/sd/docs.py:74-168 |
+| `GET /api/admin/sd/docs` | danh sách kèm đếm và `has_markdown`; `include_archived` mặc định `true` ở API admin (khác MCP, mặc định `false`) — backend/app/sd/admin.py:73-75 |
+| `PUT /api/admin/sd/docs/{id}/status` | `draft`/`published`/`archived` (xoá mềm) — backend/app/sd/admin.py:78-97 |
 
-Nhập lại chạy trong MỘT transaction dưới `pg_advisory_xact_lock` theo id tài liệu, xoá rồi ghi section/task, không chạm `sd_progress`/`sd_attempts` (backend/app/sd/admin.py:65-93). Tài liệu mới mặc định `draft`; chưa `published` thì học viên nhận 404 (backend/app/sd/learner.py:40-44).
+Nhập lại chạy trong MỘT transaction dưới `pg_advisory_xact_lock` theo id tài liệu, xoá rồi ghi section/task, không chạm `sd_progress`/`sd_attempts` (backend/app/sd/docs.py:102-159; trước 0008 logic này nằm ở admin.py, nay admin chỉ gọi service). Tài liệu mới mặc định `draft`; chưa `published` thì học viên nhận 404 (backend/app/sd/learner.py:41-45).
 
 Học viên (`current_user`; mọi truy vấn tiến độ/lần thử lọc theo `user.id` của phiên):
 
@@ -134,6 +134,45 @@ Trước hotfix #35 một cú vuốt trôi theo quán tính nhiều card, và v�
 late final _snapPhysics = SdCardSnapPhysics(anchors: _snapOffsets);
 ```
 
+### 8. Quản lý tài liệu: một service, ba cửa vào, xoá mềm
+
+Trước đây logic nhập nằm trong route admin. Từ run `2026-10-17-sd-docs-mcp` nó nằm ở `backend/app/sd/docs.py`, và ba cửa vào cùng gọi: API admin (`sd/admin.py`), 7 tool MCP (`mcp_server.py`) và CLI (`sd/import_file.py`). Nhờ vậy mọi lần nhập đều lưu markdown gốc (`sd_docs.source_md`), nên sau này sửa được một đoạn mà không phải gửi lại cả tài liệu.
+
+| Hàm trong `sd/docs.py` | Việc | file:dòng |
+|---|---|---|
+| `import_markdown(mode, dry_run, base_revision)` | parse trước khi khoá, khoá theo id, đọc lại sau khoá, xoá-rồi-ghi section/task, lưu `source_md`, tự commit | backend/app/sd/docs.py:74-168 |
+| `edit_doc` / `apply_edits` | sửa theo đoạn: mỗi `old_text` phải xuất hiện đúng 1 lần, tối đa 50 edit, mỗi chuỗi ≤20.000 ký tự; áp lên `source_md` rồi nhập lại bằng `replace` | backend/app/sd/docs.py:171-219 |
+| `set_status` | đổi `draft`/`published`/`archived`; không đụng bài nộp hay tiến độ | backend/app/sd/docs.py:281-294 |
+| `list_docs` / `get_doc` | danh sách (mặc định ẩn archived) / meta + mục lục + task + `markdown` + `revision` | backend/app/sd/docs.py:222-278 |
+
+Ba `mode` của nhập:
+
+| mode | Khi id chưa có | Khi id đã có (kể cả `archived`) | Ai dùng |
+|---|---|---|---|
+| `create` | tạo (mặc định `draft`) | lỗi, nêu trạng thái hiện tại | `sd_create_doc` |
+| `replace` | lỗi `không có tài liệu id` | ghi đè, giữ `status` nếu không truyền | `sd_replace_doc`, `edit_doc`, CLI `--mode replace` |
+| `upsert` | tạo | ghi đè | API admin, CLI mặc định |
+
+(backend/app/sd/docs.py:105-111). `dry_run` chỉ parse và so với bản hiện có để trả `cards_added`/`cards_removed`, không ghi gì. `revision` là 16 ký tự đầu của sha256 của `source_md`; `sd_replace_doc` truyền `base_revision` lấy từ `sd_get_doc` thì một bản vừa bị người khác sửa sẽ bị từ chối thay vì bị ghi đè (backend/app/sd/docs.py:53-57, 112-113). Nhập chỉ nhận `draft`/`published`; muốn xoá phải đi đường `set_status` (backend/app/sd/docs.py:33).
+
+Xoá mềm: `status='archived'`. Học viên chỉ thấy `published` ở mọi route (list, get, progress, nộp bài, xem bài đã nộp), nên doc archived biến mất khỏi app; bài nộp và tiến độ không bị động tới vì chúng không FK tới nội dung. Khôi phục bằng `set_status` về `draft` hoặc `published`. Hàng chờ chấm của Claude mặc định bỏ bài của doc archived, `include_archived=true` để xem cả (backend/app/sd/learner.py:41-45, 119; backend/app/sd/attempts.py:194-210).
+
+```python
+if not include_archived:
+    archived = select(SdDoc.id).where(SdDoc.status == "archived")
+    q = q.where(SdAttempt.doc_id.not_in(archived))
+```
+(backend/app/sd/attempts.py:208-210)
+
+Hợp đồng transaction: hàm ghi TỰ commit và rollback khi lỗi, nên caller phải truyền một session riêng cho mỗi lần gọi (MCP `open_session`, CLI, `get_session` của FastAPI đều vậy) và không được có việc chưa commit. `dry_run` cố ý không rollback vì rollback sẽ huỷ cả việc chưa commit của caller (backend/app/sd/docs.py:11-12, 133-136).
+
+CLI và backfill: tài liệu nhập trước 0008 có `source_md = NULL`, `sd_edit_doc` báo lỗi và phải gửi toàn bộ markdown bằng `replace`. Backfill bằng cách nhập lại đúng file `.md` gốc, giữ nguyên status (không truyền `--status`), có `--dry-run` để xem trước. File phải nằm trên VPS (scp lên rồi chạy lệnh). Quy trình đã chạy ở production ngày 2026-10-17: dry-run 10 doc đều `cards_added=0 cards_removed=0` (nhập lại không đổi gì ở nội dung học viên) rồi mới ghi thật.
+
+```bash
+.venv/bin/python -m app.sd.import_file /tmp/<file>.md --id <slug> --mode replace [--dry-run]
+```
+(backend/app/sd/import_file.py:1-5, 16-58; backend/README.md:102-117). CLI đọc file bằng `utf-8-sig` và `newline=""` để không đổi dấu xuống dòng hay dính BOM (backend/app/sd/import_file.py:31).
+
 ## Ranh giới & đánh đổi
 
 | Chọn | Thay vì | Vì sao |
@@ -143,9 +182,11 @@ late final _snapPhysics = SdCardSnapPhysics(anchors: _snapOffsets);
 | Chấm từ khoá ngay + chấm sâu qua MCP | gọi LLM trực tiếp từ backend | không giữ API key LLM, không tốn tiền mỗi lần nộp; Claude chat đã sẵn có qua MCP |
 | Nhóm id theo nội dung (card) và theo tên (section/task) | id tự tăng / UUID | card sửa nhẹ vẫn giữ tiến độ các card khác; đổi tên là hành vi hiếm, hậu quả đã ghi rõ |
 | Vuốt snap bằng `ScrollPhysics` tuỳ biến trên `SingleChildScrollView` | `PageView` (mỗi card một trang) | card cao hơn màn hình sẽ không đọc trọn được trong một trang; physics chặn mỗi cú vuốt ≤0,9 viewport nên card dài vẫn đọc bằng nhiều lần vuốt (xem `docs/DECISIONS.md`) |
+| Xoá = xoá mềm `archived`, không chặn xoá, không xoá cứng | chặn xoá doc đã có bài nộp; `DELETE` cứng kèm bài nộp/tiến độ | user chọn: hoàn tác được, bài nộp và tiến độ không mất, không cần luật "doc nào được xoá" (xem `docs/DECISIONS.md`) |
+| Lưu markdown gốc `source_md` | dựng lại markdown từ section/card | dựng lại không ra đúng bản gốc (khoảng trắng, thứ tự, nhãn) nên sửa theo đoạn sẽ làm lệch tài liệu (xem `docs/DECISIONS.md`) |
 | Mọi task Phase 2 mở cùng lúc | khoá tuần tự task sau chỉ mở khi task trước có lần thử | người học muốn làm task nào trước cũng được; Phase 2 vẫn chỉ mở khi Phase 1 xong; đổi một dòng ở server, client chỉ theo (xem `docs/DECISIONS.md`) |
 
-Không làm: màn admin trong app; SRS cho card; LLM chấm trực tiếp; tool xoá hay tự duyệt trong MCP; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
+Không làm: màn admin trong app; SRS cho card; LLM chấm trực tiếp; tự duyệt trong MCP (tài liệu SD không qua hàng chờ duyệt, nhưng cũng không có tool xoá bài nộp; xoá doc là xoá mềm); xoá cứng (purge) doc archived; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
 
 ### Các bất biến của run và cách đã được kiểm
 
@@ -169,6 +210,8 @@ Reviewer mối nối trả lời đủ 6 mã "còn đúng" với `file:dòng` (`
 - Chưa có màn admin trong app để nhập `.md` (hiện gọi API); `GET /api/sd/docs` đọc card của mọi tài liệu để tính `done` (đo lại khi có tài liệu lớn).
 - "Bối cảnh `done`" ở client suy ra từ `tasksDone > 0` vì server không có field riêng.
 - Vuốt snap chỉ được kiểm bằng widget test (`tester.fling`, `mobile/test/sd_reader_test.dart`); chưa thử trên thiết bị thật, và Chrome desktop không mô phỏng được fling. Cuộn bằng con lăn/trackpad trên web không có code riêng nên giữ hành vi mặc định của Flutter; chưa xác minh bằng test hay chạy thật.
+- Quản lý tài liệu (run 2026-10-17-sd-docs-mcp, STATUS.md Backlog): `apply_edits` so khớp `old_text` theo chuỗi thô, không chuẩn hoá NFC (khác NFC thì báo "không tìm thấy", an toàn nhưng khó hiểu); `base_revision` truyền cho doc chưa có thì bị bỏ qua; chưa có test downgrade với dòng `archived` và chưa có test 2 connection thật (DB test dùng chung dễ đỏ lẻ); không có test máy cho `populate_existing=True` (đã thử, test không ổn định nên bỏ, DEVIATIONS.md); `SdSection`/`SdTask` đọc không `populate_existing` (hợp đồng session riêng mỗi lần gọi che lỗ này); chưa có test 411 cho `/mcp` chunked, test bài nộp mồ côi, test `--status` sai của CLI.
+- Mối nối chưa khẳng định chủ ý (reviews/SEAM.md): `POST /api/admin/sd/docs` với `status` rõ lên doc `archived` lặng lẽ khôi phục nó (upsert; backend/app/sd/docs.py:138-140), còn MCP `replace`/`edit` và CLI mặc định thì giữ `archived`; `include_archived` mặc định khác nhau (API admin `true`, MCP `false`) — nhớ khi làm màn admin Flutter. Màn admin SD trong app Flutter vẫn chưa có.
 - Section vẫn khoá tuần tự (section sau chỉ mở khi section trước `done`); chỉ task Phase 2 là không khoá tuần tự. Menu nhảy được tới mọi section đã mở khoá, kể cả section đã xong.
 - Test đua nhau thật giữa nhập lại và PUT progress chưa có (hạ tầng test dùng một connection); nhập đồng thời và chấm đồng thời có test nhiều luồng (`tests/test_sd_concurrency.py`). Chưa chạy trên thiết bị thật; app đã chạy trên web Chrome 390px.
 
@@ -185,4 +228,4 @@ Kết quả lúc chưng cất: backend 805 passed, 2 skipped; Flutter 741 passed
 
 ## Nguồn
 
-backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-205; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.
+backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-205; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/migrations/versions/0008_sd_source_archive.py:1-33; backend/app/sd/docs.py:1-294; backend/app/sd/import_file.py:1-62; backend/README.md:102-117; backend/app/mcp_server.py:319-395; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; run 2026-10-17-sd-docs-mcp: planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, commit d5b3a28, eb24e55, 0a594dc, 3d8737b; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.

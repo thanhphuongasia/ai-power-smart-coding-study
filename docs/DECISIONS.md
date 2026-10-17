@@ -829,3 +829,39 @@ tính năng, không có tài liệu INV riêng vì chỉ một task chạm vùng
 
 **Nguồn**: mobile/lib/features/exercise/code_tab.dart:522-523,749-806;
 planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
+
+### System Design: xoá tài liệu là xoá mềm (`archived`), không chặn xoá và không xoá cứng
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp, issue #54): xoá tài liệu SD = đặt `sd_docs.status = 'archived'` (thêm giá trị thứ ba cạnh `draft`/`published`, migration 0008). Học viên chỉ thấy `published` ở mọi route nên doc archived biến mất khỏi app; bài nộp và tiến độ không bị động tới. Khôi phục bằng `set_status` về `draft`/`published`. Nhập (`create`/`replace`/`upsert`) chỉ nhận `draft`/`published`, nên muốn xoá phải đi đường `set_status` / `sd_delete_doc` có chủ đích. Hàng chờ chấm của Claude (`sd_list_attempts`) mặc định bỏ bài của doc archived, có `include_archived=true` để xem; `sd_get_attempt` vẫn đọc được từng bài.
+
+**Vì sao**: user được hỏi ba hướng (chặn xoá khi doc đã có bài nộp, xoá cứng, xoá mềm) và chọn xoá mềm: hoàn tác được, không mất dữ liệu học viên, không cần luật "doc nào được xoá". Bảng tiến độ/lần thử vốn không FK tới nội dung (xem mục System Design phía trên) nên không phải đổi gì ở đó.
+
+**Phương án đã bỏ**: chặn xoá khi có bài nộp (doc có bài thì không bao giờ gỡ được); xoá cứng kèm bài nộp (mất dữ liệu không hoàn tác được từ một lệnh của Claude).
+
+**Đánh đổi đã chấp nhận**: doc archived nằm lại DB (chưa có purge, ghi ở Backlog); downgrade 0008 đưa doc archived về `draft` và mất `source_md`; `POST /api/admin/sd/docs` với `status` rõ lên doc archived sẽ khôi phục nó (upsert), trong khi MCP `replace`/`edit` và CLI mặc định giữ archived — SEAM.md ghi là hành vi chưa khẳng định chủ ý.
+
+**Nguồn**: backend/app/sd/docs.py:32-34, 281-294; backend/app/sd/attempts.py:194-210; backend/app/sd/learner.py:41-45; backend/migrations/versions/0008_sd_source_archive.py:21-33; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, reviews/SEAM.md (INV-01, INV-04, INV-06).
+
+### MCP: Claude được publish và sửa tài liệu SD đang published; lớp chặn là "Needs approval" của claude.ai
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp): 7 tool tài liệu SD (`sd_list_docs`, `sd_get_doc`, `sd_create_doc`, `sd_replace_doc`, `sd_edit_doc`, `sd_set_status`, `sd_delete_doc`) ghi thẳng vào `sd_docs` giống API admin `/api/admin/sd`, không qua hàng chờ duyệt `content_changes` của nội dung code. Claude được đặt `published`, gỡ xuống và sửa doc đang `published` (học viên thấy ngay). Tài liệu mới mặc định `draft`. Backend không thêm bước duyệt riêng; chặn bằng ba lớp có sẵn: chỉ `sub` đã cấp quyền và còn là admin gọi được (kiểm mỗi lần), `dry_run` cho mọi lần ghi, và bước "Needs approval" (xác nhận từng tool ghi trước khi chạy) ở phía claude.ai. `INSTRUCTIONS` dặn Claude nói rõ với người dùng rằng doc published đổi là hiện ngay.
+
+**Vì sao**: user chọn cho Claude quyền publish/unpublish; tài liệu SD là bài đọc của riêng admin (số admin = 1), không phải nội dung chấm bằng test cần reviewer, và API admin của nó vốn không có hàng chờ.
+
+**Phương án đã bỏ**: bắt mọi tài liệu SD đi qua hàng chờ duyệt (chậm cho một admin tự soạn); chỉ cho Claude ghi `draft` rồi người publish tay (user không muốn).
+
+**Đánh đổi đã chấp nhận**: sai sót của Claude lên học viên ngay nếu người dùng bấm duyệt ở claude.ai mà không đọc; giảm nhẹ bằng `sd_edit_doc` được khai `destructive` + không idempotent (review ngoài bắt annotation sai ban đầu), `base_revision` cho `sd_replace_doc` để không ghi đè bản vừa sửa, và xoá chỉ là xoá mềm. Lớp "Needs approval" nằm ở client ngoài repo này, backend không kiểm chứng được nó có bật.
+
+**Nguồn**: backend/app/mcp_server.py:57-70, 147-148, 319-395; backend/app/sd/docs.py:53-57, 112-113; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, DEVIATIONS.md.
+
+### System Design: lưu markdown gốc (`source_md`) thay vì dựng lại markdown từ section/card
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp): mọi lần nhập tài liệu (API admin, MCP, CLI) lưu nguyên chuỗi markdown vào `sd_docs.source_md` (cột `TEXT NULL`, migration 0008). Sửa theo đoạn (`sd_edit_doc`) áp `{old_text, new_text}` lên chuỗi này rồi nhập lại bằng `replace`. Tài liệu nhập trước 0008 có `source_md = NULL` và phải backfill bằng cách nhập lại file `.md` gốc (CLI `python -m app.sd.import_file`, giữ nguyên status, `--dry-run` trước). Backfill production 2026-10-17: 10 doc, mỗi doc `cards_added=0 cards_removed=0`.
+
+**Vì sao**: `sd_sections.cards` là kết quả đã parse (id băm từ nội dung chuẩn hoá, khoảng trắng gộp), nên dựng ngược lại không cho ra đúng bản gốc; sửa trên bản dựng lại sẽ làm lệch tài liệu và có thể đổi id card, mất tiến độ học viên. Lưu gốc thì `old_text` khớp đúng chữ người viết. `revision` (16 ký tự đầu sha256 của `source_md`) cho Claude chống ghi đè.
+
+**Phương án đã bỏ**: dựng markdown từ section/card (không bảo toàn bản gốc, rủi ro đổi id card); bắt gửi lại toàn bộ markdown cho mọi lần sửa nhỏ (tốn ngữ cảnh, đến 1MB).
+
+**Đánh đổi đã chấp nhận**: doc cũ chưa backfill thì `sd_edit_doc` báo lỗi (dùng `sd_replace_doc`); `apply_edits` so khớp chuỗi thô, không chuẩn hoá NFC (Backlog M-4); mỗi doc lưu thêm tới 1MB trong DB.
+
+**Nguồn**: backend/app/sd/docs.py:53-57, 139-148, 171-219; backend/app/sd/import_file.py:1-58; backend/migrations/versions/0008_sd_source_archive.py:21-26; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md.
