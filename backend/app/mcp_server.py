@@ -144,6 +144,8 @@ def _write(tool: str, op: Callable[[dict], dict], dry_run: bool) -> dict:
 _READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 _WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
 _UPDATE = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False)
+# Sửa theo đoạn: có thể xoá/đổi section, task (mất tiến độ phần đó) và áp lại cùng edits thì lỗi.
+_EDIT = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False)
 
 
 @mcp.tool(annotations=_READ)
@@ -364,7 +366,7 @@ async def sd_replace_doc(doc_id: str, markdown: str, base_revision: str | None =
     )
 
 
-@mcp.tool(annotations=_WRITE)  # không idempotent: áp lại cùng edits sẽ lỗi (old_text đã đổi)
+@mcp.tool(annotations=_EDIT)
 async def sd_edit_doc(doc_id: str, edits: list[dict[str, str]], dry_run: bool = False) -> dict:
     """Sửa theo đoạn trên markdown gốc: edits = [{old_text, new_text}] (≤50), mỗi old_text phải xuất hiện ĐÚNG một lần (thêm ngữ cảnh nếu trùng), áp theo thứ tự rồi nhập lại. Cần doc có markdown gốc (has_markdown)."""
     return await run_in_threadpool(

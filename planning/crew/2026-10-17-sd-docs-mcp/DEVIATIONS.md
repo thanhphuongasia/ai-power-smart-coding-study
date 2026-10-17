@@ -12,3 +12,5 @@
 | Review T-03 Minor 1: tool sd_list_attempts không có include_archived | Thêm tham số vào tool (mcp_server.py, T-02) + test | Chấp nhận — rẻ, đóng lỗ "bài nộp còn nhưng MCP không xem được" | orchestrator |
 | Review T-02 Minor 1, 2, 4; T-04 F1–F3 | Đã sửa (annotation edit, assert đúng tập tool sd_*, comment nginx, README scp, utf-8-sig + newline="") | — | orchestrator |
 | Review T-02 Minor 3 (test 411 chunked), T-03 Minor 2–3, T-04 F4, T-01 r2 N-1/N-2 | Không sửa | Backlog | orchestrator |
+| External T-02 (lần 2) Low: lỗi quyền trả sub + lệnh CLI | Giữ | Bác: sub không bí mật, là thứ admin cần để cấp quyền (luồng onboarding thật ngày 2026-10-17 dùng đúng thông báo này); lệnh CLI đã công khai ở README | orchestrator |
+| External T-02 (lần 2) Medium: sd_edit_doc destructive_hint=False | Annotation riêng _EDIT (destructive, không idempotent) + test | Chấp nhận | orchestrator |

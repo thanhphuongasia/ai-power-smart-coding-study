@@ -105,6 +105,7 @@ def test_dry_run_and_parser_errors(granted, signer):
 def test_edit_tool_is_not_marked_idempotent(granted, signer):
     tools = {t["name"]: t for t in rpc(granted, "tools/list", token=signer.token()).json()["result"]["tools"]}
     assert tools["sd_edit_doc"]["annotations"]["idempotentHint"] is False
+    assert tools["sd_edit_doc"]["annotations"]["destructiveHint"] is True
     assert tools["sd_delete_doc"]["annotations"]["destructiveHint"] is True
 
 
