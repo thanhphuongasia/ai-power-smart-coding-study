@@ -4,11 +4,11 @@
 
 ## Là gì
 
-Trước run này, bấm Lưu ở màn Admin hay để Claude ghi qua MCP đều thay luôn nội dung học viên đang xem. Giờ có hai khái niệm tách hẳn: "live" là các bảng nội dung thật (học viên chỉ đọc cái này), còn "draft" là live cộng với mọi thay đổi đang chờ duyệt. Admin editor và MCP làm việc trên draft; học viên không bao giờ thấy draft. Mỗi thay đổi chờ duyệt là một dòng trong bảng `content_changes` ứng với đúng một mục (project, module, file hoặc bài), nên admin duyệt hay bỏ được từng mục riêng. Chỉ có hai đường ghi vào live: admin bấm duyệt, và CLI `load_content --force`.
+Trước run này, bấm Lưu ở màn Admin hay để Claude ghi qua MCP đều thay luôn nội dung học viên đang xem. Giờ có hai khái niệm tách hẳn: "live" là các bảng nội dung thật (học viên chỉ đọc cái này), còn "draft" là live cộng với mọi thay đổi đang chờ duyệt. Admin editor và MCP làm việc trên draft; học viên không bao giờ thấy draft. Mỗi thay đổi chờ duyệt là một dòng trong bảng `content_changes` ứng với đúng một mục (project, module, file hoặc bài), nên admin duyệt hay bỏ được từng mục riêng. Chỉ có hai đường ghi vào live: duyệt (admin bấm trong app, hoặc MCP `publish_changes`, cùng một hàm `approve`), và CLI `load_content --force`.
 
 ## Dùng khi nào
 
-Admin dùng màn "Chờ duyệt (N)" trong app (Home, nút Admin, rồi "Chờ duyệt": 2 chạm). Mọi thao tác sửa nội dung từ màn Admin (nút giờ là "Gửi duyệt") và mọi tool ghi của MCP tự đi vào hàng chờ, không cần gọi gì thêm. Đụng vào module này khi thêm loại mục mới (thêm vào `KINDS` và `items`/`apply_change`), đổi luật cha–con khi duyệt, hoặc thêm đường ghi nội dung mới (phải đi qua `review.submit`, không gọi thẳng `load_content`).
+Admin dùng màn "Chờ duyệt (N)" trong app (Home, nút Admin, rồi "Chờ duyệt": 2 chạm). Claude trên claude.ai cũng duyệt được khi người dùng bảo publish: `list_pending_changes`, rồi `publish_changes` hoặc `reject_changes` (xem `docs/modules/mcp.md`); các tool này gọi đúng `review.approve`/`review.reject` mà `POST /api/admin/changes/{id}/approve|reject` gọi, nên luật cha–con và khoá ghi y hệt, chỉ khác `decided_by` = `mcp:<sub> (<email>)`. Mọi thao tác sửa nội dung từ màn Admin (nút giờ là "Gửi duyệt") và mọi tool ghi của MCP tự đi vào hàng chờ, không cần gọi gì thêm. Đụng vào module này khi thêm loại mục mới (thêm vào `KINDS` và `items`/`apply_change`), đổi luật cha–con khi duyệt, hoặc thêm đường ghi nội dung mới (phải đi qua `review.submit`, không gọi thẳng `load_content`).
 
 ## Cách hoạt động
 
