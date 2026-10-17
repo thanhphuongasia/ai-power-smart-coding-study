@@ -1,2 +1,1 @@
- M planning/crew/_index.md
-?? planning/crew/2026-10-17-sd-courses/
+ M planning/crew/2026-10-17-sd-courses/baseline.txt

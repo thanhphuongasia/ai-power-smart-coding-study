@@ -48,6 +48,8 @@ def test_create_refuses_existing_id_even_archived(db_session):
         ({"skills": ["a"] * 21}, "skills"),
         ({"skills": ["x" * 41]}, "skill"),
         ({"skills": "python"}, "skills"),
+        ({"skills": ""}, "skills"),
+        ({"skills": 0}, "skills"),
         ({"domain": "x" * 101}, "domain"),
         ({"position": -1}, "position"),
         ({"position": True}, "position"),

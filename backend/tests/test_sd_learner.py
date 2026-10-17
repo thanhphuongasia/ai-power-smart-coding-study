@@ -83,7 +83,7 @@ def _keys(node) -> set[str]:
 
 def test_draft_docs_are_invisible_to_learners(db_session, client_for, sample_md):
     w = World(db_session, client_for, sample_md, status="draft")
-    assert w.client.get("/api/sd/docs", headers=w.hdr["ann"]).json() == {"items": []}
+    assert w.client.get("/api/sd/docs", headers=w.hdr["ann"]).json() == {"items": [], "courses": []}
     assert w.client.get(f"/api/sd/docs/{DOC}", headers=w.hdr["ann"]).status_code == 404
     assert w.put("requirements", []).status_code == 404
 

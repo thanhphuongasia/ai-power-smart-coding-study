@@ -125,7 +125,8 @@ def create_course(
     _check_id(course_id)
     if status not in CREATE_STATUSES:
         raise SdDocError([f"status khi tạo chỉ nhận {list(CREATE_STATUSES)}"])
-    fields = _fields({"title": title, "skills": skills or [], "domain": domain, "position": position})
+    # Chỉ None mới là "không có skill": "", 0, False… phải bị _fields từ chối, không lặng lẽ thành [].
+    fields = _fields({"title": title, "skills": [] if skills is None else skills, "domain": domain, "position": position})
     _lock(session, course_id)
     existing = session.get(Course, course_id, populate_existing=True)
     if existing is not None:
@@ -172,11 +173,11 @@ def set_course_status(session: Session, course_id: str, status: str, *, actor: s
 def assign_doc(session: Session, doc_id: str, course_id: str | None, *, actor: str, position: int | None = None) -> dict:
     """Gán doc vào course (hoặc gỡ: course_id=None). Không gán vào course đã xoá mềm."""
     _check_id(doc_id)
+    if position is not None:
+        position = _position(position)  # validate trước khi giữ khoá
     if course_id is not None:
         _check_id(course_id)
         _lock(session, course_id)  # khoá course trước doc: không gán vào course đang bị archive cùng lúc
-    if position is not None:
-        position = _position(position)
     _lock_doc(session, doc_id)  # cùng khoá với nhập/sửa doc
     if course_id is not None:
         course = session.get(Course, course_id, populate_existing=True)

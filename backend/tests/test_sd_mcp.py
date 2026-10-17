@@ -48,6 +48,7 @@ def test_tools_are_listed_with_right_annotations(granted, signer):
     assert {n for n in tools if n.startswith("sd_")} == {
         "sd_list_attempts", "sd_get_attempt", "sd_submit_feedback",
         "sd_list_docs", "sd_get_doc", "sd_create_doc", "sd_replace_doc", "sd_edit_doc", "sd_set_status", "sd_delete_doc",
+        "sd_list_courses", "sd_create_course", "sd_update_course", "sd_set_course_status", "sd_assign_doc",
     }
 
 
