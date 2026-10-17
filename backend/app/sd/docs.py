@@ -231,7 +231,17 @@ def list_docs(session: Session, *, include_archived: bool = False) -> list[dict]
     )
     tasks = select(SdTask.doc_id.label("doc_id"), func.count().label("tasks")).group_by(SdTask.doc_id).subquery()
     query = (
-        select(SdDoc.id, SdDoc.title, SdDoc.status, sec.c.sections, sec.c.cards, tasks.c.tasks, SdDoc.source_md.isnot(None))
+        select(
+            SdDoc.id,
+            SdDoc.title,
+            SdDoc.status,
+            sec.c.sections,
+            sec.c.cards,
+            tasks.c.tasks,
+            SdDoc.source_md.isnot(None),
+            SdDoc.course_id,
+            SdDoc.course_position,
+        )
         .outerjoin(sec, sec.c.doc_id == SdDoc.id)
         .outerjoin(tasks, tasks.c.doc_id == SdDoc.id)
         .order_by(SdDoc.created_at, SdDoc.id)
@@ -247,6 +257,8 @@ def list_docs(session: Session, *, include_archived: bool = False) -> list[dict]
             "cards": int(r[4] or 0),
             "tasks": r[5] or 0,
             "has_markdown": bool(r[6]),
+            "course_id": r[7],
+            "course_position": r[8],
         }
         for r in session.execute(query).all()
     ]
@@ -265,6 +277,8 @@ def get_doc(session: Session, doc_id: str) -> dict:
         "id": doc.id,
         "title": doc.title,
         "status": doc.status,
+        "course_id": doc.course_id,
+        "course_position": doc.course_position,
         "revision": revision(doc.source_md),
         "outline": [
             {"chapter": s.chapter, "section_id": s.id, "title": s.title, "cards": len(s.cards)} for s in sections

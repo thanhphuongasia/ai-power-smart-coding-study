@@ -16,6 +16,33 @@ T? _opt<T>(Map<String, dynamic> json, String key, String where) {
 int _int(Map<String, dynamic> json, String key, String where) =>
     jsonField<num>(json, key, where).toInt();
 
+/// Khoá học gom nhiều tài liệu (tab Design hiện theo nhóm).
+class SdCourse {
+  const SdCourse({
+    required this.id,
+    required this.title,
+    this.skills = const [],
+    this.domain,
+  });
+
+  factory SdCourse.fromJson(Map<String, dynamic> json) {
+    const w = 'SdCourse';
+    return SdCourse(
+      id: jsonField<String>(json, 'id', w),
+      title: jsonField<String>(json, 'title', w),
+      skills: json['skills'] == null
+          ? const []
+          : jsonStrings(json, 'skills', w),
+      domain: _opt<String>(json, 'domain', w),
+    );
+  }
+
+  final String id;
+  final String title;
+  final List<String> skills;
+  final String? domain;
+}
+
 /// Một dòng ở danh sách tài liệu.
 class SdDocSummary {
   const SdDocSummary({
@@ -28,6 +55,8 @@ class SdDocSummary {
     required this.phase2Unlocked,
     required this.tasks,
     required this.tasksDone,
+    this.courseId,
+    this.course,
   });
 
   factory SdDocSummary.fromJson(Map<String, dynamic> json) {
@@ -42,8 +71,24 @@ class SdDocSummary {
       phase2Unlocked: jsonField<bool>(json, 'phase2_unlocked', w),
       tasks: _int(json, 'tasks', w),
       tasksDone: _int(json, 'tasks_done', w),
+      courseId: _opt<String>(json, 'course_id', w),
     );
   }
+
+  /// Bản gắn course đã tra từ `courses` của server (null nếu không tra ra).
+  SdDocSummary withCourse(SdCourse? course) => SdDocSummary(
+    id: id,
+    title: title,
+    sections: sections,
+    sectionsDone: sectionsDone,
+    cards: cards,
+    cardsRead: cardsRead,
+    phase2Unlocked: phase2Unlocked,
+    tasks: tasks,
+    tasksDone: tasksDone,
+    courseId: courseId,
+    course: course,
+  );
 
   final String id;
   final String title;
@@ -54,6 +99,13 @@ class SdDocSummary {
   final bool phase2Unlocked;
   final int tasks;
   final int tasksDone;
+
+  /// `course_id` thô từ server (null = không thuộc course nào).
+  final String? courseId;
+
+  /// Course đã resolve; null khi không có course, course chưa publish hoặc
+  /// `course_id` lệch với `courses` → UI xếp vào nhóm "Khác".
+  final SdCourse? course;
 }
 
 /// Một thẻ nội dung (`kind` do server định nghĩa, vd text/code).

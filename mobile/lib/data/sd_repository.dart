@@ -77,7 +77,26 @@ class SdRepository {
   Future<List<SdDocSummary>> listDocs() async {
     const what = 'GET /api/sd/docs';
     final root = await _send(() => _http.get(_uri('/api/sd/docs')), 200, what);
-    return [for (final e in _items(root, what)) SdDocSummary.fromJson(e)];
+    // Server cũ không gửi `courses`/`course_id` → không course, list phẳng.
+    final rawCourses = root['courses'];
+    if (rawCourses != null && rawCourses is! List) {
+      throw FormatException('$what: "courses" không phải list');
+    }
+    final byId = <String, SdCourse>{};
+    for (final c in (rawCourses as List?) ?? const []) {
+      if (c is! Map<String, dynamic>) {
+        throw FormatException('$what: courses chứa phần tử không phải object');
+      }
+      final course = SdCourse.fromJson(c);
+      byId[course.id] = course;
+    }
+    return [
+      for (final e in _items(root, what))
+        () {
+          final d = SdDocSummary.fromJson(e);
+          return d.courseId == null ? d : d.withCourse(byId[d.courseId]);
+        }(),
+    ];
   }
 
   Future<SdDoc> getDoc(String id) async {

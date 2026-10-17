@@ -104,6 +104,75 @@ Map<String, dynamic> _attemptJson({int n = 1}) => {
 
 void main() {
   sdRetryTests();
+  Map<String, dynamic> docJson(String id, [Object? courseId = 'none']) => {
+    'id': id,
+    'title': 'T $id',
+    'sections': 1,
+    'sections_done': 0,
+    'cards': 2,
+    'cards_read': 0,
+    'phase2_unlocked': false,
+    'tasks': 1,
+    'tasks_done': 0,
+    if (courseId != 'none') 'course_id': courseId,
+  };
+
+  test('listDocs: có courses + course_id → gắn course, giữ thứ tự', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 'c1'), docJson('b', 'c1'), docJson('z', null)],
+        'courses': [
+          {
+            'id': 'c1',
+            'title': 'Khoá 1',
+            'skills': ['python', 'system-design'],
+            'domain': null,
+          },
+        ],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs.map((d) => d.id), ['a', 'b', 'z']);
+    expect(docs[0].courseId, 'c1');
+    expect(docs[0].course?.title, 'Khoá 1');
+    expect(docs[0].course?.skills, ['python', 'system-design']);
+    expect(docs[0].course?.domain, isNull);
+    expect(docs[2].courseId, isNull);
+    expect(docs[2].course, isNull);
+  });
+
+  test('listDocs: server cũ không có courses/course_id vẫn ra list', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a')],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs, hasLength(1));
+    expect(docs.single.courseId, isNull);
+    expect(docs.single.course, isNull);
+  });
+
+  test(
+    'listDocs: course_id lạ (không có trong courses) → course null',
+    () async {
+      final (repo, _) = _repo(
+        (_) => _json({
+          'items': [docJson('a', 'ghost')],
+          'courses': <Object>[],
+        }),
+      );
+      final docs = await repo.listDocs();
+      expect(docs.single.courseId, 'ghost');
+      expect(docs.single.course, isNull);
+    },
+  );
+
+  test('listDocs: courses sai kiểu → FormatException', () async {
+    final (repo, _) = _repo((_) => _json({'items': [], 'courses': 'x'}));
+    await expectLater(repo.listDocs(), throwsFormatException);
+  });
+
   test('listDocs parse đúng và gọi GET /api/sd/docs', () async {
     final (repo, seen) = _repo(
       (_) => _json({
