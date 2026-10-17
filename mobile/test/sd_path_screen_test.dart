@@ -244,6 +244,20 @@ void main() {
       expect(find.text('Cần đăng nhập'), findsOneWidget);
     });
 
+    testWidgets('nút refresh ở header gọi lại API (issue #48)', (tester) async {
+      final s = _Server();
+      await _pump(tester, s);
+      expect(s.docsCalls, 1);
+
+      await tester.tap(find.byKey(const Key('refresh-button')));
+      await tester.pumpAndSettle();
+      expect(s.docsCalls, greaterThan(1));
+      expect(
+        find.text('Thiết kế URL shortener'),
+        findsOneWidget,
+      ); // vẫn thấy danh sách
+    });
+
     testWidgets('chạm thẻ push /design/<id>; quay lại thì tải lại', (
       tester,
     ) async {

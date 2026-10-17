@@ -179,7 +179,8 @@ void main() {
     expect(find.text('Thử lại'), findsNothing);
     final button = tester.widget<TextButton>(find.byType(TextButton));
     expect(button.onPressed, isNull);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // Banner + nút refresh của Home (issue #48) cùng hiện spinner khi contentProvider đang tải lại.
+    expect(find.byType(CircularProgressIndicator), findsNWidgets(2));
     expect(find.text(fakeThemeName), findsOneWidget); // vẫn thấy app
 
     pending.complete(loaded(ContentSource.cache));

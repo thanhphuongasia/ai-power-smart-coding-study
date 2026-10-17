@@ -372,6 +372,40 @@ class GhostButton extends StatelessWidget {
   }
 }
 
+/// Nút nạp lại dữ liệu: icon refresh, đổi thành spinner nhỏ khi đang tải.
+/// Dùng ở Home (nội dung bài tập) và tab Design (tài liệu system design) —
+/// cùng một chỗ vào cho "tải lại mà không cần thoát app" (issue #48).
+class RefreshButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  const RefreshButton({
+    super.key,
+    required this.loading,
+    required this.onPressed,
+    this.tooltip = 'Tải lại nội dung mới nhất',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: loading
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: context.palette.inkMuted,
+              ),
+            )
+          : const Icon(Icons.refresh),
+      tooltip: tooltip,
+      onPressed: loading ? null : onPressed,
+    );
+  }
+}
+
 class HintButton extends StatelessWidget {
   final int used;
   final int max;
