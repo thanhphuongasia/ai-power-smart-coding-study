@@ -26,83 +26,94 @@ class HomeScreen extends ConsumerWidget {
     final progress = ref.watch(progressProvider);
     final inProgress = ref.watch(inProgressExerciseProvider);
     final dueCount = ref.watch(dueCardsProvider).length;
+    final refreshing = ref.watch(contentProvider).isLoading;
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpace.s4),
-          children: [
-            Row(
-              children: [
-                _StreakChip(
-                  activity: ref.watch(activityProvider),
-                  today: dayOf(ref.read(clockProvider)()),
-                ),
-                const Spacer(),
-                if (ref.watch(currentUserProvider)?.isAdmin ?? false)
-                  IconButton(
-                    key: const Key('admin-button'),
-                    icon: const Icon(Icons.fact_check_outlined),
-                    tooltip: 'Duyệt nội dung',
-                    onPressed: () => context.push('/admin'),
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(contentProvider.notifier).refresh(),
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpace.s4),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              Row(
+                children: [
+                  _StreakChip(
+                    activity: ref.watch(activityProvider),
+                    today: dayOf(ref.read(clockProvider)()),
                   ),
-                PopupMenuButton<String>(
-                  key: const Key('account-button'),
-                  icon: const Icon(Icons.account_circle_outlined),
-                  tooltip: 'Tài khoản',
-                  onSelected: (value) {
-                    if (value == 'password') {
-                      context.push('/account/password');
-                    } else {
-                      ref.read(authControllerProvider.notifier).logout();
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem<String>(
-                      enabled: false,
-                      child: Text(
-                        ref.read(currentUserProvider)?.email ?? '',
-                        key: const Key('account-email'),
-                      ),
+                  const Spacer(),
+                  RefreshButton(
+                    key: const Key('refresh-button'),
+                    loading: refreshing,
+                    onPressed: () =>
+                        ref.read(contentProvider.notifier).refresh(),
+                  ),
+                  if (ref.watch(currentUserProvider)?.isAdmin ?? false)
+                    IconButton(
+                      key: const Key('admin-button'),
+                      icon: const Icon(Icons.fact_check_outlined),
+                      tooltip: 'Duyệt nội dung',
+                      onPressed: () => context.push('/admin'),
                     ),
-                    if (ref.read(authControllerProvider).value?.open ?? false)
-                      const PopupMenuItem<String>(
+                  PopupMenuButton<String>(
+                    key: const Key('account-button'),
+                    icon: const Icon(Icons.account_circle_outlined),
+                    tooltip: 'Tài khoản',
+                    onSelected: (value) {
+                      if (value == 'password') {
+                        context.push('/account/password');
+                      } else {
+                        ref.read(authControllerProvider.notifier).logout();
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem<String>(
                         enabled: false,
-                        key: Key('account-open-mode'),
-                        child: Text('Chế độ mở'),
-                      )
-                    else ...[
-                      const PopupMenuDivider(),
-                      const PopupMenuItem<String>(
-                        value: 'password',
-                        key: Key('account-change-password'),
-                        child: Text('Đổi mật khẩu'),
+                        child: Text(
+                          ref.read(currentUserProvider)?.email ?? '',
+                          key: const Key('account-email'),
+                        ),
                       ),
-                      const PopupMenuItem<String>(
-                        value: 'logout',
-                        key: Key('account-logout'),
-                        child: Text('Đăng xuất'),
-                      ),
+                      if (ref.read(authControllerProvider).value?.open ?? false)
+                        const PopupMenuItem<String>(
+                          enabled: false,
+                          key: Key('account-open-mode'),
+                          child: Text('Chế độ mở'),
+                        )
+                      else ...[
+                        const PopupMenuDivider(),
+                        const PopupMenuItem<String>(
+                          value: 'password',
+                          key: Key('account-change-password'),
+                          child: Text('Đổi mật khẩu'),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'logout',
+                          key: Key('account-logout'),
+                          child: Text('Đăng xuất'),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                const ThemeModeButton(),
+                  ),
+                  const ThemeModeButton(),
+                ],
+              ),
+              const SizedBox(height: AppSpace.s2),
+              const Text('Luyện tập hôm nay', style: AppText.display),
+              const SizedBox(height: AppSpace.s6),
+              if (inProgress != null) ...[
+                _ContinueCard(exercise: inProgress, progress: progress),
+                const SizedBox(height: AppSpace.s6),
               ],
-            ),
-            const SizedBox(height: AppSpace.s2),
-            const Text('Luyện tập hôm nay', style: AppText.display),
-            const SizedBox(height: AppSpace.s6),
-            if (inProgress != null) ...[
-              _ContinueCard(exercise: inProgress, progress: progress),
-              const SizedBox(height: AppSpace.s6),
+              if (dueCount > 0) ...[
+                _DueCard(count: dueCount),
+                const SizedBox(height: AppSpace.s6),
+              ],
+              const SectionLabel('Chủ đề'),
+              _ThemeGrid(themes: content.themes, progress: progress),
             ],
-            if (dueCount > 0) ...[
-              _DueCard(count: dueCount),
-              const SizedBox(height: AppSpace.s6),
-            ],
-            const SectionLabel('Chủ đề'),
-            _ThemeGrid(themes: content.themes, progress: progress),
-          ],
+          ),
         ),
       ),
     );

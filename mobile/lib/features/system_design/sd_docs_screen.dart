@@ -73,10 +73,20 @@ class SdDocsScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const ScreenHeader(
+            ScreenHeader(
               title: 'System Design',
               subtitle: 'Đọc tài liệu rồi thiết kế thật',
-              trailing: ThemeModeButton(),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RefreshButton(
+                    key: const Key('refresh-button'),
+                    loading: docs.isLoading,
+                    onPressed: () => _refresh(ref),
+                  ),
+                  const ThemeModeButton(),
+                ],
+              ),
             ),
             Expanded(
               child: docs.when(

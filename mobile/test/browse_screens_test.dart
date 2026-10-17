@@ -2,6 +2,8 @@
 // GoRouter tối thiểu riêng cho test (route exercise chỉ là Placeholder có
 // Key nhận diện) — T-06 (router thật của app) chạy song song, không phụ
 // thuộc vào nó ở đây.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,10 +14,28 @@ import 'package:smart_coding_study/features/browse/theme_detail_screen.dart';
 import 'package:smart_coding_study/features/browse/topic_detail_screen.dart';
 import 'package:smart_coding_study/features/exercise/session_providers.dart';
 import 'package:smart_coding_study/features/practice/practice_screen.dart';
+import 'package:smart_coding_study/shared/widgets.dart';
 import 'package:smart_coding_study/data/content_providers.dart';
+import 'package:smart_coding_study/data/content_repository.dart';
 import 'package:smart_coding_study/domain/content.dart';
 import 'support/content_fixture.dart';
 import 'support/progress_fixture.dart';
+
+/// Repo đếm số lần `load()` được gọi — dùng để chứng minh nút refresh thật sự
+/// gọi lại mạng (issue #48), không chỉ đổi UI.
+class _CountingRepo implements ContentRepository {
+  _CountingRepo(this.handler);
+  final Future<ContentLoad> Function() handler;
+  int calls = 0;
+  @override
+  Future<ContentLoad> load() {
+    calls++;
+    return handler();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
 
 GoRouter _buildTestRouter([String initialLocation = '/']) {
   return GoRouter(
@@ -329,6 +349,48 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'Home: nút refresh gọi lại content, tắt lúc đang tải (issue #48)',
+    (tester) async {
+      final pending = Completer<ContentLoad>();
+      final repo = _CountingRepo(() => pending.future);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...contentOverrides,
+            contentRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: Builder(
+            builder: (context) => MaterialApp.router(
+              theme: buildAppTheme(),
+              routerConfig: _buildTestRouter(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        repo.calls,
+        0,
+      ); // build() ban đầu dùng fixture, không gọi repo thật
+
+      await tester.tap(find.byKey(const Key('refresh-button')));
+      await tester.pump();
+      expect(repo.calls, 1);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      final btn = tester.widget<RefreshButton>(
+        find.byKey(const Key('refresh-button')),
+      );
+      expect(btn.loading, isTrue); // đổi sang spinner, vô hiệu trong lúc tải
+
+      pending.complete(
+        ContentLoad(content: testContent, source: ContentSource.network),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
 
   group('module lồng nhau', () {
     Map<String, dynamic> ex(String id, String? cls) => {
