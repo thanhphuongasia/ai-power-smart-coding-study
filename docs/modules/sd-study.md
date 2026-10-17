@@ -215,7 +215,7 @@ Chưa có API admin hay màn quản lý course trong app: course tạo/sửa/gá
 | Course chỉ nhóm, không quyết quyền xem; course có bảng riêng, doc giữ `course_id` khi course bị xoá mềm | course quyết quyền xem doc; xoá cứng course kéo doc theo | một nguồn sự thật cho quyền xem (`sd_docs.status`); khôi phục course là doc về đúng nhóm (xem `docs/DECISIONS.md`) |
 | Mọi task Phase 2 mở cùng lúc | khoá tuần tự task sau chỉ mở khi task trước có lần thử | người học muốn làm task nào trước cũng được; Phase 2 vẫn chỉ mở khi Phase 1 xong; đổi một dòng ở server, client chỉ theo (xem `docs/DECISIONS.md`) |
 
-Không làm: màn admin trong app (kể cả quản lý course); course cho `themes` của chế độ code; SRS cho card; LLM chấm trực tiếp; tự duyệt trong MCP (tài liệu SD không qua hàng chờ duyệt, nhưng cũng không có tool xoá bài nộp; xoá doc là xoá mềm); xoá cứng (purge) doc archived; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
+Không làm: màn admin quản lý course và soạn nội dung tài liệu (màn "Tài liệu SD" chỉ publish/ẩn/khôi phục, xem `docs/modules/content-admin.md`); course cho `themes` của chế độ code; SRS cho card; LLM chấm trực tiếp; tự duyệt trong MCP (tài liệu SD không qua hàng chờ duyệt, nhưng cũng không có tool xoá bài nộp; xoá doc là xoá mềm); xoá cứng (purge) doc archived; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
 
 ### Các bất biến của run và cách đã được kiểm
 

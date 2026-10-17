@@ -895,3 +895,27 @@ planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
 **Đánh đổi đã chấp nhận**: `courses` chỉ chứa course published có ≥1 doc, nên app không liệt kê được course rỗng; một assert cũ `{"items": []}` của `test_sd_learner.py` phải đổi thành `{"items": [], "courses": []}`.
 
 **Nguồn**: backend/app/sd/learner.py:120-162; mobile/lib/data/sd_repository.dart:77-97; mobile/lib/domain/sd_models.dart:20-56; planning/crew/2026-10-17-sd-courses/DEVIATIONS.md.
+
+### MCP: tool publish RIÊNG cho hàng chờ bài code, thay vì để Claude tự publish
+
+**Quyết định** (run 2026-10-17-mcp-publish-tool, issue #59, PR #60 vào nhánh `dev`, chưa merge, chưa deploy): bài code Claude gửi qua MCP vẫn chỉ vào hàng chờ `content_changes`. Muốn học viên thấy thì Claude phải gọi thêm một tool publish riêng, `publish_changes(change_ids)` (hoặc `reject_changes`), sau khi `list_pending_changes`/`get_pending_change` cho người dùng xem. Hai tool này không có đường duyệt riêng: gọi thẳng `review.approve`/`review.reject` như API admin, mỗi id trong một savepoint để id lỗi không kéo id khác, `decided_by = mcp:<sub> (<email>)`, trần 50 id mỗi lần. INSTRUCTIONS dặn Claude chỉ gọi khi người dùng đồng ý. Tool mới nên sau khi lên production phải Disconnect rồi Connect lại connector trên claude.ai.
+
+**Vì sao**: user muốn Claude publish được qua MCP nhưng "bằng tool publish riêng chứ không tự động": gửi bài trước, publish khi người dùng bảo. Tên tool rõ nghĩa để nút "Needs approval" của claude.ai hiện đúng hành động nguy hiểm (học viên thấy NGAY) tách khỏi tool ghi vào hàng chờ (an toàn). Dùng lại `review.approve` nên bài sai luật vẫn bị `validation_errors` chặn như khi admin bấm duyệt.
+
+**Phương án đã bỏ**: để tool ghi tự publish luôn (mất bước kiểm của người dùng, và Claude gửi sai là lộ ngay); giữ nguyên "chỉ admin duyệt trong app" (user muốn duyệt từ chat).
+
+**Đánh đổi đã chấp nhận**: backend không kiểm chứng được người dùng đã đồng ý, chỉ có bước "Needs approval" ở client ngoài repo. `sd_set_status` vẫn đổi được sang `published`, tức cùng lớp chặn, không có đường nào khác để khoá. Lô 50 id giữ khoá ghi lâu, id nào hết `lock_timeout` thì báo lỗi riêng.
+
+**Nguồn**: backend/app/mcp_server.py:466-579; backend/tests/test_mcp_publish.py; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, STATUS.md, reviews/SEAM.md.
+
+### System Design: tool publish gọn (`sd_publish_doc`/`sd_unpublish_doc`), chưa có bản nháp riêng
+
+**Quyết định** (run 2026-10-17-mcp-publish-tool): thêm hai tool bọc `sd_docs.set_status` với tên rõ nghĩa: `sd_publish_doc` (`published`), `sd_unpublish_doc` (`draft`, ẩn khỏi học viên, không xoá). Trong app thêm màn admin "Tài liệu SD" (publish/ẩn/khôi phục) gọi cùng `PUT /api/admin/sd/docs/{id}/status`, nên app và Claude đi cùng một đường và cùng tập trạng thái. `sd_create_doc` vẫn mặc định `draft`. Sửa tài liệu đang `published` vẫn lên học viên ngay: tài liệu SD chưa có bản nháp riêng.
+
+**Vì sao**: user chọn "cách gọn" cho SD thay vì dựng hàng chờ riêng như bài code (theo quyết định tool tài liệu SD ghi thẳng, run 2026-10-17-sd-docs-mcp). Giữa run user còn yêu cầu có nút publish trên UI; khảo sát cho thấy nút Duyệt/Bỏ bài code đã có sẵn ở "Chờ duyệt (N)", chỉ thiếu phần tài liệu SD, nên PLAN-v2 thêm T-02.
+
+**Phương án đã bỏ**: hàng chờ/bản nháp riêng cho tài liệu SD (để Backlog); chỉ dùng `sd_set_status` (tên chung chung, khó nhận ra ở bước duyệt của claude.ai).
+
+**Đánh đổi đã chấp nhận**: một lần sửa sai trên doc đang published lên học viên ngay; cách tự làm nháp là `sd_unpublish_doc`, sửa, rồi `sd_publish_doc`.
+
+**Nguồn**: backend/app/mcp_server.py:566-579; backend/app/sd/admin.py:48-92; mobile/lib/features/admin/admin_sd_docs_screen.dart:31-215; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, PLAN-v2.md, DEVIATIONS.md.

@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../features/account/change_password_screen.dart';
 import '../features/admin/admin_module_screen.dart';
 import '../features/admin/admin_screen.dart';
+import '../features/admin/admin_sd_docs_screen.dart';
 import '../features/admin/admin_theme_screen.dart';
 import '../features/admin/exercise_editor.dart';
 import '../features/admin/review_detail_screen.dart';
@@ -136,6 +137,11 @@ final GoRouter appRouter = GoRouter(
       parentNavigatorKey: _rootKey,
       path: '/admin/review',
       builder: (context, state) => const admin_review.AdminReviewScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/admin/sd',
+      builder: (context, state) => const AdminSdDocsScreen(),
     ),
     GoRoute(
       parentNavigatorKey: _rootKey,

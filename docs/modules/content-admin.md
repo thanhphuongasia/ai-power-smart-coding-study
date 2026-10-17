@@ -8,7 +8,7 @@ Trước run này, `content.json` là nguồn thật và mỗi lần deploy thay
 
 ## Dùng khi nào
 
-Admin dùng màn Admin trong app (nút chỉ hiện với role admin, nhưng server mới là nơi chặn thật). Developer dùng CLI khi cần sửa nội dung bằng file: `export_content` để lấy bản đang chạy, sửa, rồi `load_content --force`. Deploy gọi `load_content --if-empty` mỗi lần. Đụng vào module này khi thêm luật nội dung mới (sửa `content_rules.py`, cả hai đường ghi hưởng ngay) hoặc thêm trường cho bài.
+Admin dùng màn Admin trong app (có thêm màn "Tài liệu SD" để publish/ẩn/khôi phục tài liệu System Design; nút chỉ hiện với role admin, nhưng server mới là nơi chặn thật). Developer dùng CLI khi cần sửa nội dung bằng file: `export_content` để lấy bản đang chạy, sửa, rồi `load_content --force`. Deploy gọi `load_content --if-empty` mỗi lần. Đụng vào module này khi thêm luật nội dung mới (sửa `content_rules.py`, cả hai đường ghi hưởng ngay) hoặc thêm trường cho bài.
 
 ## Cách hoạt động
 
@@ -121,6 +121,16 @@ class HighlightingController extends TextEditingController {
 
 Mỗi nhánh loại trừ nhau nên `merge-preview` được dựng đúng một lần ở mọi bề rộng; thanh Huỷ/Áp dụng nằm ngoài `LayoutBuilder` nên chỉ có một bộ, cùng điều kiện vô hiệu (`casesError == null && !hasLabelError`, exercise_editor.dart:408,929). Các mục dùng `CollapsibleSection`, ô A/B/C dùng `CollapsibleCard` (tiêu đề + tóm tắt một dòng khi đóng + chấm trạng thái, mobile/lib/features/admin/collapsible_section.dart:8-135). Dữ liệu nằm trong `_Form`/`_BlockForm` (controller), không trong cây widget, nên đóng mục hay đổi bố cục không mất dữ liệu và `toJson`/preview/cảnh báo vẫn tính trên mục đang đóng (exercise_editor.dart:119-168). Màn không đổi `AdminController`, hành vi Áp dụng/Huỷ, `toJson`, `_previewMerge`.
 
+**Màn "Tài liệu SD"** (`AdminSdDocsScreen`, run 2026-10-17-mcp-publish-tool, T-02, PR #60 vào nhánh `dev`, chưa merge) là chỗ admin cho học viên thấy hoặc giấu tài liệu System Design bằng nút bấm, thay vì phải nhờ Claude gọi tool. Nút "Tài liệu SD" nằm ngay dưới "Chờ duyệt (N)" trên màn Admin (1 chạm), mở danh sách mọi tài liệu kể cả đã xoá mềm. Màn chỉ đổi trạng thái, không soạn nội dung; soạn tài liệu vẫn qua Claude/CLI. Mỗi dòng có đúng một nút theo trạng thái hiện tại:
+
+| Trạng thái | Nút (key) | Gửi lên | file:dòng |
+| --- | --- | --- | --- |
+| `published` | Ẩn (`sd-unpublish-<id>`) | `draft` | mobile/lib/features/admin/admin_sd_docs_screen.dart:182-184 |
+| `archived` | Khôi phục (`sd-restore-<id>`) | `draft` | mobile/lib/features/admin/admin_sd_docs_screen.dart:184 |
+| `draft` | Publish (`sd-publish-<id>`) | `published` | mobile/lib/features/admin/admin_sd_docs_screen.dart:185 |
+
+Cả ba đi qua `GET /api/admin/sd/docs?include_archived=true` và `PUT /api/admin/sd/docs/{id}/status` (mobile/lib/data/admin_repository.dart:260-263, 284-293), cùng endpoint, cùng tập trạng thái `draft|published|archived` mà tool MCP `sd_set_status`/`sd_publish_doc`/`sd_unpublish_doc` dùng (backend/app/sd/admin.py:48-50, 87-92), nên app và Claude luôn thấy cùng trạng thái. Route `/admin/sd` nằm trong nhóm admin; nút ẩn với người không phải admin, còn server vẫn trả 403 (`require_admin`). Bấm xong màn tự tải lại danh sách, kể cả khi lỗi (404/409 thường do danh sách cũ), và `_busy` chặn bấm đôi (mobile/lib/features/admin/admin_sd_docs_screen.dart:71-91). Duyệt bài code vẫn ở màn "Chờ duyệt (N)" (xem `docs/modules/content-review.md`); màn này chỉ lo tài liệu SD, vì chúng không có hàng chờ.
+
 ## Ranh giới & đánh đổi
 
 | Chọn | Thay vì | Vì sao |
@@ -148,10 +158,11 @@ Không làm: lịch sử phiên bản (khôi phục dùng `export_content` và g
 - Màn Soạn bài tập: đóng RIÊNG một thẻ ô (mục vẫn mở) thì lỗi nhãn trống/trùng không hiện chữ, chỉ còn chấm đỏ ở mục và nút Áp dụng xám (đóng cả MỤC thì summary hiện lỗi). Mục lục chỉ cuộn tới header, không tự mở mục đóng; chưa có nút "Thu gọn/Mở tất cả" (state nằm trong widget); chưa test biên 700/1100 và đổi cỡ giữa chừng; Huỷ/Áp dụng luôn ở thanh dưới kể cả layout rộng. Chưa kiểm bằng mắt trên web ở 3 bề rộng (STATUS.md Backlog, planning/crew/2026-10-12-exercise-editor-redesign/).
 - `CodeCell`: tô màu mất khi IME đang composing; `lineEnd` O(n²) với dòng cực dài; `_charWidth = 8.6` hardcode theo JetBrains Mono 14px (code_cell.dart:229); không nhận `"""` nhiều dòng; toolbar tràn khi cell rộng dưới 252px; ô `cases` không viền đỏ khi lỗi.
 - Admin đổi nhãn ô thì lịch ôn khoá theo `block.id` cũ thành mồ côi (SEAM #3).
+- Màn Tài liệu SD (planning/crew/2026-10-17-mcp-publish-tool/STATUS.md Backlog, reviews/T-02.md): chưa test bấm đôi, query `include_archived`, mã hoá id trong URL, lỗi 401/5xx; chỉ ẩn nút theo role phía client (server mới là nơi chặn); sửa tài liệu đang published lên học viên ngay vì chưa có bản nháp riêng.
 - Backend: giữ kết nối DB khi đọc body admin; chưa có test tranh khoá bằng hai kết nối thật; phép kiểm chéo CPU của sơ đồ được đo <1s ở payload xấu nhất bằng test hiệu năng, nhưng run đóng sau 3 vòng review (vòng 3 vẫn CẦN SỬA, orchestrator sửa rồi đóng, không có vòng 4; user duyệt).
 - Admin duyệt xong, học viên đang mở bài giữ nội dung cũ tới lần tải kế; bài bị xoá thì `/run` trả 404.
 - Chưa xác minh: hành vi nginx thật với `location /api/admin/` ngoài lần smoke test 401 sau deploy; CORS khi `flutter run` khác origin backend local.
 
 ## Nguồn
 
-backend/app/admin_api.py:1-174; backend/app/review.py:399-436,487-514; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-63; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:129-151; mobile/lib/features/admin/code_cell.dart:12-60,133-226,229; mobile/lib/features/admin/collapsible_section.dart:8-135; mobile/lib/features/admin/exercise_editor.dart:119-168,408,690-693,929,962-1004; planning/crew/2026-10-12-exercise-editor-redesign/ (PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md INV-01..06); planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.
+backend/app/admin_api.py:1-174; backend/app/review.py:399-436,487-514; backend/app/load_content.py:1-420; backend/app/content_rules.py:1-320; backend/app/export_content.py:1-73; backend/app/main.py:26-63; backend/README.md:34-62; mobile/lib/features/admin/ (admin_controller.dart:178-218,337-395,519, admin_screen.dart, admin_theme_screen.dart, admin_module_screen.dart:255-352, admin_widgets.dart:14-35,117-130,561-660, exercise_editor.dart); mobile/lib/app/router.dart:129-151; mobile/lib/features/admin/code_cell.dart:12-60,133-226,229; mobile/lib/features/admin/collapsible_section.dart:8-135; mobile/lib/features/admin/exercise_editor.dart:119-168,408,690-693,929,962-1004; planning/crew/2026-10-12-exercise-editor-redesign/ (PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md INV-01..06); planning/crew/2026-10-11-admin-ux-levels/PLAN.md (mục 1-8, INV-01..04), reviews/SEAM.md, T-02.md; mobile/lib/data/admin_repository.dart:260-293; mobile/lib/features/admin/admin_sd_docs_screen.dart; mobile/lib/features/admin/admin_screen.dart:34-38; backend/app/sd/admin.py:48-92; planning/crew/2026-10-17-mcp-publish-tool/PLAN-v2.md, reviews/T-02.md; planning/crew/2026-10-11-users-progress-admin/PLAN.md (mục 5, 6; INV-06), reviews/SEAM.md, DEVIATIONS.md, STATUS.md.

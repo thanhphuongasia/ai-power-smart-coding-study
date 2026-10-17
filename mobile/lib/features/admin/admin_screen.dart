@@ -31,6 +31,11 @@ class AdminScreen extends ConsumerWidget {
               label: 'Chờ duyệt (${s.pendingCount})',
               onPressed: () => context.push('/admin/review'),
             ),
+            GhostButton(
+              key: const Key('admin-sd-docs-button'),
+              label: 'Tài liệu SD',
+              onPressed: () => context.push('/admin/sd'),
+            ),
             for (final t in s.themes)
               _themeCard(context, ref, t, withErrors, s),
             AdminAddButton(

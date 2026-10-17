@@ -408,7 +408,7 @@ Mật khẩu và token đi qua HTTPS (deploy/nginx/smart-coding-study.conf:22-30
 
 Admin sửa nội dung ngay trong app: màn Admin đi từng tầng theme → module → file/bài (mỗi tầng một màn, có breadcrumb) và form sửa từng bài. Bấm "Kiểm tra" chạy bộ luật
 nội dung ở server mà không ghi, bấm "Gửi duyệt" gửi cả bộ nội dung kèm số phiên bản đang giữ; server diff ra từng mục và đưa vào hàng chờ, học viên vẫn chỉ thấy bản đã duyệt (live).
-Nếu người khác đã gửi trước thì server trả 409 để không ai âm thầm xoá việc của nhau. Claude qua MCP cũng chỉ vào hàng chờ. Admin duyệt hoặc bỏ từng mục ở màn "Chờ duyệt"; CLI và duyệt cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
+Nếu người khác đã gửi trước thì server trả 409 để không ai âm thầm xoá việc của nhau. Claude qua MCP cũng chỉ vào hàng chờ. Admin duyệt hoặc bỏ từng mục ở màn "Chờ duyệt" (hoặc Claude gọi `publish_changes` qua MCP khi người dùng bảo, cùng hàm `review.approve`); CLI và duyệt cùng đi qua một hàm ghi `load_content`, nên bộ luật và khoá ghi không thể lệch nhau. Chi tiết xem
 `docs/modules/content-admin.md` và `docs/modules/content-review.md`.
 
 ### Cách hoạt động
