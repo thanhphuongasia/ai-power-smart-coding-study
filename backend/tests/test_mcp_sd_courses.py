@@ -3,6 +3,8 @@ xoá mềm course giữ nhóm (INV-05)."""
 
 from __future__ import annotations
 
+import pytest
+
 from app.mcp_access import revoke
 from tests.test_auth import client_for, fresh_throttle  # noqa: F401
 from tests.test_mcp import _data, _text, call, env, granted, mcp, signer  # noqa: F401
@@ -16,8 +18,18 @@ def _doc(client, signer, title):
     return _data(call(client, signer, "sd_create_doc", markdown=MINI.replace("# Mini", f"# {title}"), status="published"))["id"]
 
 
-def test_course_tools_need_grant(mcp, signer):
-    result = call(mcp, signer, "sd_create_course", course_id=C, title="Python")
+@pytest.mark.parametrize(
+    "name, args",
+    [
+        ("sd_list_courses", {}),
+        ("sd_create_course", {"course_id": C, "title": "Python"}),
+        ("sd_update_course", {"course_id": C, "changes": {"title": "x"}}),
+        ("sd_set_course_status", {"course_id": C, "status": "published"}),
+        ("sd_assign_doc", {"doc_id": "mini", "course_id": C}),
+    ],
+)
+def test_course_tools_need_grant(mcp, signer, name, args):
+    result = call(mcp, signer, name, **args)
     assert result["isError"] and SUB in _text(result)
 
 

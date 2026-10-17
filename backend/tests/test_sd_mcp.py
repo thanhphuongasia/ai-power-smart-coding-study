@@ -44,7 +44,7 @@ def test_tools_are_listed_with_right_annotations(granted, signer):
     assert tools["sd_get_attempt"]["annotations"]["readOnlyHint"] is True
     assert tools["sd_submit_feedback"]["annotations"]["readOnlyHint"] is False
     assert tools["sd_submit_feedback"]["annotations"]["idempotentHint"] is True
-    # Đúng tập tool sd_*: 3 tool chấm bài (không có tool xoá bài nộp/nhận xét) + 7 tool tài liệu (xoá = xoá mềm).
+    # Đúng tập tool sd_*: 3 chấm bài (không có tool xoá bài nộp/nhận xét) + 7 tài liệu + 5 course (xoá = xoá mềm).
     assert {n for n in tools if n.startswith("sd_")} == {
         "sd_list_attempts", "sd_get_attempt", "sd_submit_feedback",
         "sd_list_docs", "sd_get_doc", "sd_create_doc", "sd_replace_doc", "sd_edit_doc", "sd_set_status", "sd_delete_doc",
