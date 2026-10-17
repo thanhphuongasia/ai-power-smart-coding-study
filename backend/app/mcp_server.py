@@ -17,13 +17,14 @@ import contextvars
 import logging
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from fastapi.concurrency import run_in_threadpool
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from pydantic import ConfigDict, with_config
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
@@ -427,11 +428,21 @@ async def sd_create_course(
     )
 
 
+@with_config(ConfigDict(extra="forbid"))
+class CourseChanges(TypedDict, total=False):
+    """Field sửa được của course — schema công bố đúng 4 field, key lạ bị chặn trước khi tới service."""
+
+    title: str
+    skills: list[str]
+    domain: str | None
+    position: int
+
+
 @mcp.tool(annotations=_UPDATE)
-async def sd_update_course(course_id: str, changes: dict[str, Any]) -> dict:
+async def sd_update_course(course_id: str, changes: CourseChanges) -> dict:
     """Sửa khoá học; changes chỉ gồm title, skills, domain, position."""
     return await run_in_threadpool(
-        _sd_doc, "sd_update_course", lambda s, actor: sd_courses.update_course(s, course_id, changes, actor=actor)
+        _sd_doc, "sd_update_course", lambda s, actor: sd_courses.update_course(s, course_id, dict(changes), actor=actor)
     )
 
 

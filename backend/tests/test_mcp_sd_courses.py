@@ -55,6 +55,17 @@ def test_create_assign_order_archive_restore(granted, signer):
     assert unassigned["course_id"] is None and unassigned["previous_course_id"] == C
 
 
+def test_update_course_schema_lists_only_editable_fields(granted, signer):
+    from tests.test_mcp import rpc
+
+    tools = {t["name"]: t for t in rpc(granted, "tools/list", token=signer.token()).json()["result"]["tools"]}
+    schema = tools["sd_update_course"]["inputSchema"]
+    changes = schema["properties"]["changes"]
+    target = schema.get("$defs", {}).get(changes.get("$ref", "").split("/")[-1], changes)
+    assert set(target["properties"]) == {"title", "skills", "domain", "position"}
+    assert target.get("additionalProperties") is False
+
+
 def test_update_and_validation_errors(granted, signer):
     _data(call(granted, signer, "sd_create_course", course_id=C, title="Python"))
     assert _data(call(granted, signer, "sd_update_course", course_id=C, changes={"title": "Mới", "position": 3}))["position"] == 3

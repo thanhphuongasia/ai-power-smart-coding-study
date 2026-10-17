@@ -10,3 +10,4 @@
 | Review T-02 Minor 1–2 | Sửa comment tập tool; parametrize test chưa-cấp-quyền cho 5 tool | Chấp nhận | orchestrator |
 | Review T-02 Minor 3, T-01 r2 Minor (position khi gỡ) | Không sửa | Backlog | orchestrator |
 | Review T-03 Minor 1–3 | Không sửa | Backlog | orchestrator |
+| External T-02 Medium: changes: dict[str, Any] nhận mọi key | TypedDict CourseChanges (4 field, extra=forbid) + test schema | Chấp nhận | orchestrator |
