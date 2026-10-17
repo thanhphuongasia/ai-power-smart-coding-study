@@ -126,6 +126,51 @@ class SdPathScreen extends ConsumerWidget {
     } catch (_) {}
   }
 
+  /// Hỏi xác nhận rồi xoá tiến độ đọc; xong tải lại màn này và danh sách.
+  Future<void> _reset(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Đặt lại tiến độ?'),
+        content: const Text(
+          'Tiến độ đọc của tài liệu này sẽ về 0. '
+          'Các bài đã nộp vẫn được giữ.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('sd-reset-cancel'),
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            key: const Key('sd-reset-confirm'),
+            onPressed: () => Navigator.pop(d, true),
+            child: const Text('Đặt lại'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    // Lấy container trước await: server đã xoá tiến độ thì phải invalidate
+    // dù người dùng đã rời màn (context không còn mounted).
+    final container = ProviderScope.containerOf(context, listen: false);
+    String message;
+    try {
+      await ref.read(sdRepositoryProvider).resetProgress(docId);
+      container.invalidate(sdDocProvider(docId));
+      container.invalidate(sdDocsProvider);
+      message = 'Đã đặt lại tiến độ';
+    } on SdApiException catch (e) {
+      message = 'Không đặt lại được (mã ${e.statusCode})';
+    } catch (_) {
+      message = 'Không đặt lại được, thử lại sau';
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final doc = ref.watch(sdDocProvider(docId));
@@ -137,6 +182,25 @@ class SdPathScreen extends ConsumerWidget {
               title: doc.asData?.value.title ?? 'System Design',
               onBack: () =>
                   context.canPop() ? context.pop() : context.go('/design'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    key: const Key('sd-preview'),
+                    icon: const Icon(Icons.visibility_outlined),
+                    tooltip: 'Xem trước (không tính tiến độ)',
+                    onPressed: () => context.push(
+                      '/design/${Uri.encodeComponent(docId)}/read?preview=1',
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('sd-reset'),
+                    icon: const Icon(Icons.restart_alt),
+                    tooltip: 'Đặt lại tiến độ',
+                    onPressed: () => _reset(context, ref),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: doc.when(

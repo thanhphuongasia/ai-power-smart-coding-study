@@ -35,12 +35,21 @@ const Duration kSdBackoffMax = Duration(seconds: 30);
 const int kSdMaxFailures = 5;
 
 class SdReaderScreen extends ConsumerStatefulWidget {
-  const SdReaderScreen({super.key, required this.docId, this.sectionId});
+  const SdReaderScreen({
+    super.key,
+    required this.docId,
+    this.sectionId,
+    this.preview = false,
+  });
 
   final String docId;
 
   /// Section cần mở tới; null → section mở khoá đầu tiên chưa xong.
   final String? sectionId;
+
+  /// Chế độ xem trước: lướt toàn bộ tài liệu, KHÔNG đánh dấu đã đọc và KHÔNG
+  /// gửi tiến độ nào lên server.
+  final bool preview;
 
   @override
   ConsumerState<SdReaderScreen> createState() => _SdReaderScreenState();
@@ -61,7 +70,11 @@ class _SdReaderScreenState extends ConsumerState<SdReaderScreen> {
           error: e,
           onRetry: () => ref.invalidate(sdDocProvider(widget.docId)),
         ),
-        data: (d) => _ReaderBody(doc: d, sectionId: widget.sectionId),
+        data: (d) => _ReaderBody(
+          doc: d,
+          sectionId: widget.sectionId,
+          preview: widget.preview,
+        ),
       ),
     );
   }
@@ -113,9 +126,14 @@ class _Flat {
 }
 
 class _ReaderBody extends ConsumerStatefulWidget {
-  const _ReaderBody({required this.doc, this.sectionId});
+  const _ReaderBody({
+    required this.doc,
+    this.sectionId,
+    this.preview = false,
+  });
   final SdDoc doc;
   final String? sectionId;
+  final bool preview;
 
   @override
   ConsumerState<_ReaderBody> createState() => _ReaderBodyState();
@@ -190,8 +208,8 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
       t.cancel();
     }
     _timers.clear();
-    // Gửi nốt phần đang chờ (kể cả khi chưa hết debounce).
-    for (final sid in _dirty) {
+    // Gửi nốt phần đang chờ (kể cả khi chưa hết debounce). Preview: không gửi.
+    for (final sid in widget.preview ? const <String>[] : _dirty) {
       if (_blocked.contains(sid) || _unlocked[sid] != true) continue;
       unawaited(
         _repo
@@ -335,7 +353,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
 
     final touched = <String>{};
     for (final f in _flat) {
-      if (_menuJumps > 0) break; // đang nhảy từ menu: chưa đánh dấu gì
+      if (_menuJumps > 0 || widget.preview) break; // menu/preview: không đánh dấu
       final sid = f.section.id;
       if (_unlocked[sid] != true || _read[sid]!.contains(f.card.id)) continue;
       final box = f.key.currentContext?.findRenderObject();
@@ -451,6 +469,7 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
   }
 
   void _schedule(String sid, {bool restart = false}) {
+    if (widget.preview) return;
     if (_blocked.contains(sid) || _unlocked[sid] != true) return;
     if (_backoff.contains(sid)) return; // timer backoff tự gửi lại
     if (_inflight.contains(sid) && !restart) return;
@@ -463,7 +482,8 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
   }
 
   Future<void> _send(String sid) async {
-    if (!mounted ||
+    if (widget.preview ||
+        !mounted ||
         _inflight.contains(sid) ||
         _blocked.contains(sid) ||
         _unlocked[sid] != true ||
@@ -567,6 +587,18 @@ class _ReaderBodyState extends ConsumerState<_ReaderBody> {
             onBack: () => Navigator.of(context).maybePop(),
             onMenu: _openMenu,
           ),
+          if (widget.preview)
+            Container(
+              key: const Key('sd-preview-banner'),
+              width: double.infinity,
+              color: const Color(0xFFB45309),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              child: Text(
+                'Xem trước — không tính tiến độ',
+                textAlign: TextAlign.center,
+                style: AppText.caption.copyWith(color: Colors.white),
+              ),
+            ),
           Expanded(
             child: Container(
               key: const Key('sd-reader-paper'),

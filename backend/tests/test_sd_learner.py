@@ -1,4 +1,4 @@
-"""API học viên System Design: danh sách, tài liệu, tiến độ đọc, khoá tuần tự, không lộ rubric."""
+"""API học viên System Design: danh sách, tài liệu, tiến độ đọc, mọi section mở (issue #66), không lộ rubric."""
 
 from __future__ import annotations
 
@@ -100,9 +100,9 @@ def test_list_summary_for_new_learner(world):
     assert item["cards_read"] == 0 and item["cards"] > 9 and item["phase2_unlocked"] is False
 
 
-def test_fresh_doc_unlocks_only_first_section_and_hides_phase2(world):
+def test_fresh_doc_unlocks_every_section_and_hides_phase2(world):
     d = world.doc()
-    assert [s["unlocked"] for s in d["sections"]] == [True] + [False] * 8
+    assert [s["unlocked"] for s in d["sections"]] == [True] * 9  # key vẫn có, luôn true: app cũ không vỡ
     assert not any(s["done"] or s["read"] for s in d["sections"])
     assert d["phase2_unlocked"] is False and d["context"] == []
     assert all(not t["unlocked"] and t["prompt"] is None and t["hints"] == [] and t["ref_section_id"] is None for t in d["tasks"])
@@ -121,7 +121,7 @@ def test_responses_never_contain_rubric_or_keywords(world):
         assert not _keys(payload) & {"rubric", "keywords", "auto_result", "verdicts"}, _keys(payload)
 
 
-# --- tiến độ đọc và khoá tuần tự (INV-04) ---------------------------------------------------
+# --- tiến độ đọc, không khoá tuần tự (INV-04) ---------------------------------------------------
 
 
 def test_progress_marks_cards_done_and_unlocks_next_section(world):
@@ -131,7 +131,7 @@ def test_progress_marks_cards_done_and_unlocks_next_section(world):
     assert part["done"] is False and part["next_section_id"] is None and part["read"] == ids[:-1]
     full = world.put(first["id"], ids).json()
     assert full["done"] is True and full["next_section_id"] == world.doc()["sections"][1]["id"]
-    assert [s["unlocked"] for s in world.doc()["sections"]][:3] == [True, True, False]
+    assert all(s["unlocked"] for s in world.doc()["sections"])
 
 
 def test_progress_is_monotonic_and_ignores_unknown_ids(world):
@@ -145,11 +145,13 @@ def test_progress_is_monotonic_and_ignores_unknown_ids(world):
     assert "no-such-card" not in row.read_cards
 
 
-def test_locked_section_cannot_record_progress(world):
-    second = world.doc()["sections"][1]
-    r = world.put(second["id"], [c["id"] for c in second["cards"]])
-    assert r.status_code == 409 and r.json()["detail"] == "section_locked"
-    assert world.session.scalars(select(SdProgress)).all() == []
+def test_any_section_can_record_progress_out_of_order(world):
+    # Issue #66: đọc section cuối khi chưa đọc section đầu vẫn ghi được; Phase 2 vẫn chờ đọc hết.
+    sections = world.doc()["sections"]
+    out = world.read_section(sections[-1])
+    assert out["done"] is True and out["next_section_id"] is None and out["phase2_unlocked"] is False
+    d = world.doc()
+    assert d["sections"][-1]["done"] is True and d["sections"][0]["done"] is False and d["phase2_unlocked"] is False
 
 
 def test_unknown_section_is_404(world):
@@ -161,7 +163,7 @@ def test_progress_is_per_user(world):
     world.read_section(first, "ann")
     assert world.doc("ann")["sections"][0]["done"] is True
     bob = world.doc("bob")
-    assert bob["sections"][0]["done"] is False and bob["sections"][1]["unlocked"] is False
+    assert bob["sections"][0]["done"] is False and bob["sections"][0]["read"] == []
 
 
 @pytest.mark.parametrize(
