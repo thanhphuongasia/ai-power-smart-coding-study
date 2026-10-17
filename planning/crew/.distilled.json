@@ -82,5 +82,21 @@
   "f772e39": {
     "date": "2026-10-12",
     "run": "2026-10-12-system-design-mode"
+  },
+  "caaf83f": {
+    "date": "2026-10-13",
+    "run": "2026-10-13-todo-comment-fill-button"
+  },
+  "e7ae1af": {
+    "date": "2026-10-17",
+    "run": "2026-10-17-sd-docs-mcp"
+  },
+  "97466dc": {
+    "date": "2026-10-17",
+    "run": "2026-10-17-sd-courses"
+  },
+  "7679441": {
+    "date": "2026-10-17",
+    "run": "2026-10-17-mcp-publish-tool"
   }
 }

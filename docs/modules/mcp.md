@@ -1,14 +1,14 @@
 # mcp
 
-> MCP server (`POST /mcp`) để Claude trên claude.ai đọc và tạo/sửa nội dung học; đăng nhập OAuth qua identity-service, backend chỉ là resource server; mọi lần ghi vào hàng chờ duyệt chung đường với admin PUT, admin duyệt thì học viên mới thấy.
+> MCP server (`POST /mcp`) để Claude trên claude.ai đọc và tạo/sửa nội dung học; đăng nhập OAuth qua identity-service, backend chỉ là resource server; mọi lần ghi vào hàng chờ duyệt chung đường với admin PUT; học viên chỉ thấy sau khi được duyệt, bởi admin trong app hoặc bởi Claude qua tool publish riêng khi người dùng đồng ý.
 
 ## Là gì
 
-Trước run này nội dung học chỉ sửa được qua màn Admin hoặc CLI. Module này cho phép người dùng chat với Claude trên claude.ai để tạo project, module, file và bài. Claude gọi 12 tool qua giao thức MCP (Model Context Protocol: chuẩn để chatbot gọi công cụ bên ngoài) tại `/mcp`. Backend không tự phát token và không giữ secret: người dùng đăng nhập GitHub ở identity-service (dịch vụ đăng nhập riêng của chủ repo, đã chạy cho các app khác), identity-service ký JWT (chuỗi token có chữ ký), còn backend chỉ kiểm chữ ký và kiểm xem tài khoản đó có được cấp quyền không. Quyền nằm ở bảng `mcp_access` và kiểm lại ở mỗi tool call, nên thu hồi có hiệu lực ngay dù JWT còn hạn. Mọi lần ghi dùng đúng khoá, cách so phiên bản và hàm `review.submit` của admin PUT: bản sửa chỉ vào hàng chờ duyệt (`content_changes`, xem `docs/modules/content-review.md`), không đổi nội dung học viên thấy tới khi admin duyệt trong app. Tool đọc và tool ghi đều làm việc trên bản nháp (nội dung đang chạy cộng các mục chờ), nên Claude tạo file rồi tạo bài trong file đó vẫn được dù file chưa duyệt. Ngoài 12 tool nội dung còn 3 tool `sd_*` để chấm bài thực chiến System Design (xem `docs/modules/sd-study.md`): chúng đọc/ghi dữ liệu của học viên chứ không phải nội dung học, nên KHÔNG đi qua hàng chờ duyệt và feedback hiện cho học viên ngay.
+Trước run này nội dung học chỉ sửa được qua màn Admin hoặc CLI. Module này cho phép người dùng chat với Claude trên claude.ai để tạo project, module, file và bài. Claude gọi 33 tool qua giao thức MCP (Model Context Protocol: chuẩn để chatbot gọi công cụ bên ngoài) tại `/mcp`. Backend không tự phát token và không giữ secret: người dùng đăng nhập GitHub ở identity-service (dịch vụ đăng nhập riêng của chủ repo, đã chạy cho các app khác), identity-service ký JWT (chuỗi token có chữ ký), còn backend chỉ kiểm chữ ký và kiểm xem tài khoản đó có được cấp quyền không. Quyền nằm ở bảng `mcp_access` và kiểm lại ở mỗi tool call, nên thu hồi có hiệu lực ngay dù JWT còn hạn. Mọi lần ghi dùng đúng khoá, cách so phiên bản và hàm `review.submit` của admin PUT: bản sửa chỉ vào hàng chờ duyệt (`content_changes`, xem `docs/modules/content-review.md`), không đổi nội dung học viên thấy tới khi được duyệt: admin duyệt trong app, hoặc Claude gọi `publish_changes` sau khi người dùng bảo publish (cùng hàm `review.approve` với admin). Tool đọc và tool ghi đều làm việc trên bản nháp (nội dung đang chạy cộng các mục chờ), nên Claude tạo file rồi tạo bài trong file đó vẫn được dù file chưa duyệt. Ngoài 12 tool nội dung còn 4 tool cho hàng chờ duyệt bài code (xem danh sách, xem một mục, publish, bỏ) và 17 tool `sd_*` cho chế độ System Design (xem `docs/modules/sd-study.md`): 3 tool chấm bài thực chiến (đọc/ghi dữ liệu của học viên, feedback hiện ngay), 9 tool quản lý tài liệu đọc của tab Design (tạo, thay, sửa theo đoạn, đổi trạng thái, publish, gỡ, xoá mềm) và 5 tool quản lý khoá học (course) nhóm các tài liệu đó. Cả hai nhóm KHÔNG đi qua hàng chờ duyệt: tài liệu SD không có bước admin duyệt trong app, nên tài liệu đang `published` mà Claude sửa thì học viên thấy ngay.
 
 ## Dùng khi nào
 
-Người dùng thêm connector `https://codewithphuong.jacons-corp.com/mcp` trên claude.ai (Customize, Connectors, Add custom connector, Connect), đăng nhập GitHub, rồi nhờ Claude soạn bài. Lần đầu tool báo `sub=… chưa được cấp quyền`; admin lấy `sub` đó và cấp bằng CLI trên VPS hoặc API admin. Đụng vào module này khi thêm tool mới (thêm hàm trong `content_ops.py` và một `@mcp.tool` trong `mcp_server.py`), đổi domain (phải đổi `PUBLIC_BASE_URL` và `AllowedResources` bên identity-service cùng lúc), hoặc đổi cách cấp quyền.
+Người dùng thêm connector `https://codewithphuong.jacons-corp.com/mcp` trên claude.ai (Customize, Connectors, Add custom connector, Connect), đăng nhập GitHub, rồi nhờ Claude soạn bài. Lần đầu tool báo `sub=… chưa được cấp quyền`; admin lấy `sub` đó và cấp bằng CLI trên VPS hoặc API admin. Sau khi Claude gửi bài, người dùng bảo "publish" thì Claude gọi `list_pending_changes` rồi `publish_changes`; bảo "gỡ bài SD" thì `sd_unpublish_doc`. Tool mới chỉ hiện sau khi người dùng Disconnect rồi Connect lại connector trên claude.ai (danh sách tool được claude.ai nhớ lúc kết nối). Đụng vào module này khi thêm tool mới (thêm hàm trong `content_ops.py` và một `@mcp.tool` trong `mcp_server.py`), đổi domain (phải đổi `PUBLIC_BASE_URL` và `AllowedResources` bên identity-service cùng lúc), hoặc đổi cách cấp quyền.
 
 ## Cách hoạt động
 
@@ -16,12 +16,13 @@ Luồng một request:
 
 | Bước | Việc | Kết quả khi sai | file:dòng |
 | --- | --- | --- | --- |
-| 1 | `McpGate` nhận request trước SDK; chỉ nhận `POST` | GET/DELETE trả 405 `Allow: POST` (không mở luồng SSE treo worker) | backend/app/mcp_server.py:302-307 |
-| 2 | `PUBLIC_BASE_URL` chưa đặt | 503 `mcp_not_configured` | backend/app/mcp_server.py:308-311 |
-| 3 | `verify_bearer`: header `Bearer`, chữ ký RS256 theo `kid`, `iss`, `aud == <PUBLIC_BASE_URL>/mcp`, `exp` (leeway 30s) | 401 + `WWW-Authenticate: Bearer resource_metadata="…"` | backend/app/mcp_server.py:312-318, backend/app/mcp_auth.py:169-202 |
-| 4 | Không tải được JWKS (khoá công khai) của identity-service và không còn khoá cũ dùng được | 503 `auth_unavailable`, không lẫn thành 401 (claude.ai coi 401 là token hỏng và bắt đăng nhập lại) | backend/app/mcp_server.py:319-322, backend/app/mcp_auth.py:89-90 |
-| 5 | Claims đặt vào `ContextVar`, SDK xử lý JSON-RPC (stateless, JSON response) | | backend/app/mcp_server.py:323-327 |
-| 6 | Mỗi tool gọi `authorize_sub`: `sub` phải có dòng `mcp_access` chưa thu hồi, và user đích còn role admin | tool trả lỗi kèm `sub` và lệnh cấp quyền | backend/app/mcp_server.py:74-83, backend/app/mcp_auth.py:205-218 |
+| 1 | `McpGate` nhận request trước SDK; chỉ nhận `POST` | GET/DELETE trả 405 `Allow: POST` (không mở luồng SSE treo worker) | backend/app/mcp_server.py:403-408 |
+| 2 | `PUBLIC_BASE_URL` chưa đặt | 503 `mcp_not_configured` | backend/app/mcp_server.py:409-412 |
+| 3 | `verify_bearer`: header `Bearer`, chữ ký RS256 theo `kid`, `iss`, `aud == <PUBLIC_BASE_URL>/mcp`, `exp` (leeway 30s) | 401 + `WWW-Authenticate: Bearer resource_metadata="…"` | backend/app/mcp_server.py:413-418, backend/app/mcp_auth.py:169-202 |
+| 4 | Không tải được JWKS (khoá công khai) của identity-service và không còn khoá cũ dùng được | 503 `auth_unavailable`, không lẫn thành 401 (claude.ai coi 401 là token hỏng và bắt đăng nhập lại) | backend/app/mcp_server.py:419-423, backend/app/mcp_auth.py:89-90 |
+| 5 | Claims đặt vào `ContextVar`, SDK xử lý JSON-RPC (stateless, JSON response) | | backend/app/mcp_server.py:424-428 |
+| 5b | Body tối đa 2MB: middleware `_limit_body` so `Content-Length` với `_body_limit("/mcp")` = `MAX_BODY_BYTES` (2MB), quá thì 413; không có `Content-Length` mà có body chunked thì 411. Các route khác vẫn 64KB (admin 4MB). Cổng JWT (bước 1-4) chạy trong `McpGate`, SDK mới đọc body, nên khách chưa xác thực không bắt server đọc được chừng này; nginx `location = /mcp` cho tới 2100k để chính backend trả 413 | backend/app/main.py:76-79, 91-94; backend/app/mcp_server.py:52, 439; deploy/nginx/smart-coding-study.conf:78-83 |
+| 6 | Mỗi tool gọi `authorize_sub`: `sub` phải có dòng `mcp_access` chưa thu hồi, và user đích còn role admin | tool trả lỗi kèm `sub` và lệnh cấp quyền | backend/app/mcp_server.py:76-92, backend/app/mcp_auth.py:205-218 |
 
 Cổng 401 chạy trước SDK vì claude.ai chỉ hiện nút Connect khi thấy `resource_metadata` trên một 401. Discovery (RFC 9728, tài liệu mô tả "resource này tin authorization server nào") nằm ở `/.well-known/oauth-protected-resource` và `/.well-known/oauth-protected-resource/mcp`, trả `resource`, `authorization_servers = [IDENTITY_ISSUER]`, `scopes_supported = ["content"]` (backend/app/mcp_auth.py:221-236). Route `/mcp` là ASGI thô gắn thẳng vào router, không qua FastAPI (backend/app/main.py:67-72).
 
@@ -53,20 +54,91 @@ Quyền cấp/thu hồi:
 
 | Nhóm | Tool | file:dòng |
 | --- | --- | --- |
-| Đọc | `list_projects`, `get_project`, `get_lesson`, `get_authoring_guide` (luật + một bài mẫu thật) | backend/app/mcp_server.py:137-188 |
-| Ghi (đều có `dry_run`) | `create_project` (kèm module đầu), `update_project`, `create_module` (lồng được), `update_module`, `create_file`, `update_file`, `create_lesson`, `update_lesson` | backend/app/mcp_server.py:195-244 |
+| Đọc | `list_projects`, `get_project`, `get_lesson`, `get_authoring_guide` (luật + một bài mẫu thật) | backend/app/mcp_server.py:152-203 |
+| Ghi (đều có `dry_run`) | `create_project` (kèm module đầu), `update_project`, `create_module` (lồng được), `update_module`, `create_file`, `update_file`, `create_lesson`, `update_lesson` | backend/app/mcp_server.py:210-259 |
 
 3 tool chấm bài System Design (dữ liệu học viên, không qua hàng chờ duyệt):
 
 | Tool | Việc | file:dòng |
 |---|---|---|
-| `sd_list_attempts` | hàng đợi lần thử cần chấm, cũ nhất trước; mặc định `status='auto'` (mới chỉ có điểm từ khoá), `limit` bị kẹp 1..50; trả `learner_id` chứ không trả email | backend/app/mcp_server.py:270-277, backend/app/sd/attempts.py:194-226 |
-| `sd_get_attempt` | một lần thử đầy đủ: `answer`, đề, các ý rubric (chữ, không từ khoá), điểm từ khoá, đáp án mẫu; luôn kèm `answer_notice` | backend/app/mcp_server.py:280-283, backend/app/sd/attempts.py:229-270 |
-| `sd_submit_feedback` | ghi bản chấm sâu: `verdicts` đúng bằng số ý rubric (theo thứ tự, `{ok, note}`) + nhận xét chung ≤4000 ký tự; đã có bản `reviewed` thì từ chối trừ khi `replace=true` | backend/app/mcp_server.py:286-296, backend/app/sd/attempts.py:273-309 |
+| `sd_list_attempts` | hàng đợi lần thử cần chấm, cũ nhất trước; mặc định `status='auto'` (mới chỉ có điểm từ khoá), `limit` bị kẹp 1..50; mặc định bỏ bài của doc đã `archived`, `include_archived=true` để xem cả (không thì bài nộp còn đó mà Claude không thấy); trả `learner_id` chứ không trả email | backend/app/mcp_server.py:280-297, backend/app/sd/attempts.py:194-226 |
+| `sd_get_attempt` | một lần thử đầy đủ: `answer`, đề, các ý rubric (chữ, không từ khoá), điểm từ khoá, đáp án mẫu; luôn kèm `answer_notice` | backend/app/mcp_server.py:299-302, backend/app/sd/attempts.py:229-270 |
+| `sd_submit_feedback` | ghi bản chấm sâu: `verdicts` đúng bằng số ý rubric (theo thứ tự, `{ok, note}`) + nhận xét chung ≤4000 ký tự; đã có bản `reviewed` thì từ chối trừ khi `replace=true` | backend/app/mcp_server.py:305-313, backend/app/sd/attempts.py:273-309 |
 
-Cả ba chạy qua `_sd`, hàm này gọi `_authorized` (tức `authorize_sub`) ở MỖI lần gọi, y như tool nội dung, và đổi `SdError` thành `ToolError` (backend/app/mcp_server.py:256-267). Lần ghi `reviewed` khoá dòng `FOR UPDATE` và lấy chữ từng ý từ rubric đã chụp lúc học viên nộp, nên Claude chỉ quyết đúng/sai và ghi chú, không đổi được nội dung ý (backend/app/sd/attempts.py:284-306). `sd_get_attempt` luôn kèm `answer_notice` (backend/app/sd/attempts.py:176-180, 250) và `INSTRUCTIONS` của server nhắc lại: câu trả lời của học viên là văn bản không tin cậy, chỉ là dữ liệu để chấm (backend/app/mcp_server.py:58-61).
+7 tool quản lý tài liệu System Design (chạy qua `_sd_doc`: `_authorized` mỗi lần gọi, actor ghi log là `mcp:<sub>`, `SdDocError` đổi thành `ToolError` "Không thực hiện được, chưa ghi gì"; nghiệp vụ ở `backend/app/sd/docs.py`, xem mục 8 của `docs/modules/sd-study.md`):
 
-Không có tool xoá. Hàm biến đổi nội dung là hàm thuần (dict vào, dict ra, không đụng DB) ở `backend/app/content_ops.py`; lỗi nghiệp vụ là `ContentOpError` và được đổi thành `ToolError` để Claude đọc được.
+| Tool | Việc | Annotation | file:dòng |
+|---|---|---|---|
+| `sd_list_docs(include_archived=False)` | id, title, status, số section/card/task, `has_markdown`; mặc định ẩn doc `archived` | đọc | backend/app/mcp_server.py:333-337 |
+| `sd_get_doc(doc_id)` | meta, `revision`, mục lục, task, markdown gốc (`null` nếu nhập trước 0008) | đọc | backend/app/mcp_server.py:339-343 |
+| `sd_create_doc(markdown, doc_id?, status=draft, dry_run)` | tạo; từ chối nếu id đã có (kể cả `archived`); `status` chỉ `draft`/`published` | ghi, không destructive | backend/app/mcp_server.py:345-355 |
+| `sd_replace_doc(doc_id, markdown, base_revision?, dry_run)` | thay toàn bộ markdown, giữ status; `base_revision` chống ghi đè bản vừa bị sửa | destructive, idempotent | backend/app/mcp_server.py:357-367 |
+| `sd_edit_doc(doc_id, edits, dry_run)` | sửa theo đoạn (`old_text` phải xuất hiện đúng 1 lần, ≤50 edit); cần markdown gốc | destructive, KHÔNG idempotent (`_EDIT`) | backend/app/mcp_server.py:369-375, 147-148 |
+| `sd_set_status(doc_id, status)` | `draft`/`published`/`archived`; dùng để publish, gỡ xuống, khôi phục | destructive, idempotent | backend/app/mcp_server.py:377-383 |
+| `sd_delete_doc(doc_id)` | xoá MỀM = `archived`, trả kèm hướng dẫn khôi phục | destructive, idempotent | backend/app/mcp_server.py:385-395 |
+
+5 tool quản lý khoá học (course) System Design, cùng wrapper `_sd_doc` (authorize mỗi lần gọi, `SdDocError` thành `ToolError`); nghiệp vụ ở `backend/app/sd/courses.py`, xem mục 9 của `docs/modules/sd-study.md`:
+
+| Tool | Việc | Annotation | file:dòng |
+|---|---|---|---|
+| `sd_list_courses(include_archived=False)` | id, title, skills, domain, status, position + danh sách doc (id, title, status, course_position) theo `DOC_ORDER`; mặc định ẩn course `archived` | đọc | backend/app/mcp_server.py:404-409 |
+| `sd_create_course(course_id, title, skills?, domain?, status=draft, position=0)` | tạo; `status` chỉ `draft`/`published`; từ chối id đã có, kể cả course đã xoá mềm | ghi | backend/app/mcp_server.py:412-428 |
+| `sd_update_course(course_id, changes)` | sửa `title`/`skills`/`domain`/`position` | update | backend/app/mcp_server.py:441-446 |
+| `sd_set_course_status(course_id, status)` | `draft`/`published`/`archived` (xoá mềm, doc giữ liên kết); không đổi quyền xem của doc | update | backend/app/mcp_server.py:449-454 |
+| `sd_assign_doc(doc_id, course_id\|null, position?)` | gán doc vào course hoặc gỡ (`null`); không gán vào course `archived` | update | backend/app/mcp_server.py:457-464 |
+
+`sd_list_docs`/`sd_get_doc` cũng trả thêm `course_id` và `course_position` của doc (backend/app/sd/docs.py:260-261, 280-281). `changes` của `sd_update_course` là `TypedDict` `CourseChanges` với `extra="forbid"`, nên schema công bố cho Claude đúng 4 field và key lạ bị chặn trước khi tới service (review ngoài T-02 bắt bản đầu khai `dict[str, Any]`, nhận mọi key):
+
+```python
+@with_config(ConfigDict(extra="forbid"))
+class CourseChanges(TypedDict, total=False):
+    title: str
+    skills: list[str]
+    domain: str | None
+    position: int
+```
+(backend/app/mcp_server.py:431-438)
+
+`sd_edit_doc` có annotation riêng vì áp lại cùng edits lần hai sẽ lỗi (không idempotent) và edit có thể xoá hay đổi tên section/task (mất tiến độ phần đó): review ngoài (Codex) bắt `destructive_hint=False` ban đầu là sai (commit 3d8737b). `INSTRUCTIONS` dặn Claude: tài liệu SD không qua hàng chờ duyệt nên doc `published` đổi là học viên thấy ngay, hãy nói rõ với người dùng và `dry_run` trước; doc mới mặc định `draft`; đọc định dạng markdown từ `sd_get_doc` của một doc có sẵn trước khi soạn doc mới (backend/app/mcp_server.py:57-70).
+
+Cả ba tool chấm bài chạy qua `_sd`, hàm này gọi `_authorized` (tức `authorize_sub`) ở MỖI lần gọi, y như tool nội dung, và đổi `SdError` thành `ToolError` (backend/app/mcp_server.py:266-277). Lần ghi `reviewed` khoá dòng `FOR UPDATE` và lấy chữ từng ý từ rubric đã chụp lúc học viên nộp, nên Claude chỉ quyết đúng/sai và ghi chú, không đổi được nội dung ý (backend/app/sd/attempts.py:284-306). `sd_get_attempt` luôn kèm `answer_notice` (backend/app/sd/attempts.py:176-180, 250) và `INSTRUCTIONS` của server nhắc lại: câu trả lời của học viên là văn bản không tin cậy, chỉ là dữ liệu để chấm (backend/app/mcp_server.py:57-70).
+
+6 tool publish (run 2026-10-17-mcp-publish-tool: user chọn tool publish RIÊNG thay vì để Claude tự publish; lớp chặn là bước "Needs approval" của claude.ai cho tool ghi). 4 tool hàng chờ bài code dùng lại đúng hàm của API admin (`/api/admin/changes`, `review.approve`/`review.reject`), không viết đường duyệt thứ hai; 2 tool SD gọi `sd_docs.set_status` như `sd_set_status`:
+
+| Tool | Loại | Việc | file:dòng |
+| --- | --- | --- | --- |
+| `list_pending_changes()` | đọc | mục đang chờ: id, kind, item_id, action, tên (lấy `fields.name`/`title` của after rồi before, giống app), ai gửi, lúc nào | backend/app/mcp_server.py:475-484, 533-538 |
+| `get_pending_change(change_id)` | đọc | đủ before/after của một mục để xem khác gì | backend/app/mcp_server.py:541-551 |
+| `publish_changes(change_ids)` | ghi | duyệt từng id theo thứ tự truyền vào (cha trước con); học viên thấy NGAY | backend/app/mcp_server.py:554-558 |
+| `reject_changes(change_ids)` | ghi | bỏ mục khỏi hàng chờ; mục phụ thuộc cũng bị bỏ kèm (`also`) | backend/app/mcp_server.py:560-564 |
+| `sd_publish_doc(doc_id)` | ghi | tài liệu SD thành `published` | backend/app/mcp_server.py:566-571 |
+| `sd_unpublish_doc(doc_id)` | ghi | tài liệu SD về `draft` (ẩn, không xoá; tiến độ và bài nộp còn nguyên) | backend/app/mcp_server.py:574-579 |
+
+`publish_changes`/`reject_changes` chạy qua `_decide_many`. Mỗi id nằm trong một savepoint (điểm hoàn tác con của transaction) riêng, nên id lỗi chỉ hoàn tác chính nó, các id khác vẫn được duyệt; kết quả trả theo từng id:
+
+```python
+for cid in ids:
+    savepoint = session.begin_nested()
+    try:
+        r = action(session, cid, reviewer)
+        savepoint.commit()
+        results.append({"id": cid, "status": r["status"], "also": r.get("also", [])})
+    except review.NotPending as exc:
+        savepoint.rollback()
+        results.append({"id": cid, "status": "skipped", "error": exc.message})
+```
+(backend/app/mcp_server.py:507-515, rút gọn)
+
+| Tình huống | Kết quả của id đó | file:dòng |
+| --- | --- | --- |
+| đã được duyệt kèm mục khác hoặc đã xử lý | `skipped` | backend/app/mcp_server.py:513-515 |
+| lỗi nghiệp vụ (vd "cần duyệt X trước", xung đột, nội dung không hợp lệ) | `error` kèm `details` (tối đa `MAX_ERRORS`) để Claude tự sửa thứ tự | backend/app/mcp_server.py:516-518 |
+| `DataError` (DB từ chối nội dung) | `error`, không lộ SQL | backend/app/mcp_server.py:519-521 |
+| `OperationalError` (hết thời gian chờ khoá ghi vì admin đang duyệt/lưu cùng lúc) | `error` "thử lại sau" cho riêng id đó | backend/app/mcp_server.py:522-525 |
+
+`change_ids` phải là danh sách 1..50 số nguyên dương (bool bị loại), trùng id được gộp (backend/app/mcp_server.py:472, 493-498). Người duyệt ghi vào `decided_by` là `mcp:<sub> (<email>)`, cùng dạng với `author` lúc gửi (backend/app/mcp_server.py:505). Tool trả `{results, pending, version}`; `version` là base cho lần ghi kế tiếp, giống `admin_api._decide`. `message` của tool ghi bài code và `INSTRUCTIONS` đã đổi từ "admin cần duyệt" thành "học viên chưa thấy; publish bằng `publish_changes` khi người dùng đồng ý, hoặc admin duyệt trong app", và dặn Claude CHỈ publish khi người dùng bảo (backend/app/mcp_server.py:61-63, 146).
+
+Không có tool xoá nội dung học hay bài nộp (`sd_delete_doc` chỉ xoá mềm tài liệu SD). Hàm biến đổi nội dung là hàm thuần (dict vào, dict ra, không đụng DB) ở `backend/app/content_ops.py`; lỗi nghiệp vụ là `ContentOpError` và được đổi thành `ToolError` để Claude đọc được.
 
 Đường ghi dùng chung với admin PUT (vào hàng chờ, không ghi nội dung đang chạy):
 
@@ -79,9 +151,9 @@ errors = validation_errors(after)
 author = f"mcp:{sub} ({user.email})" if user.email else f"mcp:{sub}"
 result = review.submit(session, base, after, author)
 ```
-(backend/app/mcp_server.py:101-121, rút gọn)
+(backend/app/mcp_server.py:112-134, rút gọn)
 
-Luật nội dung được kiểm trước khi giữ khoá (nội dung sai không chặn ai); `review.submit` lấy `pg_advisory_xact_lock` (cùng khoá với admin PUT, xem `docs/modules/content-admin.md`), so `base` với hash bản nháp hiện tại, diff với nội dung đang chạy thành các mục và upsert dòng `pending` với `author = mcp:<sub> (<email>)` (backend/app/review.py:399-434). Vì `admin_version` (của bản nháp) đổi sau mỗi lần gửi, màn Admin đang cầm `base_version` cũ sẽ nhận 409 chứ không ghi đè bài của Claude. Tool trả `{ok, version, pending, message}` với câu "Đã gửi vào hàng chờ duyệt — admin cần duyệt trong app thì học viên mới thấy"; `dry_run` báo hợp lệ rồi hướng dẫn gọi lại để gửi vào hàng chờ. Gửi duyệt đổi cha của module có sẵn bị từ chối (`unsupported_move`) và đổi thành `ToolError` (backend/app/mcp_server.py:122-124). Lỗi validate trả tối đa 50 dòng (backend/app/mcp_server.py:50, 86-89). Mỗi lần ghi log email admin, `sub`, tên tool, version trước và sau (backend/app/mcp_server.py:127).
+Luật nội dung được kiểm trước khi giữ khoá (nội dung sai không chặn ai); `review.submit` lấy `pg_advisory_xact_lock` (cùng khoá với admin PUT, xem `docs/modules/content-admin.md`), so `base` với hash bản nháp hiện tại, diff với nội dung đang chạy thành các mục và upsert dòng `pending` với `author = mcp:<sub> (<email>)` (backend/app/review.py:399-434). Vì `admin_version` (của bản nháp) đổi sau mỗi lần gửi, màn Admin đang cầm `base_version` cũ sẽ nhận 409 chứ không ghi đè bài của Claude. Tool trả `{ok, version, pending, message}` với câu "Đã gửi vào hàng chờ duyệt — học viên chưa thấy. Publish bằng publish_changes … hoặc admin duyệt trong app" (backend/app/mcp_server.py:146); `dry_run` báo hợp lệ rồi hướng dẫn gọi lại để gửi vào hàng chờ. Gửi duyệt đổi cha của module có sẵn bị từ chối (`unsupported_move`) và đổi thành `ToolError` (backend/app/mcp_server.py:133-135). Lỗi validate trả tối đa 50 dòng (backend/app/mcp_server.py:53, 94-96). Mỗi lần ghi log email admin, `sub`, tên tool, version trước và sau (backend/app/mcp_server.py:134).
 
 Env và deploy:
 
@@ -89,11 +161,11 @@ Env và deploy:
 | --- | --- | --- |
 | `PUBLIC_BASE_URL` | `https://<DOMAIN>`; thiếu thì MCP tắt (PRM 404, `/mcp` 503) | backend/app/mcp_auth.py:50-52, deploy/deploy.sh:112-113 |
 | `IDENTITY_ISSUER` | mặc định `https://identity.jacons-corp.com`; deploy.sh ghi lại mỗi lần, idempotent | backend/app/mcp_auth.py:32,55-56, deploy/deploy.sh:112-113 |
-| nginx | `location = /mcp` (body ≤80k, `proxy_buffering off`) và `location ^~ /.well-known/oauth-protected-resource` (không có `^~` thì rơi vào SPA `try_files`) | deploy/nginx/smart-coding-study.conf:78-96 |
+| nginx | `location = /mcp` (body ≤2100k, lớn hơn trần 2MB của backend nên backend trả 413, `proxy_buffering off`) và `location ^~ /.well-known/oauth-protected-resource` (không có `^~` thì rơi vào SPA `try_files`) | deploy/nginx/smart-coding-study.conf:78-96 |
 | smoke test | PRM chứa `https://<DOMAIN>/mcp`; POST `/mcp` không token trả 401 có `resource_metadata`; sai thì `rollback_site` | deploy/deploy.sh:159-164 |
 | hướng dẫn kết nối | mục "Kết nối Claude (MCP)" | backend/README.md:83-101 |
 
-Phía identity-service (repo khác, PR riêng): thêm `https://codewithphuong.jacons-corp.com/mcp` vào `OAuth2:AllowedResources`. Chỉ đổi config, luồng của các app khác không đổi. Tại thời điểm chưng cất PR đó (identity-service #5) chưa được merge/deploy theo STATUS.md, nên connector thật chưa chạy được end-to-end (chưa xác minh).
+Phía identity-service (repo khác, PR riêng): thêm `https://codewithphuong.jacons-corp.com/mcp` vào `OAuth2:AllowedResources`. Chỉ đổi config, luồng của các app khác không đổi. PR đó (identity-service #5, commit `85625e2`) đã merge và deploy ngày 2026-10-11.
 
 ## Ranh giới & đánh đổi
 
@@ -104,22 +176,27 @@ Phía identity-service (repo khác, PR riêng): thêm `https://codewithphuong.ja
 | Chưa cấp quyền thì tool trả `isError` kèm `sub` | HTTP 403 | claude.ai hiện thông báo của tool cho người dùng; 403 thì không |
 | Stateless + JSON response, GET/DELETE trả 405 | luồng SSE, phiên trong RAM | không giữ phiên; GET qua SDK mở SSE treo mãi, chiếm worker |
 | Ghi đi chung đường (`review.submit`) và khoá với admin PUT, vào hàng chờ | đường ghi riêng cho MCP; ghi thẳng vào nội dung đang chạy | một bộ luật, một khoá, 409 cho admin cầm version cũ; Claude không thể làm lộ bài chưa duyệt cho học viên |
+| Tool tài liệu SD ghi thẳng, kể cả đổi doc `published`, và tool publish bài code riêng (`publish_changes`); lớp chặn là bước "Needs approval" của claude.ai | thêm hàng chờ duyệt riêng cho tài liệu SD | user chọn: Claude được publish/gỡ/sửa doc đang published; mỗi tool ghi hiện cho người dùng duyệt trước khi chạy ở phía claude.ai, backend không tự thêm bước nào (xem `docs/DECISIONS.md`). Backend vẫn chỉ cho admin đã cấp quyền |
+| Trần body `/mcp` 2MB, chỉ cho `/mcp` | nâng trần chung | doc SD tới 1MB cộng JSON escape; route khác giữ 64KB/4MB |
 | Không giữ khoá suốt lần tải JWKS | single-flight | tải tối đa 1 lần/60s, timeout 5s; chưa đo thấy nghẽn (DEVIATIONS.md) |
-| Tắt chống DNS rebinding của SDK | `allowed_hosts` theo domain | endpoint đòi Bearer, trình duyệt không tự gắn token cho trang lạ; Host thật sau nginx khác nhau giữa môi trường (backend/app/mcp_server.py:333-340). PLAN ban đầu định khai `allowed_hosts`, code không làm |
+| Tắt chống DNS rebinding của SDK | `allowed_hosts` theo domain | endpoint đòi Bearer, trình duyệt không tự gắn token cho trang lạ; Host thật sau nginx khác nhau giữa môi trường (backend/app/mcp_server.py:437-440). PLAN ban đầu định khai `allowed_hosts`, code không làm |
 
 Tool `sd_*` ghi thẳng, không vào hàng chờ: bản chấm là phản hồi cho riêng một học viên, không phải nội dung chung cần admin duyệt. MCP là đường của admin đã được cấp quyền (đích phải còn là admin), không phải đường của học viên; học viên chỉ có route `/api/sd` luôn lọc theo `user.id` (backend/app/mcp_auth.py:205-218, backend/app/sd/attempts.py:154-155).
 
-Không làm: tool xoá, tự duyệt (duyệt là việc của admin trong app, MCP không có tool approve), màn quản lý quyền MCP trong app, sửa `AUTH_OPEN_AS`/token `user_sessions` thành đường vào `/mcp` (hai hệ xác thực tách hẳn; bật `AUTH_OPEN_AS` `/mcp` vẫn 401).
+Không làm: tool xoá cứng, Claude tự publish không hỏi (có tool `publish_changes` nhưng INSTRUCTIONS dặn chỉ gọi khi người dùng đồng ý; backend không kiểm chứng được điều đó, chỉ có "Needs approval" của claude.ai chặn), màn quản lý quyền MCP trong app, sửa `AUTH_OPEN_AS`/token `user_sessions` thành đường vào `/mcp` (hai hệ xác thực tách hẳn; bật `AUTH_OPEN_AS` `/mcp` vẫn 401).
 
 ## Giới hạn đã biết
 
+- Tool tài liệu SD (run 2026-10-17-sd-docs-mcp, STATUS.md/SEAM.md): trần 2MB so theo byte JSON thô, nên doc 1MB toàn ký tự điều khiển (mỗi ký tự thành 6 byte `\u0001`) bị 413 dù hợp lệ — chỉ ảnh hưởng input thù địch, lỗi theo hướng từ chối; chưa có test 411 cho `/mcp` chunked; `sd_edit_doc` so `old_text` thô, không chuẩn hoá NFC; lỗi quyền vẫn trả `sub` và lệnh CLI cấp quyền (cố ý: admin cần `sub` để cấp quyền, DEVIATIONS.md); `sd_delete_doc` không có purge (xoá cứng) nên doc `archived` nằm lại DB.
+- Tool course (run 2026-10-17-sd-courses, STATUS.md Backlog): chưa có test annotations của 5 tool, `include_archived`, và `skills` sai kiểu ở tầng tool (service có kiểm); `sd_list_courses` không phân trang hay trần số course.
 - Đổi mật khẩu trong app KHÔNG thu hồi quyền MCP: quyền gắn tài khoản identity (GitHub), không gắn mật khẩu app; cắt bằng `revoke` (DEVIATIONS.md, quyết định của orchestrator).
 - Backlog (STATUS.md): key lạ trong module/file/project bị bỏ lặng lẽ; module/file con lồng sẵn không qua kiểm id toàn cục; `update_*` không kiểm kiểu giá trị (lỗi pydantic khó đọc); `allow` sub đang hiệu lực cho email khác đổi user im lặng; email không giới hạn độ dài; `list` không phân trang; `lock_timeout` 15s giữ connection DB khi ghi đồng thời; README chưa nhắc `PUBLIC_BASE_URL`/`IDENTITY_ISSUER` khi chạy local; nhánh `IntegrityError` của `allow` chưa có test.
+- Tool publish (run 2026-10-17-mcp-publish-tool, STATUS.md Backlog, SEAM.md): PR #60 vào nhánh `dev`, chưa merge, chưa deploy nên chưa chạy trên production. `get_pending_change` với id vượt int64 chưa chặn ở tầng tool (DB từ chối); lô 50 id giữ khoá ghi lâu (admin chờ tới `lock_timeout`, id bị lỗi `OperationalError` chỉ báo thử lại); `sd_set_status` cũng đổi được sang `published` nên lớp chặn "Needs approval" là như nhau cho cả `sd_set_status` và `sd_publish_doc`; tài liệu SD chưa có bản nháp riêng: sửa doc đang published lên học viên ngay (`sd_unpublish_doc` rồi sửa rồi publish lại là cách tự làm nháp).
 - Test khoá ghi giả lập bằng một lần ghi chen giữa validate và khoá (cùng session); chưa có race thật hai connection (fixture DB test rollback theo transaction, connection độc lập sẽ commit vào DB dùng chung và gây đỏ lẻ tẻ).
 - identity-service vẫn khai `scopes_supported: ["expense"]` cứng; không chặn luồng, chỉ gây nhầm.
 - Rủi ro dư prompt injection của `sd_*` (run 2026-10-12-system-design-mode, DEVIATIONS.md): `answer` của học viên đi vào ngữ cảnh của Claude. Đã có `answer_notice`, `INSTRUCTIONS`, docstring tool và `replace=false` mặc định để không đè bản đã chấm, nhưng `sd_submit_feedback` không buộc `attempt_id` với lần vừa đọc và không có token một lần. Quyết định chấp nhận vì công cụ là của admin nội bộ (số admin = 1); xem `docs/DECISIONS.md`.
-- Chưa xác minh: kết nối thật từ claude.ai (chờ merge và deploy identity-service PR #5, STATUS.md "Next action"). Đã có E2E bằng uvicorn thật + JWKS giả và smoke qua nginx production.
+- Kết nối thật từ claude.ai đã chạy ngày 2026-10-17: log production cho thấy request từ dải IP Anthropic `160.79.106.x` nhận 401 rồi 200 sau khi đăng nhập, tool trả "chưa được cấp quyền" kèm `sub`, admin cấp bằng `python -m app.mcp_access allow` (issue #24). Ngoài ra có E2E bằng uvicorn thật + JWKS giả và smoke qua nginx production.
 
 ## Nguồn
 
-backend/app/mcp_auth.py:1-236; backend/app/mcp_server.py:1-346; backend/app/sd/attempts.py:176-309; backend/app/review.py:390-436; backend/app/mcp_access.py:1-138; backend/app/content_ops.py:14-360; backend/app/admin_api.py:136-178; backend/app/tables.py:187-201; backend/app/main.py:55-66; backend/migrations/versions/0005_mcp_access.py; deploy/deploy.sh:112-113,159-164; deploy/nginx/smart-coding-study.conf:78-96; backend/README.md:83-101; planning/crew/2026-10-11-mcp-content/PLAN.md (mục Thiết kế, INV-01..07), STATUS.md, DEVIATIONS.md, reviews/SEAM.md.
+backend/app/mcp_auth.py:1-236; backend/app/mcp_server.py:1-629; backend/tests/test_mcp_publish.py; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, PLAN-v2.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, T-01.md; mobile/lib/features/admin/admin_sd_docs_screen.dart; backend/app/sd/courses.py:1-200; backend/app/sd/attempts.py:176-309; backend/app/sd/docs.py:1-294; backend/app/main.py:76-94; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md; planning/crew/2026-10-17-sd-courses/STATUS.md, DEVIATIONS.md, reviews/T-02.md, T-02-external.md; backend/app/review.py:390-436; backend/app/mcp_access.py:1-138; backend/app/content_ops.py:14-360; backend/app/admin_api.py:136-178; backend/app/tables.py:187-201; backend/app/main.py:55-66; backend/migrations/versions/0005_mcp_access.py; deploy/deploy.sh:112-113,159-164; deploy/nginx/smart-coding-study.conf:78-96; backend/README.md:83-101; planning/crew/2026-10-11-mcp-content/PLAN.md (mục Thiết kế, INV-01..07), STATUS.md, DEVIATIONS.md, reviews/SEAM.md.

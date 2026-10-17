@@ -20,3 +20,7 @@
 | 2026-10-12-issue29-reskin | Thay áo The Coach + responsive web (#29) | PR #30 mở, chờ user merge (done sau merge) |
 | 2026-10-12-system-design-mode | Chế độ học System Design: nhập .md, lộ trình kiểu Duolingo, đọc liền mạch, Thực chiến + MCP feedback (#31) | PR mở, chờ user merge (done sau merge) |
 | 2026-10-12-sd-reader-hotfix | Hotfix #35: màn đọc vuốt từng card, menu mục lục, task không khoá tuần tự | PR mở, chờ user merge (done sau merge) |
+| 2026-10-13-todo-comment-fill-button | Ô TODO rỗng hiện # TODO <nhãn> — <tiêu đề> + nút Điền code (CodeTab, dùng chung admin preview) (#39) | done — PR #40 đã merge vào ci/deploy-vps-on-merge |
+| 2026-10-17-sd-docs-mcp | MCP tool tài liệu System Design: import/xem/sửa/xoá mềm/publish (#54) | done (PR) |
+| 2026-10-17-sd-courses | Course cho tài liệu System Design — phase 1 (#56) | done (PR) |
+| 2026-10-17-mcp-publish-tool | Tool MCP publish riêng: hàng chờ bài code + tài liệu SD (#59) | done (PR → dev) |

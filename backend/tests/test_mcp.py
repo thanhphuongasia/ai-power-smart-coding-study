@@ -161,6 +161,9 @@ def test_initialize_and_list_tools(mcp, signer):
         "create_project", "update_project", "create_module", "update_module",
         "create_file", "update_file", "create_lesson", "update_lesson",
         "sd_list_attempts", "sd_get_attempt", "sd_submit_feedback",
+        "sd_list_docs", "sd_get_doc", "sd_create_doc", "sd_replace_doc", "sd_edit_doc", "sd_set_status", "sd_delete_doc",
+        "sd_list_courses", "sd_create_course", "sd_update_course", "sd_set_course_status", "sd_assign_doc",
+        "list_pending_changes", "get_pending_change", "publish_changes", "reject_changes", "sd_publish_doc", "sd_unpublish_doc",
     }
     assert tools["list_projects"]["annotations"]["readOnlyHint"] is True
     assert "dry_run" in tools["create_lesson"]["inputSchema"]["properties"]
@@ -379,6 +382,6 @@ def test_gate_rejects_without_reading_body(env):
 
 
 def test_body_over_limit_is_413(mcp, signer):
-    big = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"pad": "x" * 70_000}})
+    big = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"pad": "x" * (2 * 1024 * 1024 + 1)}})
     r = mcp.post("/mcp", content=big, headers=_headers(signer.token()))
     assert r.status_code == 413

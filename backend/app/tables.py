@@ -238,9 +238,29 @@ class ContentChange(Base):
 # users): nhập lại tài liệu xoá-rồi-ghi section/task, FK cascade sẽ xoá sạch tiến độ.
 
 
+class Course(Base):
+    """Khoá học: nhóm các tài liệu SD (phase 1 issue #56). Chỉ để NHÓM khi hiển thị — quyền xem doc vẫn theo
+    `sd_docs.status`. archived = xoá mềm (doc giữ `course_id`, khôi phục là về đúng nhóm)."""
+
+    __tablename__ = "courses"
+    __table_args__ = (CheckConstraint("status IN ('draft','published','archived')", name="ck_courses_status"),)
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    title: Mapped[str] = mapped_column(Text)
+    skills: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    domain: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="draft", server_default="draft")
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class SdDoc(Base):
     __tablename__ = "sd_docs"
-    __table_args__ = (CheckConstraint("status IN ('draft','published')", name="ck_sd_docs_status"),)
+    # archived = xoá mềm: học viên không thấy, bài nộp/tiến độ còn nguyên, khôi phục bằng đổi status.
+    __table_args__ = (CheckConstraint("status IN ('draft','published','archived')", name="ck_sd_docs_status"),)
 
     # Slug của tài liệu, ổn định giữa các lần nhập lại.
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -248,6 +268,13 @@ class SdDoc(Base):
     status: Mapped[str] = mapped_column(String(10), default="draft", server_default="draft")
     # Các card của phần "Bối cảnh" (Phase 2): [{id, kind, title, body}].
     context: Mapped[list] = mapped_column(JSONB, default=list)
+    # Markdown gốc của lần nhập gần nhất (để sửa lại được); None = nhập trước migration 0008.
+    source_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Course chứa doc (None = không thuộc course nào) và vị trí trong course. Nhập lại doc KHÔNG đụng hai cột này.
+    course_id: Mapped[str | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    course_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

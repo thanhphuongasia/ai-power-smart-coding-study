@@ -104,6 +104,127 @@ Map<String, dynamic> _attemptJson({int n = 1}) => {
 
 void main() {
   sdRetryTests();
+  Map<String, dynamic> docJson(String id, [Object? courseId = 'none']) => {
+    'id': id,
+    'title': 'T $id',
+    'sections': 1,
+    'sections_done': 0,
+    'cards': 2,
+    'cards_read': 0,
+    'phase2_unlocked': false,
+    'tasks': 1,
+    'tasks_done': 0,
+    if (courseId != 'none') 'course_id': courseId,
+  };
+
+  test('listDocs: có courses + course_id → gắn course, giữ thứ tự', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 'c1'), docJson('b', 'c1'), docJson('z', null)],
+        'courses': [
+          {
+            'id': 'c1',
+            'title': 'Khoá 1',
+            'skills': ['python', 'system-design'],
+            'domain': null,
+          },
+        ],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs.map((d) => d.id), ['a', 'b', 'z']);
+    expect(docs[0].courseId, 'c1');
+    expect(docs[0].course?.title, 'Khoá 1');
+    expect(docs[0].course?.skills, ['python', 'system-design']);
+    expect(docs[0].course?.domain, isNull);
+    expect(docs[2].courseId, isNull);
+    expect(docs[2].course, isNull);
+  });
+
+  test('listDocs: server cũ không có courses/course_id vẫn ra list', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a')],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs, hasLength(1));
+    expect(docs.single.courseId, isNull);
+    expect(docs.single.course, isNull);
+  });
+
+  test(
+    'listDocs: course_id lạ (không có trong courses) → course null',
+    () async {
+      final (repo, _) = _repo(
+        (_) => _json({
+          'items': [docJson('a', 'ghost')],
+          'courses': <Object>[],
+        }),
+      );
+      final docs = await repo.listDocs();
+      expect(docs.single.courseId, 'ghost');
+      expect(docs.single.course, isNull);
+    },
+  );
+
+  test('listDocs: courses sai kiểu → coi như rỗng, items vẫn ra', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 'c1')],
+        'courses': 'x',
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs.single.courseId, 'c1');
+    expect(docs.single.course, isNull);
+  });
+
+  test(
+    'listDocs: course hỏng bị bỏ qua, course còn lại vẫn nhóm đúng',
+    () async {
+      final (repo, _) = _repo(
+        (_) => _json({
+          'items': [docJson('a', 'c1'), docJson('b', 'c2'), docJson('c', 'c3')],
+          'courses': [
+            'không phải object',
+            {'id': 'c2'}, // thiếu title
+            {'id': 5, 'title': 'id sai kiểu'},
+            {
+              'id': 'c1',
+              'title': 'Khoá 1',
+              'skills': ['python', 3, null],
+              'domain': 42,
+            },
+            {'id': 'c3', 'title': 'Khoá 3', 'skills': 'x'},
+          ],
+        }),
+      );
+      final docs = await repo.listDocs();
+      expect(docs.map((d) => d.id), ['a', 'b', 'c']);
+      expect(docs[0].course?.title, 'Khoá 1');
+      expect(docs[0].course?.skills, ['python']);
+      expect(docs[0].course?.domain, isNull);
+      expect(docs[1].course, isNull);
+      expect(docs[2].course?.skills, isEmpty);
+    },
+  );
+
+  test('listDocs: course_id sai kiểu → null, không làm lỗi list', () async {
+    final (repo, _) = _repo(
+      (_) => _json({
+        'items': [docJson('a', 7), docJson('b', 'c1')],
+        'courses': [
+          {'id': 'c1', 'title': 'Khoá 1'},
+        ],
+      }),
+    );
+    final docs = await repo.listDocs();
+    expect(docs[0].courseId, isNull);
+    expect(docs[0].course, isNull);
+    expect(docs[1].course?.id, 'c1');
+  });
+
   test('listDocs parse đúng và gọi GET /api/sd/docs', () async {
     final (repo, seen) = _repo(
       (_) => _json({

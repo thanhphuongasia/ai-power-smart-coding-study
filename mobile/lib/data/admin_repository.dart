@@ -143,6 +143,25 @@ class ChangeResult {
   final List<int> also;
 }
 
+/// Một tài liệu System Design trong danh sách admin (GET /api/admin/sd/docs).
+class AdminSdDoc {
+  const AdminSdDoc({
+    required this.id,
+    required this.title,
+    required this.status,
+    required this.sections,
+    required this.cards,
+  });
+
+  final String id;
+  final String title;
+
+  /// draft | published | archived
+  final String status;
+  final int sections;
+  final int cards;
+}
+
 class ValidationResult {
   const ValidationResult({required this.ok, required this.errors});
   final bool ok;
@@ -237,6 +256,47 @@ class AdminRepository {
     }
   }
 
+  /// Mọi tài liệu SD, kể cả đã xoá mềm.
+  Future<List<AdminSdDoc>> sdDocs() async {
+    final r = await _send(
+      () => _http.get(
+        _baseUrl.resolve('/api/admin/sd/docs?include_archived=true'),
+      ),
+    );
+    final body = _decode(r);
+    try {
+      return [
+        for (final d in (body['items'] as List))
+          AdminSdDoc(
+            id: (d as Map)['id'] as String,
+            title: d['title'] as String,
+            status: d['status'] as String,
+            sections: (d['sections'] as num?)?.toInt() ?? 0,
+            cards: (d['cards'] as num?)?.toInt() ?? 0,
+          ),
+      ];
+    } catch (_) {
+      throw const AdminError(AdminErrorKind.network);
+    }
+  }
+
+  /// Đổi trạng thái tài liệu SD (draft | published | archived).
+  Future<void> setSdDocStatus(String id, String status) async {
+    final r = await _send(
+      () => _http.put(
+        _baseUrl.resolve(
+          '/api/admin/sd/docs/${Uri.encodeComponent(id)}/status',
+        ),
+        headers: _json,
+        body: jsonEncode({'status': status}),
+      ),
+    );
+    final body = _decode(r);
+    if (body['status'] is! String) {
+      throw const AdminError(AdminErrorKind.network);
+    }
+  }
+
   /// Duyệt một mục. Lỗi 404/409/422 mang `detail` + `message` của server.
   Future<ChangeResult> approve(int id) => _decide(id, 'approve');
 
@@ -282,13 +342,16 @@ class AdminRepository {
         final b = _bodyOrEmpty(r);
         final d = _str(b['detail']);
         final m = _str(b['message']);
-        if (d != 'change_not_found' && m == null) {
+        if (d != 'change_not_found' && d != 'doc_not_found' && m == null) {
           throw const AdminError(AdminErrorKind.network);
         }
         throw AdminError(
           AdminErrorKind.server,
           const [],
-          m ?? 'Không tìm thấy mục này',
+          m ??
+              (d == 'doc_not_found'
+                  ? 'Không tìm thấy tài liệu này'
+                  : 'Không tìm thấy mục này'),
           d,
         );
       case 409:

@@ -802,3 +802,120 @@ này bảng nội dung có dữ liệu nhập tay thì quyết định này ph�
 **Đánh đổi đã chấp nhận**: không còn ràng buộc thứ tự giữa các task; node "hiện tại" trên lộ trình vẫn đúng một (node mở chưa xong đầu tiên theo thứ tự section, bối cảnh, task). Dòng cũ ở mục quyết định gốc không sửa (append-only); mục này là bản hiệu lực cho phần task.
 
 **Nguồn**: backend/app/sd/learner.py:73-92; backend/app/sd/attempts.py:102-104; mobile/lib/features/system_design/sd_path_screen.dart:85-112, 232-237; mobile/lib/features/system_design/task_screen.dart:352-356; planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md (Quyết định thiết kế 4, INV-01, INV-03), DEVIATIONS.md.
+
+### Ô TODO rỗng dùng chung một widget cho học viên và admin preview, không tách đường render riêng
+
+**Quyết định** (run 2026-10-13-todo-comment-fill-button, commit caaf83f): ô code còn trống hiện
+dòng comment giả `# TODO <nhãn> — <tiêu đề block>` (dùng thẳng `Block.title` có sẵn, không thêm
+field schema mới) + nút "Điền code" riêng, cả hai và cả việc chạm khung ô đều gọi đúng `onTap` mở
+`CellEditorPage` hiện có — không dựng khung nhập inline mới, không đổi đích đến. Vì admin "Xem
+trước" đã dựng bằng cách tái dùng `ExerciseScreen(preview: true)` (xem mục "Mọi sửa nội dung vào
+hàng chờ..." phía trên), sửa đúng một chỗ trong `_CodePreview` (code_tab.dart) là đủ cho cả hai
+nơi, không cần nhánh hiển thị riêng cho preview.
+
+**Vì sao**: giữ nguyên kiến trúc "preview = tái dùng y hệt màn thật" đã có; `CellEditorPage` (số
+dòng, gợi ý vocab, autocomplete) đã là đúng chỗ nhập, không có lý do thêm cách nhập thứ hai.
+
+**Đánh đổi đã chấp nhận**: bỏ icon `open_in_full` ở nhánh ô rỗng (không còn ý nghĩa "mở xem code
+đã viết" khi ô chưa có gì) — quyết định hợp lý nhưng review ghi nhận Minor vì hành động đó không
+được giải thích ở `DEVIATIONS.md`/`STATUS.md` lúc review, chỉ ghi trong commit message.
+
+**Lưu ý sau merge `ci/deploy-vps-on-merge` → `main` (2026-10-13)**: run `2026-10-12-issue29-reskin`
+(mục "Thay áo The Coach" phía trên) đã thêm `CodeTab(inlineEditor: bool)` — khi `true`, ô đang mở
+là editor ngay trong notebook (`_inlineEditor`), không còn render qua `_CodePreview`. Nhánh ô rỗng
+mô tả ở đây (`# TODO <nhãn>` + nút "Điền code") chỉ còn áp dụng khi `inlineEditor: false` (mặc
+định) hoặc cho ô lỗi chưa mở trong chế độ inline — đã merge tay (không phải worker), giữ cả hai
+tính năng, không có tài liệu INV riêng vì chỉ một task chạm vùng này.
+
+**Nguồn**: mobile/lib/features/exercise/code_tab.dart:522-523,749-806;
+planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
+
+### System Design: xoá tài liệu là xoá mềm (`archived`), không chặn xoá và không xoá cứng
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp, issue #54): xoá tài liệu SD = đặt `sd_docs.status = 'archived'` (thêm giá trị thứ ba cạnh `draft`/`published`, migration 0008). Học viên chỉ thấy `published` ở mọi route nên doc archived biến mất khỏi app; bài nộp và tiến độ không bị động tới. Khôi phục bằng `set_status` về `draft`/`published`. Nhập (`create`/`replace`/`upsert`) chỉ nhận `draft`/`published`, nên muốn xoá phải đi đường `set_status` / `sd_delete_doc` có chủ đích. Hàng chờ chấm của Claude (`sd_list_attempts`) mặc định bỏ bài của doc archived, có `include_archived=true` để xem; `sd_get_attempt` vẫn đọc được từng bài.
+
+**Vì sao**: user được hỏi ba hướng (chặn xoá khi doc đã có bài nộp, xoá cứng, xoá mềm) và chọn xoá mềm: hoàn tác được, không mất dữ liệu học viên, không cần luật "doc nào được xoá". Bảng tiến độ/lần thử vốn không FK tới nội dung (xem mục System Design phía trên) nên không phải đổi gì ở đó.
+
+**Phương án đã bỏ**: chặn xoá khi có bài nộp (doc có bài thì không bao giờ gỡ được); xoá cứng kèm bài nộp (mất dữ liệu không hoàn tác được từ một lệnh của Claude).
+
+**Đánh đổi đã chấp nhận**: doc archived nằm lại DB (chưa có purge, ghi ở Backlog); downgrade 0008 đưa doc archived về `draft` và mất `source_md`; `POST /api/admin/sd/docs` với `status` rõ lên doc archived sẽ khôi phục nó (upsert), trong khi MCP `replace`/`edit` và CLI mặc định giữ archived — SEAM.md ghi là hành vi chưa khẳng định chủ ý.
+
+**Nguồn**: backend/app/sd/docs.py:32-34, 281-294; backend/app/sd/attempts.py:194-210; backend/app/sd/learner.py:41-45; backend/migrations/versions/0008_sd_source_archive.py:21-33; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, reviews/SEAM.md (INV-01, INV-04, INV-06).
+
+### MCP: Claude được publish và sửa tài liệu SD đang published; lớp chặn là "Needs approval" của claude.ai
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp): 7 tool tài liệu SD (`sd_list_docs`, `sd_get_doc`, `sd_create_doc`, `sd_replace_doc`, `sd_edit_doc`, `sd_set_status`, `sd_delete_doc`) ghi thẳng vào `sd_docs` giống API admin `/api/admin/sd`, không qua hàng chờ duyệt `content_changes` của nội dung code. Claude được đặt `published`, gỡ xuống và sửa doc đang `published` (học viên thấy ngay). Tài liệu mới mặc định `draft`. Backend không thêm bước duyệt riêng; chặn bằng ba lớp có sẵn: chỉ `sub` đã cấp quyền và còn là admin gọi được (kiểm mỗi lần), `dry_run` cho mọi lần ghi, và bước "Needs approval" (xác nhận từng tool ghi trước khi chạy) ở phía claude.ai. `INSTRUCTIONS` dặn Claude nói rõ với người dùng rằng doc published đổi là hiện ngay.
+
+**Vì sao**: user chọn cho Claude quyền publish/unpublish; tài liệu SD là bài đọc của riêng admin (số admin = 1), không phải nội dung chấm bằng test cần reviewer, và API admin của nó vốn không có hàng chờ.
+
+**Phương án đã bỏ**: bắt mọi tài liệu SD đi qua hàng chờ duyệt (chậm cho một admin tự soạn); chỉ cho Claude ghi `draft` rồi người publish tay (user không muốn).
+
+**Đánh đổi đã chấp nhận**: sai sót của Claude lên học viên ngay nếu người dùng bấm duyệt ở claude.ai mà không đọc; giảm nhẹ bằng `sd_edit_doc` được khai `destructive` + không idempotent (review ngoài bắt annotation sai ban đầu), `base_revision` cho `sd_replace_doc` để không ghi đè bản vừa sửa, và xoá chỉ là xoá mềm. Lớp "Needs approval" nằm ở client ngoài repo này, backend không kiểm chứng được nó có bật.
+
+**Nguồn**: backend/app/mcp_server.py:57-70, 147-148, 319-395; backend/app/sd/docs.py:53-57, 112-113; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, DEVIATIONS.md.
+
+### System Design: lưu markdown gốc (`source_md`) thay vì dựng lại markdown từ section/card
+
+**Quyết định** (run 2026-10-17-sd-docs-mcp): mọi lần nhập tài liệu (API admin, MCP, CLI) lưu nguyên chuỗi markdown vào `sd_docs.source_md` (cột `TEXT NULL`, migration 0008). Sửa theo đoạn (`sd_edit_doc`) áp `{old_text, new_text}` lên chuỗi này rồi nhập lại bằng `replace`. Tài liệu nhập trước 0008 có `source_md = NULL` và phải backfill bằng cách nhập lại file `.md` gốc (CLI `python -m app.sd.import_file`, giữ nguyên status, `--dry-run` trước). Backfill production 2026-10-17: 10 doc, mỗi doc `cards_added=0 cards_removed=0`.
+
+**Vì sao**: `sd_sections.cards` là kết quả đã parse (id băm từ nội dung chuẩn hoá, khoảng trắng gộp), nên dựng ngược lại không cho ra đúng bản gốc; sửa trên bản dựng lại sẽ làm lệch tài liệu và có thể đổi id card, mất tiến độ học viên. Lưu gốc thì `old_text` khớp đúng chữ người viết. `revision` (16 ký tự đầu sha256 của `source_md`) cho Claude chống ghi đè.
+
+**Phương án đã bỏ**: dựng markdown từ section/card (không bảo toàn bản gốc, rủi ro đổi id card); bắt gửi lại toàn bộ markdown cho mọi lần sửa nhỏ (tốn ngữ cảnh, đến 1MB).
+
+**Đánh đổi đã chấp nhận**: doc cũ chưa backfill thì `sd_edit_doc` báo lỗi (dùng `sd_replace_doc`); `apply_edits` so khớp chuỗi thô, không chuẩn hoá NFC (Backlog M-4); mỗi doc lưu thêm tới 1MB trong DB.
+
+**Nguồn**: backend/app/sd/docs.py:53-57, 139-148, 171-219; backend/app/sd/import_file.py:1-58; backend/migrations/versions/0008_sd_source_archive.py:21-26; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md.
+
+### System Design: course chỉ để nhóm tài liệu, không quyết quyền xem
+
+**Quyết định** (run 2026-10-17-sd-courses, issue #56 phase 1): bảng `courses` + `sd_docs.course_id`/`course_position` chỉ dùng để gom doc khi hiển thị. Học viên có thấy doc hay không vẫn do `sd_docs.status` quyết, độc lập với course. Course chưa `published` thì doc của nó hiện ở nhóm "Khác"; course `archived` là xoá mềm, doc giữ `course_id`, khôi phục course thì doc về đúng nhóm. Nhập lại doc không đổi `course_id`/`course_position`.
+
+**Vì sao**: bất biến INV-01 của run: học viên thấy đúng tập doc `published` như trước khi có course; chuyển course về draft/archived mà doc biến khỏi app là lỗi. Giữ `sd_docs.status` là nguồn duy nhất cho quyền xem thì thêm course không đổi tập doc được xem. Xoá course là xoá mềm (INV-05) để khôi phục được; FK `ON DELETE SET NULL` chỉ là lưới phòng xa. Sổ bất biến được kiểm bằng e2e 10/10 (INV-01..07) và mutation (bỏ chặn gán vào course archived, bỏ `course_position` khỏi `DOC_ORDER` đều làm test đỏ).
+
+**Đánh đổi đã chấp nhận**: course nháp không "giấu" được doc đã published (chỉ đẩy xuống nhóm "Khác"); muốn giấu thì gỡ doc.
+
+**Nguồn**: backend/app/sd/courses.py:1-8, 158-171; backend/app/sd/learner.py:121-160; backend/app/tables.py:241-277; planning/crew/2026-10-17-sd-courses/PLAN.md.
+
+### System Design: phase 1 không gắn course cho `themes` của chế độ code
+
+**Quyết định** (run 2026-10-17-sd-courses): course chỉ nhóm tài liệu System Design (`sd_docs`); chưa gắn course cho `themes`. Cần thì làm ở phase sau bằng bảng nối không FK.
+
+**Vì sao**: `themes` bị xoá rồi ghi lại mỗi lần duyệt nội dung (`load_content` chạy `delete(model)` cho `Theme` rồi nạp lại), nên một cột FK trên `themes` trỏ tới course sẽ mất hoặc vỡ sau mỗi lần duyệt; cùng kiểu lý do `sd_progress`/`sd_attempts` không FK tới nội dung SD.
+
+**Đánh đổi đã chấp nhận**: chế độ code chưa có khái niệm khoá học. Backlog của run ghi hướng làm sau là bảng nối không FK (chưa thiết kế).
+
+**Nguồn**: backend/app/load_content.py:307-320; planning/crew/2026-10-17-sd-courses/PLAN.md (mục phạm vi), STATUS.md (Backlog).
+
+### API học viên `GET /api/sd/docs`: chỉ THÊM key để app cũ vẫn chạy
+
+**Quyết định** (run 2026-10-17-sd-courses): hợp đồng chỉ thêm `course_id` ở mỗi item và `courses` ở gốc response; không đổi hay bỏ key nào, không đổi kiểu trả về. Item có `course_id` chỉ khi course `published`. App cũ bỏ qua key lạ nên vẫn hiện list phẳng; app mới đọc server cũ (không có hai key) cũng hiện list phẳng. Phía Flutter parse course lỏng (dữ liệu course lệch không làm lỗi cả tab) và giữ `listDocs` trả `List<SdDocSummary>` (gắn course vào từng doc) thay vì đổi sang kiểu bọc mới.
+
+**Vì sao**: PLAN ghi rõ "app cũ trên TestFlight bỏ qua key mới và vẫn hiện list phẳng", nên backend chỉ được thêm key. Course chỉ là thông tin nhóm nên không đáng để dữ liệu course lệch làm hỏng cả tab Design (review T-04 bắt parse quá chặt, correction T-04b nới ra). Giữ kiểu `listDocs` vì đổi sang `SdDocsIndex` làm vỡ `test/sd_path_screen_test.dart` ngoài ownership (DEVIATIONS.md).
+
+**Đánh đổi đã chấp nhận**: `courses` chỉ chứa course published có ≥1 doc, nên app không liệt kê được course rỗng; một assert cũ `{"items": []}` của `test_sd_learner.py` phải đổi thành `{"items": [], "courses": []}`.
+
+**Nguồn**: backend/app/sd/learner.py:120-162; mobile/lib/data/sd_repository.dart:77-97; mobile/lib/domain/sd_models.dart:20-56; planning/crew/2026-10-17-sd-courses/DEVIATIONS.md.
+
+### MCP: tool publish RIÊNG cho hàng chờ bài code, thay vì để Claude tự publish
+
+**Quyết định** (run 2026-10-17-mcp-publish-tool, issue #59, PR #60 vào nhánh `dev`, chưa merge, chưa deploy): bài code Claude gửi qua MCP vẫn chỉ vào hàng chờ `content_changes`. Muốn học viên thấy thì Claude phải gọi thêm một tool publish riêng, `publish_changes(change_ids)` (hoặc `reject_changes`), sau khi `list_pending_changes`/`get_pending_change` cho người dùng xem. Hai tool này không có đường duyệt riêng: gọi thẳng `review.approve`/`review.reject` như API admin, mỗi id trong một savepoint để id lỗi không kéo id khác, `decided_by = mcp:<sub> (<email>)`, trần 50 id mỗi lần. INSTRUCTIONS dặn Claude chỉ gọi khi người dùng đồng ý. Tool mới nên sau khi lên production phải Disconnect rồi Connect lại connector trên claude.ai.
+
+**Vì sao**: user muốn Claude publish được qua MCP nhưng "bằng tool publish riêng chứ không tự động": gửi bài trước, publish khi người dùng bảo. Tên tool rõ nghĩa để nút "Needs approval" của claude.ai hiện đúng hành động nguy hiểm (học viên thấy NGAY) tách khỏi tool ghi vào hàng chờ (an toàn). Dùng lại `review.approve` nên bài sai luật vẫn bị `validation_errors` chặn như khi admin bấm duyệt.
+
+**Phương án đã bỏ**: để tool ghi tự publish luôn (mất bước kiểm của người dùng, và Claude gửi sai là lộ ngay); giữ nguyên "chỉ admin duyệt trong app" (user muốn duyệt từ chat).
+
+**Đánh đổi đã chấp nhận**: backend không kiểm chứng được người dùng đã đồng ý, chỉ có bước "Needs approval" ở client ngoài repo. `sd_set_status` vẫn đổi được sang `published`, tức cùng lớp chặn, không có đường nào khác để khoá. Lô 50 id giữ khoá ghi lâu, id nào hết `lock_timeout` thì báo lỗi riêng.
+
+**Nguồn**: backend/app/mcp_server.py:466-579; backend/tests/test_mcp_publish.py; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, STATUS.md, reviews/SEAM.md.
+
+### System Design: tool publish gọn (`sd_publish_doc`/`sd_unpublish_doc`), chưa có bản nháp riêng
+
+**Quyết định** (run 2026-10-17-mcp-publish-tool): thêm hai tool bọc `sd_docs.set_status` với tên rõ nghĩa: `sd_publish_doc` (`published`), `sd_unpublish_doc` (`draft`, ẩn khỏi học viên, không xoá). Trong app thêm màn admin "Tài liệu SD" (publish/ẩn/khôi phục) gọi cùng `PUT /api/admin/sd/docs/{id}/status`, nên app và Claude đi cùng một đường và cùng tập trạng thái. `sd_create_doc` vẫn mặc định `draft`. Sửa tài liệu đang `published` vẫn lên học viên ngay: tài liệu SD chưa có bản nháp riêng.
+
+**Vì sao**: user chọn "cách gọn" cho SD thay vì dựng hàng chờ riêng như bài code (theo quyết định tool tài liệu SD ghi thẳng, run 2026-10-17-sd-docs-mcp). Giữa run user còn yêu cầu có nút publish trên UI; khảo sát cho thấy nút Duyệt/Bỏ bài code đã có sẵn ở "Chờ duyệt (N)", chỉ thiếu phần tài liệu SD, nên PLAN-v2 thêm T-02.
+
+**Phương án đã bỏ**: hàng chờ/bản nháp riêng cho tài liệu SD (để Backlog); chỉ dùng `sd_set_status` (tên chung chung, khó nhận ra ở bước duyệt của claude.ai).
+
+**Đánh đổi đã chấp nhận**: một lần sửa sai trên doc đang published lên học viên ngay; cách tự làm nháp là `sd_unpublish_doc`, sửa, rồi `sd_publish_doc`.
+
+**Nguồn**: backend/app/mcp_server.py:566-579; backend/app/sd/admin.py:48-92; mobile/lib/features/admin/admin_sd_docs_screen.dart:31-215; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, PLAN-v2.md, DEVIATIONS.md.

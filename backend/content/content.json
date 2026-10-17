@@ -779,6 +779,153 @@
           "modules": []
         }
       ]
+    },
+    {
+      "id": "azure-ragbot",
+      "name": "RAG Chatbot nội bộ",
+      "description": "Vá bug thật và bổ sung tính năng còn thiếu của một chatbot RAG nội bộ, dựa theo các issue thật của dự án shin-agentic-rag-system: feedback idempotent, cấu hình an toàn, không log dữ liệu nhạy cảm, cache và giới hạn lịch sử hội thoại.",
+      "tags": [
+        "python",
+        "rag",
+        "reliability"
+      ],
+      "diagram": {
+        "classes": [
+          {
+            "name": "FeedbackService",
+            "file": "services/feedback_service.py",
+            "attributes": [
+              {
+                "name": "records",
+                "type": "dict[str, str]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "save_feedback"
+            ]
+          },
+          {
+            "name": "RagConfig",
+            "file": "config.py",
+            "attributes": [
+              {
+                "name": "search_number_of_answers",
+                "type": "int",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__"
+            ]
+          },
+          {
+            "name": "ErrorLogger",
+            "file": "errors/error_logger.py",
+            "attributes": [
+              {
+                "name": "records",
+                "type": "list[dict]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "log_error"
+            ]
+          },
+          {
+            "name": "QueryCache",
+            "file": "cache/query_cache.py",
+            "attributes": [
+              {
+                "name": "store",
+                "type": "dict",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "get_or_set"
+            ]
+          },
+          {
+            "name": "ConversationHistory",
+            "file": "memory/conversation_history.py",
+            "attributes": [
+              {
+                "name": "max_turns",
+                "type": "int",
+                "group": "core"
+              },
+              {
+                "name": "turns",
+                "type": "list[list]",
+                "group": "core"
+              }
+            ],
+            "methods": [
+              "__init__",
+              "add_turn"
+            ]
+          }
+        ],
+        "relations": []
+      },
+      "topics": [
+        {
+          "id": "ragbot-reliability",
+          "name": "Reliability — vá lỗi thật",
+          "description": "Sửa 3 lỗi thật: feedback nhân bản/không validate, cấu hình đọc nhầm kiểu, log lộ dữ liệu người dùng.",
+          "files": [
+            {
+              "id": "ragbot-feedback-py",
+              "name": "services/feedback_service.py",
+              "exercise_ids": [
+                "feedback-save"
+              ]
+            },
+            {
+              "id": "ragbot-config-py",
+              "name": "config.py",
+              "exercise_ids": [
+                "rag-config-cast"
+              ]
+            },
+            {
+              "id": "ragbot-error-logger-py",
+              "name": "errors/error_logger.py",
+              "exercise_ids": [
+                "error-logger-redact"
+              ]
+            }
+          ],
+          "modules": []
+        },
+        {
+          "id": "ragbot-performance",
+          "name": "Performance — tính năng còn thiếu",
+          "description": "Bổ sung 2 tính năng hệ thống chưa có: cache tra cứu và giới hạn lịch sử hội thoại.",
+          "files": [
+            {
+              "id": "ragbot-cache-py",
+              "name": "cache/query_cache.py",
+              "exercise_ids": [
+                "query-cache-get-or-set"
+              ]
+            },
+            {
+              "id": "ragbot-history-py",
+              "name": "memory/conversation_history.py",
+              "exercise_ids": [
+                "history-limit-turns"
+              ]
+            }
+          ],
+          "modules": []
+        }
+      ]
     }
   ],
   "exercises": {
@@ -5809,6 +5956,627 @@
             "call": "buf.getvalue().splitlines()[2]",
             "expect": {
               "return": "Interest Rate: 5.0%"
+            }
+          }
+        ]
+      }
+    },
+    "feedback-save": {
+      "id": "feedback-save",
+      "title": "Feedback: validate rating + khoá ổn định (không nhân bản)",
+      "class_name": "FeedbackService",
+      "function_name": "save_feedback",
+      "params": [
+        "turn_id",
+        "user_id",
+        "rating"
+      ],
+      "template": "class FeedbackService:\n    VALID_RATINGS = {\"like\", \"unlike\"}\n\n    def __init__(self):\n        self.records = {}  # khoá \"turn_id:user_id\" -> rating mới nhất\n\n    def save_feedback(self, turn_id, user_id, rating):\n        # TODO A\n        # TODO B\n        self.records[key] = rating\n        return key",
+      "challenge": {
+        "statement": "Viết save_feedback(self, turn_id, user_id, rating): (A) nếu rating không phải \"like\" hay \"unlike\" thì raise ValueError NGAY — if và raise trong CÙNG một ô. (B) Tạo khoá ổn định key = \"turn_id:user_id\" để lưu. Phần ghi vào self.records và return đã có sẵn.",
+        "motivation": "Bản gốc (POST /feedback) chỉ kiểm 4 trường không rỗng rồi tạo id = uuid4() MỖI LẦN gọi — bấm like rồi đổi ý bấm unlike tạo ra 2 document, không ai biết cái nào là trạng thái hiện tại; \"good\"/\"Like\"/\"👍\"/\"abc\" đều được lưu y như nhau vì evaluation là chuỗi tự do. Khoá cố định theo (turn_id, user_id) biến upsert thành GHI ĐÈ thật; rating có tập giá trị hợp lệ.",
+        "small": {
+          "caption": "Bấm like rồi đổi ý bấm unlike cùng một câu trả lời",
+          "input": "svc = FeedbackService()\nsvc.save_feedback(\"T1\", \"U1\", \"like\")\nsvc.save_feedback(\"T1\", \"U1\", \"unlike\")\nprint(svc.records)",
+          "output": "{'T1:U1': 'unlike'}",
+          "note": "Chỉ 1 document, ghi đè theo khoá — không nhân bản như bản gốc."
+        },
+        "project": {
+          "caption": "Client cũ gửi rating không hợp lệ (\"good\")",
+          "input": "svc.save_feedback(\"T1\", \"U1\", \"good\")",
+          "output": "ValueError: rating phải là 'like' hoặc 'unlike'",
+          "note": "Trước đây mọi chuỗi đều được lưu nguyên văn; giờ sai enum bị từ chối ngay."
+        }
+      },
+      "blocks": [
+        {
+          "id": "feedback-save-a",
+          "label": "A",
+          "title": "Validate rating rồi từ chối",
+          "prompt": "Nếu rating không phải \"like\" hay \"unlike\" thì raise ValueError với thông báo \"rating phải là 'like' hoặc 'unlike'\".",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if rating not in self.VALID_RATINGS:\n    raise ValueError(\"rating phải là 'like' hoặc 'unlike'\")"
+          ],
+          "expected_output": "Đã từ chối rating không hợp lệ.",
+          "explanation": "not in kiểm tra rating có nằm trong tập hợp lệ; raise viết ngay dưới if vì validate và từ chối là MỘT quy tắc, không phải hai ô riêng.",
+          "hints": [
+            "Dùng not in trên tập VALID_RATINGS; raise viết ngay dưới (thụt thêm 4 space).",
+            "if rating not in self.VALID_RATINGS:",
+            "if rating not in self.VALID_RATINGS:\n    raise ValueError(\"rating phải là 'like' hoặc 'unlike'\")"
+          ],
+          "vocab": [
+            "not in",
+            "raise"
+          ]
+        },
+        {
+          "id": "feedback-save-b",
+          "label": "B",
+          "title": "Tạo khoá ổn định",
+          "prompt": "Ghép turn_id và user_id thành khoá \"turn_id:user_id\".",
+          "indent_level": 2,
+          "accepted_answers": [
+            "key = \"%s:%s\" % (turn_id, user_id)"
+          ],
+          "expected_output": "Đã tạo khoá.",
+          "explanation": "Khoá cố định theo (turn_id, user_id) — không phải uuid4() sinh mới mỗi lần — nên lần ghi sau GHI ĐÈ đúng bản ghi cũ thay vì thêm document mới.",
+          "hints": [
+            "Ghép turn_id và user_id bằng dấu hai chấm.",
+            "\"%s:%s\" % (turn_id, user_id)",
+            "key = \"%s:%s\" % (turn_id, user_id)"
+          ],
+          "vocab": [
+            "%",
+            "string format"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class FeedbackService:\n    VALID_RATINGS = {\"like\", \"unlike\"}\n\n    def __init__(self):\n        self.records = {}  # khoá \"turn_id:user_id\" -> rating mới nhất\n\n    def save_feedback(self, turn_id, user_id, rating):\n        if rating not in self.VALID_RATINGS:\n            raise ValueError(\"rating phải là 'like' hoặc 'unlike'\")\n        key = \"%s:%s\" % (turn_id, user_id)\n        self.records[key] = rating\n        return key",
+        "cases": [
+          {
+            "steps": [
+              "svc = FeedbackService()"
+            ],
+            "call": "svc.save_feedback(\"T1\", \"U1\", \"like\")",
+            "expect": {
+              "return": "T1:U1"
+            }
+          },
+          {
+            "steps": [
+              "svc = FeedbackService()",
+              "svc.save_feedback(\"T1\", \"U1\", \"like\")"
+            ],
+            "call": "svc.records",
+            "expect": {
+              "return": {
+                "T1:U1": "like"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FeedbackService()",
+              "svc.save_feedback(\"T1\", \"U1\", \"like\")",
+              "svc.save_feedback(\"T1\", \"U1\", \"unlike\")"
+            ],
+            "call": "svc.records",
+            "expect": {
+              "return": {
+                "T1:U1": "unlike"
+              }
+            }
+          },
+          {
+            "steps": [
+              "svc = FeedbackService()"
+            ],
+            "call": "svc.save_feedback(\"T1\", \"U1\", \"good\")",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "svc = FeedbackService()",
+              "try:\n    svc.save_feedback('T1', 'U1', 'good')\nexcept ValueError as e:\n    msg = str(e)"
+            ],
+            "call": "msg",
+            "expect": {
+              "return": "rating phải là 'like' hoặc 'unlike'"
+            }
+          },
+          {
+            "steps": [
+              "svc = FeedbackService()",
+              "svc.save_feedback(\"T1\", \"U1\", \"like\")",
+              "svc.save_feedback(\"T1\", \"U2\", \"unlike\")"
+            ],
+            "call": "svc.records",
+            "expect": {
+              "return": {
+                "T1:U1": "like",
+                "T1:U2": "unlike"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "rag-config-cast": {
+      "id": "rag-config-cast",
+      "title": "Cấu hình: ép kiểu env string sang int, chặn lúc khởi động",
+      "class_name": "RagConfig",
+      "function_name": "__init__",
+      "params": [
+        "raw_env"
+      ],
+      "template": "class RagConfig:\n    def __init__(self, raw_env):\n        value = raw_env.get(\"SEARCH_NUMBER_OF_ANSWERS\", \"3\")\n        # TODO A\n        self.search_number_of_answers = int(value)",
+      "challenge": {
+        "statement": "Viết phần kiểm tra của RagConfig.__init__: value đọc từ env LUÔN là chuỗi (str) — nếu value không phải chuỗi toàn chữ số thì raise ValueError NGAY (if và raise trong CÙNG một ô). Dòng int(value) đã có sẵn.",
+        "motivation": "Bản gốc đọc thẳng env string rồi so sánh với số: len(documents) >= \"3\" — Python so str với int ném TypeError ngay khi có tài liệu đầu tiên đạt ngưỡng, nghĩa là CÀNG NHIỀU tài liệu tốt càng hay lỗi 500. Validate + ép kiểu MỘT LẦN lúc khởi động để cấu hình sai lộ ra ngay lúc deploy, không phải giữa request của người dùng.",
+        "small": {
+          "caption": "Cấu hình hợp lệ",
+          "input": "cfg = RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"5\"})\nprint(cfg.search_number_of_answers)",
+          "output": "5",
+          "note": null
+        },
+        "project": {
+          "caption": "Deploy nhầm giá trị rỗng cho biến môi trường",
+          "input": "RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"\"})",
+          "output": "ValueError: SEARCH_NUMBER_OF_ANSWERS phải là số nguyên",
+          "note": "Lỗi lộ ra ngay lúc khởi động service, không phải lúc có người dùng gửi câu hỏi."
+        }
+      },
+      "blocks": [
+        {
+          "id": "rag-config-cast-a",
+          "label": "A",
+          "title": "Validate rồi từ chối giá trị không phải số",
+          "prompt": "Nếu value không phải chuỗi toàn chữ số thì raise ValueError với thông báo \"SEARCH_NUMBER_OF_ANSWERS phải là số nguyên\".",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if not value.isdigit():\n    raise ValueError(\"SEARCH_NUMBER_OF_ANSWERS phải là số nguyên\")"
+          ],
+          "expected_output": "Đã chặn cấu hình sai.",
+          "explanation": "isdigit() kiểm chuỗi toàn chữ số; raise viết ngay dưới if vì validate và từ chối là MỘT quy tắc, không phải hai ô riêng.",
+          "hints": [
+            "Dùng value.isdigit(); raise viết ngay dưới (thụt thêm 4 space).",
+            "if not value.isdigit():",
+            "if not value.isdigit():\n    raise ValueError(\"SEARCH_NUMBER_OF_ANSWERS phải là số nguyên\")"
+          ],
+          "vocab": [
+            "isdigit",
+            "raise"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class RagConfig:\n    def __init__(self, raw_env):\n        value = raw_env.get(\"SEARCH_NUMBER_OF_ANSWERS\", \"3\")\n        if not value.isdigit():\n            raise ValueError(\"SEARCH_NUMBER_OF_ANSWERS phải là số nguyên\")\n        self.search_number_of_answers = int(value)",
+        "cases": [
+          {
+            "steps": [
+              "cfg = RagConfig({})"
+            ],
+            "call": "cfg.search_number_of_answers",
+            "expect": {
+              "return": 3
+            }
+          },
+          {
+            "steps": [
+              "cfg = RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"7\"})"
+            ],
+            "call": "cfg.search_number_of_answers",
+            "expect": {
+              "return": 7
+            }
+          },
+          {
+            "steps": [],
+            "call": "RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"\"})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [],
+            "call": "RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"abc\"})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [],
+            "call": "RagConfig({\"SEARCH_NUMBER_OF_ANSWERS\": \"-1\"})",
+            "expect": {
+              "raises": "ValueError"
+            }
+          },
+          {
+            "steps": [
+              "try:\n    RagConfig({'SEARCH_NUMBER_OF_ANSWERS': 'abc'})\nexcept ValueError as e:\n    msg = str(e)"
+            ],
+            "call": "msg",
+            "expect": {
+              "return": "SEARCH_NUMBER_OF_ANSWERS phải là số nguyên"
+            }
+          }
+        ]
+      }
+    },
+    "error-logger-redact": {
+      "id": "error-logger-redact",
+      "title": "Error log: ngừng ghi dữ liệu nhạy cảm",
+      "class_name": "ErrorLogger",
+      "function_name": "log_error",
+      "params": [
+        "payload"
+      ],
+      "template": "class ErrorLogger:\n    SENSITIVE_FIELDS = {\"user_input\", \"system_prompt\"}\n\n    def __init__(self):\n        self.records = []\n\n    def log_error(self, payload):\n        safe = dict(payload)\n        for field in self.SENSITIVE_FIELDS:\n            # TODO A\n        self.records.append(safe)\n        return safe",
+      "challenge": {
+        "statement": "Viết thân vòng lặp trong log_error(self, payload): với mỗi field trong SENSITIVE_FIELDS, xoá field đó khỏi safe NẾU CÓ — dùng pop với giá trị mặc định, không cần if riêng. Phần sao chép payload, ghi vào self.records và return đã có sẵn.",
+        "motivation": "Bản gốc ghi NGUYÊN VĂN câu hỏi người dùng + lịch sử + system prompt vào log mức ERROR cho MỌI request dù không có lỗi — ai đọc được log là đọc được dữ liệu người dùng, và log giữ lâu, khó xoá. pop(field, None) xoá an toàn: field có hay không có trong payload đều không ném lỗi, nên không cần if riêng để kiểm tồn tại trước.",
+        "small": {
+          "caption": "Payload có field nhạy cảm",
+          "input": "logger = ErrorLogger()\nsafe = logger.log_error({\"request_id\": \"r1\", \"user_input\": \"số dư của tôi?\", \"system_prompt\": \"Bạn là trợ lý...\"})\nprint(sorted(safe.keys()))",
+          "output": "['request_id']",
+          "note": null
+        },
+        "project": {
+          "caption": "Payload không có field nhạy cảm (lỗi tới từ bước khác)",
+          "input": "logger.log_error({\"request_id\": \"r2\", \"status_code\": 500})",
+          "output": "{'request_id': 'r2', 'status_code': 500}",
+          "note": "pop(field, None) không ném lỗi khi field vắng mặt — payload giữ nguyên."
+        }
+      },
+      "blocks": [
+        {
+          "id": "error-logger-redact-a",
+          "label": "A",
+          "title": "Xoá field nhạy cảm nếu có",
+          "prompt": "Xoá field khỏi safe bằng pop, không lỗi nếu field không tồn tại.",
+          "indent_level": 3,
+          "accepted_answers": [
+            "safe.pop(field, None)"
+          ],
+          "expected_output": "Đã xoá field nhạy cảm.",
+          "explanation": "dict.pop(field, None) xoá field nếu có, không ném lỗi nếu field vắng mặt — gọn hơn viết if field in safe: del safe[field].",
+          "hints": [
+            "Dùng safe.pop(field, None).",
+            "pop(key, default) không ném lỗi khi thiếu key.",
+            "safe.pop(field, None)"
+          ],
+          "vocab": [
+            "pop",
+            "for"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class ErrorLogger:\n    SENSITIVE_FIELDS = {\"user_input\", \"system_prompt\"}\n\n    def __init__(self):\n        self.records = []\n\n    def log_error(self, payload):\n        safe = dict(payload)\n        for field in self.SENSITIVE_FIELDS:\n            safe.pop(field, None)\n        self.records.append(safe)\n        return safe",
+        "cases": [
+          {
+            "steps": [
+              "logger = ErrorLogger()"
+            ],
+            "call": "sorted(logger.log_error({\"request_id\": \"r1\", \"user_input\": \"x\", \"system_prompt\": \"y\"}).keys())",
+            "expect": {
+              "return": [
+                "request_id"
+              ]
+            }
+          },
+          {
+            "steps": [
+              "logger = ErrorLogger()"
+            ],
+            "call": "logger.log_error({\"a\": 1, \"b\": 2})",
+            "expect": {
+              "return": {
+                "a": 1,
+                "b": 2
+              }
+            }
+          },
+          {
+            "steps": [
+              "logger = ErrorLogger()"
+            ],
+            "call": "logger.log_error({\"user_input\": \"x\", \"code\": 200})",
+            "expect": {
+              "return": {
+                "code": 200
+              }
+            }
+          },
+          {
+            "steps": [
+              "logger = ErrorLogger()",
+              "logger.log_error({\"x\": 1})"
+            ],
+            "call": "len(logger.records)",
+            "expect": {
+              "return": 1
+            }
+          },
+          {
+            "steps": [
+              "logger = ErrorLogger()",
+              "logger.log_error({\"x\": 1})",
+              "logger.log_error({\"y\": 2})"
+            ],
+            "call": "len(logger.records)",
+            "expect": {
+              "return": 2
+            }
+          },
+          {
+            "steps": [
+              "logger = ErrorLogger()",
+              "payload = {'user_input': 'x', 'code': 1}",
+              "logger.log_error(payload)"
+            ],
+            "call": "sorted(payload.keys())",
+            "expect": {
+              "return": [
+                "code",
+                "user_input"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "query-cache-get-or-set": {
+      "id": "query-cache-get-or-set",
+      "title": "Thêm cache tra cứu chính xác",
+      "class_name": "QueryCache",
+      "function_name": "get_or_set",
+      "params": [
+        "key",
+        "compute"
+      ],
+      "template": "class QueryCache:\n    def __init__(self):\n        self.store = {}\n\n    def get_or_set(self, key, compute):\n        # TODO A\n        value = compute()\n        self.store[key] = value\n        return value",
+      "challenge": {
+        "statement": "Viết phần đầu của get_or_set(self, key, compute): nếu key đã có trong self.store thì return THẲNG giá trị đã lưu — if và return trong CÙNG một ô, không gọi compute(). Phần tính giá trị mới, lưu lại rồi return đã có sẵn.",
+        "motivation": "Hệ thống RAG hiện CHƯA có cache nào: câu hỏi lặp lại (kể cả giống hệt câu trước) vẫn chạy đủ gọi LLM + embedding + search. QueryCache tra theo khoá CHÍNH XÁC — bậc rẻ nhất, làm trước semantic cache — không gọi compute() nếu đã có kết quả.",
+        "small": {
+          "caption": "Hỏi lại đúng câu đã hỏi",
+          "input": "calls = []\ndef compute():\n    calls.append(1)\n    return \"42 ghế trống\"\ncache = QueryCache()\nprint(cache.get_or_set(\"VN1 còn mấy ghế?\", compute))\nprint(cache.get_or_set(\"VN1 còn mấy ghế?\", compute))\nprint(len(calls))",
+          "output": "42 ghế trống\n42 ghế trống\n1",
+          "note": "compute() chỉ chạy đúng 1 lần dù gọi get_or_set 2 lần cùng khoá."
+        },
+        "project": {
+          "caption": "Hai câu hỏi khác nhau",
+          "input": "cache2 = QueryCache()\ncache2.get_or_set(\"A\", lambda: 1)\ncache2.get_or_set(\"B\", lambda: 2)\nprint(cache2.store)",
+          "output": "{'A': 1, 'B': 2}",
+          "note": "Khoá khác nhau thì compute chạy riêng cho từng khoá, không dùng chung kết quả."
+        }
+      },
+      "blocks": [
+        {
+          "id": "query-cache-get-or-set-a",
+          "label": "A",
+          "title": "Trả thẳng giá trị đã cache",
+          "prompt": "Nếu key đã có trong self.store thì return self.store[key] ngay, không gọi compute().",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if key in self.store:\n    return self.store[key]"
+          ],
+          "expected_output": "Đã tránh gọi lại compute() khi đã có kết quả.",
+          "explanation": "in kiểm tra khoá đã cache; return viết ngay dưới if để thoát hàm NGAY, không chạy xuống compute() bên dưới — đây là một quy tắc duy nhất (tra cache rồi trả), không phải hai ô riêng.",
+          "hints": [
+            "Dùng in để kiểm key trong self.store; return viết ngay dưới (thụt thêm 4 space).",
+            "if key in self.store:",
+            "if key in self.store:\n    return self.store[key]"
+          ],
+          "vocab": [
+            "in",
+            "return"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class QueryCache:\n    def __init__(self):\n        self.store = {}\n\n    def get_or_set(self, key, compute):\n        if key in self.store:\n            return self.store[key]\n        value = compute()\n        self.store[key] = value\n        return value",
+        "cases": [
+          {
+            "steps": [
+              "cache = QueryCache()"
+            ],
+            "call": "cache.get_or_set(\"A\", lambda: 1)",
+            "expect": {
+              "return": 1
+            }
+          },
+          {
+            "steps": [
+              "cache = QueryCache()",
+              "calls = []",
+              "def f():\n    calls.append(1)\n    return 9",
+              "cache.get_or_set('A', f)",
+              "cache.get_or_set('A', f)"
+            ],
+            "call": "len(calls)",
+            "expect": {
+              "return": 1
+            }
+          },
+          {
+            "steps": [
+              "cache = QueryCache()",
+              "cache.get_or_set('A', lambda: 9)"
+            ],
+            "call": "cache.get_or_set('A', lambda: 99)",
+            "expect": {
+              "return": 9
+            }
+          },
+          {
+            "steps": [
+              "cache = QueryCache()",
+              "cache.get_or_set('A', lambda: 1)",
+              "cache.get_or_set('B', lambda: 2)"
+            ],
+            "call": "cache.store",
+            "expect": {
+              "return": {
+                "A": 1,
+                "B": 2
+              }
+            }
+          },
+          {
+            "steps": [
+              "cache = QueryCache()",
+              "cache.get_or_set('K', lambda: 'v')"
+            ],
+            "call": "cache.store",
+            "expect": {
+              "return": {
+                "K": "v"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "history-limit-turns": {
+      "id": "history-limit-turns",
+      "title": "Giới hạn lịch sử hội thoại còn K lượt gần nhất",
+      "class_name": "ConversationHistory",
+      "function_name": "add_turn",
+      "params": [
+        "question",
+        "answer"
+      ],
+      "template": "class ConversationHistory:\n    def __init__(self, max_turns):\n        self.max_turns = max_turns\n        self.turns = []\n\n    def add_turn(self, question, answer):\n        self.turns.append([question, answer])\n        # TODO A",
+      "challenge": {
+        "statement": "Viết phần cuối của add_turn(self, question, answer): nếu số lượt đã lưu VƯỢT QUÁ max_turns thì cắt self.turns chỉ giữ max_turns lượt GẦN NHẤT — if và cắt trong CÙNG một ô. Dòng append lượt mới đã có sẵn.",
+        "motivation": "Bản gốc đưa TOÀN BỘ lịch sử (mỗi lượt là nguyên JSON response cũ) vào mỗi lần gọi LLM — hội thoại càng dài, token đầu vào càng tăng, có thể vượt context window. Giữ K lượt gần nhất là bước đầu tiên (S1) của lộ trình quản lý bộ nhớ ngắn hạn.",
+        "small": {
+          "caption": "Hội thoại 2 lượt, giới hạn 2",
+          "input": "hist = ConversationHistory(2)\nhist.add_turn(\"Q1\", \"A1\")\nhist.add_turn(\"Q2\", \"A2\")\nprint(len(hist.turns))",
+          "output": "2",
+          "note": null
+        },
+        "project": {
+          "caption": "Hội thoại dài hơn giới hạn",
+          "input": "hist = ConversationHistory(2)\nhist.add_turn(\"Q1\", \"A1\")\nhist.add_turn(\"Q2\", \"A2\")\nhist.add_turn(\"Q3\", \"A3\")\nprint(hist.turns)",
+          "output": "[['Q2', 'A2'], ['Q3', 'A3']]",
+          "note": "Lượt Q1 cũ nhất bị cắt bỏ, chỉ còn 2 lượt gần nhất."
+        }
+      },
+      "blocks": [
+        {
+          "id": "history-limit-turns-a",
+          "label": "A",
+          "title": "Cắt bớt lượt cũ khi vượt giới hạn",
+          "prompt": "Nếu len(self.turns) lớn hơn self.max_turns thì chỉ giữ lại max_turns lượt gần nhất.",
+          "indent_level": 2,
+          "accepted_answers": [
+            "if len(self.turns) > self.max_turns:\n    self.turns = self.turns[-self.max_turns:]"
+          ],
+          "expected_output": "Đã giới hạn số lượt lưu trữ.",
+          "explanation": "Slicing [-max_turns:] lấy đúng max_turns phần tử CUỐI (gần nhất); if và cắt là MỘT quy tắc duy nhất, không phải hai ô riêng.",
+          "hints": [
+            "So len(self.turns) với self.max_turns; cắt bằng slicing [-max_turns:] ngay dưới if.",
+            "if len(self.turns) > self.max_turns:",
+            "if len(self.turns) > self.max_turns:\n    self.turns = self.turns[-self.max_turns:]"
+          ],
+          "vocab": [
+            "len",
+            "slicing"
+          ]
+        }
+      ],
+      "judge": {
+        "solution": "class ConversationHistory:\n    def __init__(self, max_turns):\n        self.max_turns = max_turns\n        self.turns = []\n\n    def add_turn(self, question, answer):\n        self.turns.append([question, answer])\n        if len(self.turns) > self.max_turns:\n            self.turns = self.turns[-self.max_turns:]",
+        "cases": [
+          {
+            "steps": [
+              "hist = ConversationHistory(3)",
+              "hist.add_turn(\"Q1\", \"A1\")"
+            ],
+            "call": "hist.turns",
+            "expect": {
+              "return": [
+                [
+                  "Q1",
+                  "A1"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "hist = ConversationHistory(2)",
+              "hist.add_turn(\"Q1\", \"A1\")",
+              "hist.add_turn(\"Q2\", \"A2\")"
+            ],
+            "call": "hist.turns",
+            "expect": {
+              "return": [
+                [
+                  "Q1",
+                  "A1"
+                ],
+                [
+                  "Q2",
+                  "A2"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "hist = ConversationHistory(2)",
+              "hist.add_turn(\"Q1\", \"A1\")",
+              "hist.add_turn(\"Q2\", \"A2\")",
+              "hist.add_turn(\"Q3\", \"A3\")"
+            ],
+            "call": "hist.turns",
+            "expect": {
+              "return": [
+                [
+                  "Q2",
+                  "A2"
+                ],
+                [
+                  "Q3",
+                  "A3"
+                ]
+              ]
+            }
+          },
+          {
+            "steps": [
+              "hist = ConversationHistory(2)",
+              "hist.add_turn(\"Q1\", \"A1\")",
+              "hist.add_turn(\"Q2\", \"A2\")",
+              "hist.add_turn(\"Q3\", \"A3\")"
+            ],
+            "call": "len(hist.turns)",
+            "expect": {
+              "return": 2
+            }
+          },
+          {
+            "steps": [
+              "hist = ConversationHistory(1)",
+              "hist.add_turn(\"Q1\", \"A1\")",
+              "hist.add_turn(\"Q2\", \"A2\")"
+            ],
+            "call": "hist.turns",
+            "expect": {
+              "return": [
+                [
+                  "Q2",
+                  "A2"
+                ]
+              ]
             }
           }
         ]
