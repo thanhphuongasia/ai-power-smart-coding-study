@@ -24,3 +24,4 @@
 | 2026-10-17-sd-docs-mcp | MCP tool tài liệu System Design: import/xem/sửa/xoá mềm/publish (#54) | done (PR) |
 | 2026-10-17-sd-courses | Course cho tài liệu System Design — phase 1 (#56) | done (PR) |
 | 2026-10-17-mcp-publish-tool | Tool MCP publish riêng: hàng chờ bài code + tài liệu SD (#59) | done (PR → dev) |
+- 2026-10-17-sd-preview-reset — issue #66 preview/bỏ khoá/reset tiến độ SD — pr
