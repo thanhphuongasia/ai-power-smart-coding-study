@@ -28,7 +28,7 @@ def main(argv: list[str]) -> int:
         return exc.code if isinstance(exc.code, int) else 2
 
     try:
-        with open(args.path, encoding="utf-8") as f:
+        with open(args.path, encoding="utf-8-sig", newline="") as f:
             markdown = f.read()
     except (OSError, UnicodeDecodeError) as exc:
         print(f"không đọc được file: {exc}", file=sys.stderr)

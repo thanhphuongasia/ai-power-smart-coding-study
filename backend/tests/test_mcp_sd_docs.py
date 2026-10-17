@@ -102,6 +102,12 @@ def test_dry_run_and_parser_errors(granted, signer):
     assert bad["isError"] and "chưa ghi gì" in _text(bad)
 
 
+def test_edit_tool_is_not_marked_idempotent(granted, signer):
+    tools = {t["name"]: t for t in rpc(granted, "tools/list", token=signer.token()).json()["result"]["tools"]}
+    assert tools["sd_edit_doc"]["annotations"]["idempotentHint"] is False
+    assert tools["sd_delete_doc"]["annotations"]["destructiveHint"] is True
+
+
 def test_bad_status_rejected_by_schema(granted, signer):
     _data(call(granted, signer, "sd_create_doc", markdown=MINI))
     assert call(granted, signer, "sd_set_status", doc_id=DOC, status="deleted")["isError"]
@@ -129,3 +135,17 @@ def test_revoked_sub_cannot_write(granted, signer, loaded_session):
     loaded_session.flush()
     result = call(granted, signer, "sd_delete_doc", doc_id=DOC)
     assert result["isError"] and SUB in _text(result)
+
+
+def test_list_attempts_tool_can_include_archived(granted, signer, loaded_session):
+    from app.tables import SdAttempt, User
+    from sqlalchemy import select
+
+    _data(call(granted, signer, "sd_create_doc", markdown=MINI, status="published"))
+    uid = loaded_session.scalar(select(User.id).where(User.email == ADMIN))
+    loaded_session.add(SdAttempt(user_id=uid, doc_id=DOC, task_id="task-a", n=1, answer="bài", auto_result={"hits": [False], "score": 0}))
+    loaded_session.commit()
+    assert len(_data(call(granted, signer, "sd_list_attempts", doc_id=DOC))) == 1
+    _data(call(granted, signer, "sd_delete_doc", doc_id=DOC))
+    assert _data(call(granted, signer, "sd_list_attempts", doc_id=DOC)) == []
+    assert len(_data(call(granted, signer, "sd_list_attempts", doc_id=DOC, include_archived=True))) == 1

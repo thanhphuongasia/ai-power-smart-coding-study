@@ -277,11 +277,19 @@ def _sd(tool: str, fn: Callable[[Session, str], Any], *, write: bool = False) ->
 
 @mcp.tool(annotations=_READ)
 async def sd_list_attempts(
-    doc_id: str | None = None, task_id: str | None = None, status: str | None = "auto", limit: int = 20
+    doc_id: str | None = None,
+    task_id: str | None = None,
+    status: str | None = "auto",
+    limit: int = 20,
+    include_archived: bool = False,
 ) -> list[dict]:
-    """Hàng đợi bài thực chiến System Design cần chấm, cũ nhất trước. Mặc định status='auto' (mới chỉ có điểm từ khoá); 'reviewed' xem bài đã chấm; None xem tất cả. Mỗi mục có attempt_id để gọi sd_get_attempt."""
+    """Hàng đợi bài thực chiến System Design cần chấm, cũ nhất trước. Mặc định status='auto' (mới chỉ có điểm từ khoá); 'reviewed' xem bài đã chấm; None xem tất cả. Mặc định bỏ bài của tài liệu đã xoá mềm (archived) — học viên không còn thấy; include_archived=true để xem cả. Mỗi mục có attempt_id để gọi sd_get_attempt."""
     return await run_in_threadpool(
-        _sd, "sd_list_attempts", lambda s, _: sd_attempts.review_queue(s, doc_id=doc_id, task_id=task_id, status=status, limit=limit)
+        _sd,
+        "sd_list_attempts",
+        lambda s, _: sd_attempts.review_queue(
+            s, doc_id=doc_id, task_id=task_id, status=status, limit=limit, include_archived=include_archived
+        ),
     )
 
 
@@ -356,7 +364,7 @@ async def sd_replace_doc(doc_id: str, markdown: str, base_revision: str | None =
     )
 
 
-@mcp.tool(annotations=_UPDATE)
+@mcp.tool(annotations=_WRITE)  # không idempotent: áp lại cùng edits sẽ lỗi (old_text đã đổi)
 async def sd_edit_doc(doc_id: str, edits: list[dict[str, str]], dry_run: bool = False) -> dict:
     """Sửa theo đoạn trên markdown gốc: edits = [{old_text, new_text}] (≤50), mỗi old_text phải xuất hiện ĐÚNG một lần (thêm ngữ cảnh nếu trùng), áp theo thứ tự rồi nhập lại. Cần doc có markdown gốc (has_markdown)."""
     return await run_in_threadpool(

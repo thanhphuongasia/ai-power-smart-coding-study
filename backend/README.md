@@ -106,10 +106,11 @@ Tool tài liệu System Design: `sd_list_docs`, `sd_get_doc`, `sd_create_doc`, `
 ### Backfill markdown gốc
 
 Tài liệu nhập trước khi có `source_md` không sửa lại được bằng `sd_edit_doc`. Nhập lại đúng file `.md` gốc,
-giữ nguyên status:
+giữ nguyên status. File phải nằm TRÊN VPS (đường dẫn trong lệnh là đường dẫn trên server):
 
 ```bash
-ssh vps 'cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.sd.import_file <path.md> --id <slug> --mode replace'
+scp backend/content/sd/<file>.md vps:/tmp/<file>.md
+ssh vps 'cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.sd.import_file /tmp/<file>.md --id <slug> --mode replace && rm /tmp/<file>.md'
 ```
 
 Thêm `--dry-run` để xem trước số card thêm/bớt mà không ghi.
