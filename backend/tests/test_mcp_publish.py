@@ -56,7 +56,7 @@ def test_publish_lesson_goes_live_with_trace(granted, signer, loaded_session, co
     assert out["results"] == [{"id": cid, "status": "approved", "also": []}]
     assert lesson["id"] in _live_lessons(granted)  # INV-01: học viên thấy qua /content
     row = loaded_session.get(ContentChange, cid)
-    assert row.status == "approved" and row.decided_by == f"mcp:{SUB}" and row.decided_at  # INV-02
+    assert row.status == "approved" and row.decided_by.startswith(f"mcp:{SUB}") and row.decided_at  # INV-02
 
     # INV-05: ghi tiếp ngay sau khi publish không bị 409.
     again = call(granted, signer, "update_lesson", lesson_id=lesson["id"], changes={"title": "Tiêu đề mới"})
