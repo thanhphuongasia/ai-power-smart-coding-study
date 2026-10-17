@@ -25,18 +25,6 @@ class SdCourse {
     this.domain,
   });
 
-  factory SdCourse.fromJson(Map<String, dynamic> json) {
-    const w = 'SdCourse';
-    return SdCourse(
-      id: jsonField<String>(json, 'id', w),
-      title: jsonField<String>(json, 'title', w),
-      skills: json['skills'] == null
-          ? const []
-          : jsonStrings(json, 'skills', w),
-      domain: _opt<String>(json, 'domain', w),
-    );
-  }
-
   /// Parse lỏng: course chỉ là thông tin nhóm, nên dữ liệu lệch không được làm
   /// hỏng cả danh sách. Thiếu/sai kiểu `id`/`title` → null (bỏ course);
   /// `skills` sai kiểu → []; phần tử skill không phải chuỗi bị bỏ;

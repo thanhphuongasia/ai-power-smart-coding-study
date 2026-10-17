@@ -103,7 +103,8 @@ def _as_dict(c: Course, docs: list[dict] | None = None) -> dict:
 
 
 def list_courses(session: Session, *, include_archived: bool = False) -> list[dict]:
-    query = select(Course).order_by(Course.position, Course.id)
+    # COLLATE "C" = so theo mã ký tự, khớp với sort chuỗi của Python ở API học viên (sd/learner.py) khi trùng position.
+    query = select(Course).order_by(Course.position, Course.id.collate("C"))
     if not include_archived:
         query = query.where(Course.status != "archived")
     courses = session.scalars(query).all()
