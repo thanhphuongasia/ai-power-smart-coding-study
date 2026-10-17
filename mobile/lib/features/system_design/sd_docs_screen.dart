@@ -89,20 +89,93 @@ class SdDocsScreen extends ConsumerWidget {
                   onRefresh: () => _refresh(ref),
                   child: items.isEmpty
                       ? const _EmptyDocs()
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(AppSpace.s4),
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: AppSpace.s4),
-                          itemBuilder: (_, i) => _DocCard(doc: items[i]),
-                        ),
+                      : _DocList(items: items),
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Danh sách tài liệu: có ≥1 course → chia nhóm (giữ thứ tự server), nhóm
+/// "Khác" cuối cho doc không có course; không có course → list phẳng như cũ.
+class _DocList extends StatelessWidget {
+  const _DocList({required this.items});
+
+  final List<SdDocSummary> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final courses = <String, SdCourse>{};
+    final groups = <String, List<SdDocSummary>>{};
+    final other = <SdDocSummary>[];
+    for (final d in items) {
+      final c = d.course;
+      if (c == null) {
+        other.add(d);
+      } else {
+        courses.putIfAbsent(c.id, () => c);
+        (groups[c.id] ??= []).add(d);
+      }
+    }
+    final rows = <Widget>[];
+    void add(Widget w) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: AppSpace.s4));
+      rows.add(w);
+    }
+
+    if (groups.isEmpty) {
+      for (final d in items) {
+        add(_DocCard(doc: d));
+      }
+    } else {
+      for (final e in groups.entries) {
+        add(_CourseHeader(course: courses[e.key]));
+        for (final d in e.value) {
+          add(_DocCard(doc: d));
+        }
+      }
+      if (other.isNotEmpty) {
+        add(const _CourseHeader(course: null));
+        for (final d in other) {
+          add(_DocCard(doc: d));
+        }
+      }
+    }
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(AppSpace.s4),
+      children: rows,
+    );
+  }
+}
+
+/// Tiêu đề nhóm; [course] null = nhóm "Khác".
+class _CourseHeader extends StatelessWidget {
+  const _CourseHeader({required this.course});
+
+  final SdCourse? course;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = course;
+    return Column(
+      key: Key(c == null ? 'sd-course-other' : 'sd-course-${c.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(c?.title ?? 'Khác', style: AppText.title),
+        if (c != null && c.skills.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.s2),
+          Wrap(
+            spacing: AppSpace.s2,
+            runSpacing: AppSpace.s1,
+            children: [for (final s in c.skills) TagChip(s)],
+          ),
+        ],
+      ],
     );
   }
 }

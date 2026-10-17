@@ -1,6 +1,7 @@
 """API học viên cho chế độ System Design, dưới `/api/sd` (cần đăng nhập).
 
-- GET /api/sd/docs                                   → {items: [tóm tắt tài liệu ĐÃ PUBLISH + tiến độ của tôi]}
+- GET /api/sd/docs                                   → {items: [tóm tắt tài liệu ĐÃ PUBLISH + tiến độ của tôi + course_id],
+  courses: [course published có ≥1 doc trong items]}. Course chỉ để nhóm, không đổi tập doc được xem.
 - GET /api/sd/docs/{id}                              → tài liệu: section (kèm card, đã đọc, done, unlocked),
   bối cảnh (chỉ khi Phase 2 mở) và task (kèm unlocked, done, số lần thử).
 - PUT /api/sd/docs/{id}/sections/{sid}/progress      {read_cards} → {read, done, next_section_id, phase2_unlocked}
@@ -25,7 +26,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, current_user
 from app.db import get_session
-from app.tables import SdAttempt, SdDoc, SdProgress, SdSection, SdTask
+from app.sd.courses import DOC_ORDER
+from app.tables import Course, SdAttempt, SdDoc, SdProgress, SdSection, SdTask
 
 router = APIRouter(prefix="/api/sd")
 
@@ -116,7 +118,18 @@ def _load(session: Session, user_id: int, doc_ids: list[str]):
 
 @router.get("/docs")
 def list_docs(user: CurrentUser = Depends(current_user), session: Session = Depends(get_session)) -> dict:
-    docs = session.scalars(select(SdDoc).where(SdDoc.status == "published").order_by(SdDoc.created_at, SdDoc.id)).all()
+    docs = list(session.scalars(select(SdDoc).where(SdDoc.status == "published").order_by(*DOC_ORDER)).all())
+    course_ids = {d.course_id for d in docs if d.course_id}
+    courses = (
+        {c.id: c for c in session.scalars(select(Course).where(Course.id.in_(course_ids), Course.status == "published"))}
+        if course_ids
+        else {}
+    )
+    # Doc thuộc course published đứng trước (theo course rồi DOC_ORDER); sort ổn định giữ DOC_ORDER trong course.
+    grouped = sorted((d for d in docs if d.course_id in courses), key=lambda d: (courses[d.course_id].position, d.course_id))
+    rest = sorted((d for d in docs if d.course_id not in courses), key=lambda d: (d.created_at, d.id))
+    docs = grouped + rest
+    shown = sorted({d.course_id for d in grouped}, key=lambda i: (courses[i].position, i))
     ids = [d.id for d in docs]
     sections, tasks, read, attempts = _load(session, user.id, ids)
     items = []
@@ -135,9 +148,16 @@ def list_docs(user: CurrentUser = Depends(current_user), session: Session = Depe
                 "phase2_unlocked": phase1,
                 "tasks": len(tsk),
                 "tasks_done": sum(t["done"] for t in tsk),
+                "course_id": d.course_id if d.course_id in courses else None,
             }
         )
-    return {"items": items}
+    return {
+        "items": items,
+        "courses": [
+            {"id": i, "title": courses[i].title, "skills": list(courses[i].skills), "domain": courses[i].domain}
+            for i in shown
+        ],
+    }
 
 
 @router.get("/docs/{doc_id}")

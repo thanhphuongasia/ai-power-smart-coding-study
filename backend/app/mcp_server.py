@@ -17,13 +17,14 @@ import contextvars
 import logging
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from fastapi.concurrency import run_in_threadpool
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from pydantic import ConfigDict, with_config
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
@@ -31,6 +32,7 @@ from starlette.types import Receive, Scope, Send
 
 from app import content_ops, review
 from app.sd import attempts as sd_attempts
+from app.sd import courses as sd_courses
 from app.sd import docs as sd_docs
 from app.content_ops import ContentOpError
 from app.db import SessionLocal
@@ -66,7 +68,10 @@ INSTRUCTIONS = (
     "sd_edit_doc, sd_set_status, sd_delete_doc: KHÔNG qua hàng chờ duyệt — doc đang published thì học viên thấy thay "
     "đổi NGAY, nên nói rõ với người dùng và dùng dry_run trước. Doc mới mặc định draft. sd_delete_doc là xoá mềm "
     "(archived): học viên không thấy, bài nộp và tiến độ còn nguyên, khôi phục bằng sd_set_status. Đọc định dạng "
-    "markdown từ sd_get_doc của một doc có sẵn trước khi soạn doc mới."
+    "markdown từ sd_get_doc của một doc có sẵn trước khi soạn doc mới. "
+    "Khoá học (course) nhóm các tài liệu SD: sd_list_courses, sd_create_course, sd_update_course, "
+    "sd_set_course_status (archived = xoá mềm), sd_assign_doc. Course CHỈ để nhóm khi hiển thị — học viên thấy doc "
+    "theo status của doc; course chưa published thì doc của nó hiện ở nhóm 'Khác'."
 )
 
 mcp = MCPServer(name="smart-coding-study", instructions=INSTRUCTIONS)
@@ -391,6 +396,72 @@ async def sd_delete_doc(doc_id: str) -> dict:
         return {**result, "note": "Đã xoá mềm. Khôi phục: sd_set_status(doc_id, 'published' hoặc 'draft')."}
 
     return await run_in_threadpool(_sd_doc, "sd_delete_doc", archive)
+
+
+# --- Course (khoá học) nhóm tài liệu SD — app/sd/courses.py. Cùng wrapper _sd_doc (authorize mỗi lần gọi). ---------
+
+
+@mcp.tool(annotations=_READ)
+async def sd_list_courses(include_archived: bool = False) -> list[dict]:
+    """Các khoá học: id, title, skills, domain, status, position và danh sách doc (id, title, status, course_position) theo đúng thứ tự học viên thấy. Mặc định ẩn course đã xoá mềm."""
+    return await run_in_threadpool(
+        _sd_doc, "sd_list_courses", lambda s, _: sd_courses.list_courses(s, include_archived=include_archived)
+    )
+
+
+@mcp.tool(annotations=_WRITE)
+async def sd_create_course(
+    course_id: str,
+    title: str,
+    skills: list[str] | None = None,
+    domain: str | None = None,
+    status: Literal["draft", "published"] = "draft",
+    position: int = 0,
+) -> dict:
+    """Tạo khoá học (course_id là slug a-z0-9-). Mặc định draft: học viên chưa thấy nhóm này (doc vẫn hiện ở nhóm 'Khác'). position nhỏ hiện trước. Từ chối nếu id đã có (kể cả course đã xoá mềm)."""
+    return await run_in_threadpool(
+        _sd_doc,
+        "sd_create_course",
+        lambda s, actor: sd_courses.create_course(
+            s, course_id=course_id, title=title, skills=skills, domain=domain, status=status, position=position, actor=actor
+        ),
+    )
+
+
+@with_config(ConfigDict(extra="forbid"))
+class CourseChanges(TypedDict, total=False):
+    """Field sửa được của course — schema công bố đúng 4 field, key lạ bị chặn trước khi tới service."""
+
+    title: str
+    skills: list[str]
+    domain: str | None
+    position: int
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_update_course(course_id: str, changes: CourseChanges) -> dict:
+    """Sửa khoá học; changes chỉ gồm title, skills, domain, position."""
+    return await run_in_threadpool(
+        _sd_doc, "sd_update_course", lambda s, actor: sd_courses.update_course(s, course_id, dict(changes), actor=actor)
+    )
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_set_course_status(course_id: str, status: Literal["draft", "published", "archived"]) -> dict:
+    """published = học viên thấy nhóm này; draft = ẩn nhóm; archived = xoá mềm (doc giữ liên kết, khôi phục là về đúng nhóm). Không đổi quyền xem của doc."""
+    return await run_in_threadpool(
+        _sd_doc, "sd_set_course_status", lambda s, actor: sd_courses.set_course_status(s, course_id, status, actor=actor)
+    )
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_assign_doc(doc_id: str, course_id: str | None, position: int | None = None) -> dict:
+    """Gán tài liệu vào khoá học (course_id=null để gỡ). position = thứ tự trong course (nhỏ trước; bỏ trống = cuối). Không gán được vào course đã xoá mềm."""
+    return await run_in_threadpool(
+        _sd_doc,
+        "sd_assign_doc",
+        lambda s, actor: sd_courses.assign_doc(s, doc_id, course_id, position=position, actor=actor),
+    )
 
 
 def _json(status: int, body: dict, headers: dict[str, str] | None = None) -> JSONResponse:
