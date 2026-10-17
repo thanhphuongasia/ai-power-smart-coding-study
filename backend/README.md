@@ -99,6 +99,21 @@ Tool (12): `list_projects`, `get_project`, `get_lesson`, `get_authoring_guide` (
 - Mọi thay đổi có hiệu lực ngay với học viên. Luôn thử `dry_run=true` trước, rồi mới ghi thật.
 - Thu hồi quyền: `python -m app.mcp_access revoke <sub>`, chạy theo cùng cách như trên.
 
+Tool tài liệu System Design: `sd_list_docs`, `sd_get_doc`, `sd_create_doc`, `sd_replace_doc`, `sd_edit_doc`,
+`sd_set_status`, `sd_delete_doc`. Xoá là xoá mềm (`status=archived`) — học viên không thấy nữa, bài nộp và tiến
+độ còn nguyên; khôi phục bằng `sd_set_status`.
+
+### Backfill markdown gốc
+
+Tài liệu nhập trước khi có `source_md` không sửa lại được bằng `sd_edit_doc`. Nhập lại đúng file `.md` gốc,
+giữ nguyên status:
+
+```bash
+ssh vps 'cd /opt/smart-coding-study/backend && set -a && . /etc/smart-coding-study.env && set +a && .venv/bin/python -m app.sd.import_file <path.md> --id <slug> --mode replace'
+```
+
+Thêm `--dry-run` để xem trước số card thêm/bớt mà không ghi.
+
 ## Giới hạn
 
 - `ce.judge0.com` là máy chủ công khai: code bài tập được gửi tới bên thứ ba, có giới hạn tần suất

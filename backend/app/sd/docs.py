@@ -7,6 +7,9 @@
 - `mode`: `create` (id đã có → lỗi, kể cả doc đã xoá mềm), `replace` (id phải có), `upsert` (hành vi cũ của API).
 - Xoá = xoá mềm: `status='archived'`. Học viên chỉ thấy `published` (sd/learner.py), bài nộp và tiến độ còn nguyên;
   khôi phục bằng `set_status`.
+
+Hợp đồng transaction: hàm ghi TỰ commit, và rollback khi lỗi. Caller truyền session riêng cho mỗi lần gọi, không
+có việc chưa commit (MCP `open_session`, CLI, `get_session` của FastAPI đều vậy).
 """
 
 from __future__ import annotations
@@ -98,7 +101,7 @@ def import_markdown(
 
     try:
         _lock(session, doc_id)  # hai lần nhập cùng tài liệu đúng lúc: tuần tự hoá theo id
-        doc = session.get(SdDoc, doc_id)
+        doc = session.get(SdDoc, doc_id, populate_existing=True)  # đọc lại SAU khoá, không lấy bản cũ trong session
         if mode == "create" and doc is not None:
             raise SdDocError(
                 [f'đã có tài liệu id "{doc_id}" (trạng thái {doc.status}) — sửa bằng replace/edit, '
@@ -128,7 +131,8 @@ def import_markdown(
             "cards_removed": len(old - new),
         }
         if dry_run:
-            session.rollback()
+            # Không rollback: chưa ghi gì, và rollback sẽ huỷ cả việc chưa commit của caller. Khoá nhả khi
+            # caller đóng session (MCP/CLI/API đều mở session riêng cho mỗi lần gọi).
             return {**summary, "dry_run": True}
 
         if doc is not None:
@@ -200,7 +204,7 @@ def edit_doc(session: Session, doc_id: str, edits: Any, *, actor: str, dry_run: 
     """Sửa theo đoạn trên markdown gốc rồi nhập lại (giữ status, giữ tiến độ card không đổi)."""
     _check_id(doc_id)
     _lock(session, doc_id)  # khoá TRƯỚC khi đọc source_md: hai lần sửa đồng thời không mất bản của nhau
-    doc = session.get(SdDoc, doc_id)
+    doc = session.get(SdDoc, doc_id, populate_existing=True)
     if doc is None:
         session.rollback()
         raise SdDocNotFound(doc_id)
@@ -251,7 +255,8 @@ def list_docs(session: Session, *, include_archived: bool = False) -> list[dict]
 def get_doc(session: Session, doc_id: str) -> dict:
     """Meta + mục lục + task + markdown gốc (None nếu nhập trước khi có cột source_md)."""
     _check_id(doc_id)
-    doc = session.get(SdDoc, doc_id)
+    _lock(session, doc_id)  # markdown và mục lục cùng một lần nhập (không lẫn với lần nhập đang commit dở)
+    doc = session.get(SdDoc, doc_id, populate_existing=True)
     if doc is None:
         raise SdDocNotFound(doc_id)
     sections = session.scalars(select(SdSection).where(SdSection.doc_id == doc_id).order_by(SdSection.position)).all()
@@ -278,7 +283,7 @@ def set_status(session: Session, doc_id: str, status: str, *, actor: str) -> dic
         raise SdDocError([f"status phải là một trong {list(STATUSES)}"])
     _check_id(doc_id)
     _lock(session, doc_id)
-    doc = session.get(SdDoc, doc_id)
+    doc = session.get(SdDoc, doc_id, populate_existing=True)
     if doc is None:
         session.rollback()
         raise SdDocNotFound(doc_id)

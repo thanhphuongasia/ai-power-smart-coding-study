@@ -74,6 +74,8 @@ app.router.add_route("/mcp", mcp_server.McpGate(), include_in_schema=False)
 
 
 def _body_limit(path: str) -> int:
+    if path == "/mcp":
+        return mcp_server.MAX_BODY_BYTES  # tài liệu SD ≤1MB; cổng JWT chạy trước khi đọc body
     return MAX_ADMIN_BODY_BYTES if path.startswith("/api/admin/") else MAX_BODY_BYTES
 
 

@@ -44,7 +44,8 @@ def test_tools_are_listed_with_right_annotations(granted, signer):
     assert tools["sd_get_attempt"]["annotations"]["readOnlyHint"] is True
     assert tools["sd_submit_feedback"]["annotations"]["readOnlyHint"] is False
     assert tools["sd_submit_feedback"]["annotations"]["idempotentHint"] is True
-    assert not any(n.startswith("sd_") and "delete" in n for n in tools)  # không có tool xoá
+    # Không có tool xoá bài nộp/nhận xét của học viên. (sd_delete_doc là xoá MỀM tài liệu — test_mcp_sd_docs.py.)
+    assert not any("attempt" in n and "delete" in n for n in tools)
 
 
 @pytest.mark.parametrize(
