@@ -25,7 +25,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import ConfigDict, with_config
-from sqlalchemy.exc import DataError
+from sqlalchemy.exc import DataError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
@@ -35,11 +35,11 @@ from app import content_ops, review
 from app.sd import attempts as sd_attempts
 from app.sd import courses as sd_courses
 from app.sd import docs as sd_docs
+from app.tables import ContentChange
 from app.content_ops import ContentOpError
 from app.db import SessionLocal
 from app.export_content import admin_version
 from app.load_content import validation_errors
-from app.tables import ContentChange
 from app.mcp_auth import (
     InvalidToken,
     JwksUnavailable,
@@ -519,6 +519,10 @@ def _decide_many(tool: str, action: Callable[[Session, int, str], dict], change_
             except DataError as exc:
                 savepoint.rollback()
                 results.append({"id": cid, "status": "error", "error": f"DB từ chối nội dung ({type(exc.orig).__name__})"})
+            except OperationalError:
+                # Hết thời gian chờ khoá ghi (admin đang duyệt/lưu cùng lúc): chỉ id này lỗi, không lộ SQL.
+                savepoint.rollback()
+                results.append({"id": cid, "status": "error", "error": "Đang có người khác duyệt/sửa nội dung — thử lại sau"})
         version = review.draft_version(session)  # base cho lần ghi kế tiếp (như admin_api._decide)
         pending = len(review.pending_rows(session))
         session.commit()

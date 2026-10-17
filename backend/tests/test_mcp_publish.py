@@ -89,6 +89,32 @@ def test_dependency_order_and_one_bad_id_does_not_block_others(granted, signer, 
     assert "zz-in-new" in _live_lessons(granted) and out["pending"] == 0
 
 
+def test_failure_after_partial_write_is_rolled_back_per_id(granted, signer, content_data, monkeypatch):
+    # INV-03: id lỗi SAU khi load_content đã ghi dở → savepoint hoàn tác phần đó; id sau vẫn publish.
+    from sqlalchemy.exc import DataError
+
+    from app import mcp_server, review
+
+    bad, good = _new_lesson(content_data, "zz-bad"), _new_lesson(content_data, "zz-good")
+    for lesson in (bad, good):
+        _data(call(granted, signer, "create_lesson", file_id=_first_file(content_data), lesson=lesson))
+    ids = _pending(granted, signer)
+    bad_id = ids[("exercise", "zz-bad")]
+    real = review.approve
+
+    def flaky(session, change_id, reviewer):
+        out = real(session, change_id, reviewer)  # đã load_content → live đã có bài
+        if change_id == bad_id:
+            raise DataError("stmt", {}, Exception("giả lập DB từ chối sau khi ghi"))
+        return out
+
+    monkeypatch.setattr(mcp_server.review, "approve", flaky)
+    out = _data(call(granted, signer, "publish_changes", change_ids=[bad_id, ids[("exercise", "zz-good")]]))
+    assert [r["status"] for r in out["results"]] == ["error", "approved"]
+    live = _live_lessons(granted)
+    assert "zz-bad" not in live and "zz-good" in live
+
+
 def test_reject_keeps_lesson_off_live(granted, signer, content_data):
     lesson = _new_lesson(content_data)
     _data(call(granted, signer, "create_lesson", file_id=_first_file(content_data), lesson=lesson))
