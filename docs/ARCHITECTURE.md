@@ -431,7 +431,7 @@ Lưu là thay toàn bộ nội dung, nên học viên đang mở bài giữ bả
 
 ### Là gì
 
-Bên cạnh chế độ code (bài tập chấm bằng test), app có một chế độ đọc và viết thiết kế hệ thống. Admin nhập một file markdown; backend cắt thành chương, section và "card" (mỗi đoạn, bảng, khối code là một card). Học viên đọc theo thứ tự, và khi đọc hết mọi section thì mở phần thực chiến: tự viết lời giải cho từng task, thấy điểm theo từ khoá ngay, rồi nhờ Claude chấm sâu hơn qua MCP. Chế độ này có bảng, API và màn hình riêng, không đi qua `load_content` hay hàng chờ duyệt. Chi tiết đầy đủ ở `docs/modules/sd-study.md`.
+Bên cạnh chế độ code (bài tập chấm bằng test), app có một chế độ đọc và viết thiết kế hệ thống. Admin nhập một file markdown; backend cắt thành chương, section và "card" (mỗi đoạn, bảng, khối code là một card). Học viên đọc các section theo thứ tự tuỳ ý (có chế độ xem trước không tính tiến độ và nút đặt lại tiến độ), và khi đọc hết mọi section thì mở phần thực chiến: tự viết lời giải cho từng task, thấy điểm theo từ khoá ngay, rồi nhờ Claude chấm sâu hơn qua MCP. Chế độ này có bảng, API và màn hình riêng, không đi qua `load_content` hay hàng chờ duyệt. Chi tiết đầy đủ ở `docs/modules/sd-study.md`.
 
 ### Cách hoạt động
 
@@ -439,8 +439,9 @@ Bên cạnh chế độ code (bài tập chấm bằng test), app có một ch�
 | --- | --- | --- |
 | Cắt markdown thành section/card/task; chuẩn hoá NFC trước khi băm; mọi trần được kiểm trước khi tích luỹ | `parse_markdown` | backend/app/sd/parser.py:366-373, backend/app/sd/parser.py:28-45 |
 | Nhập lại tài liệu trong một transaction dưới advisory lock, không chạm tiến độ/lần thử | `_import` | backend/app/sd/admin.py:57-93 |
-| Server tính `done`/`unlocked` của section, Phase 2 và task; response không có rubric/từ khoá | `_sections_state`, `_tasks_state` | backend/app/sd/learner.py:48-92 |
-| PUT tiến độ chỉ thêm card đã đọc; section khoá trả 409 | `put_progress` | backend/app/sd/learner.py:159-198 |
+| Server tính `done` của section, Phase 2 và task (`unlocked` của section luôn `true`); response không có rubric/từ khoá | `_sections_state`, `_tasks_state` | backend/app/sd/learner.py:48-92 |
+| PUT tiến độ chỉ thêm card đã đọc; không còn 409 khoá section | `put_progress` | backend/app/sd/learner.py:185-227 |
+| `DELETE /api/sd/docs/{id}/progress` đặt lại tiến độ đọc (giữ bài đã nộp), khoá mọi section của doc trước khi xoá | `reset_progress` | backend/app/sd/learner.py:230-243 |
 | Nộp bài: chấm từ khoá ngay, chụp rubric lúc nộp, tối đa 20 lần/task/24 giờ, câu trả lời ≤8KB | `submit_attempt` | backend/app/sd/attempts.py:85-140 |
 | Một bản duy nhất cho học viên: `reviewed` (Claude) thắng `auto` (từ khoá) | `attempt_view` | backend/app/sd/attempts.py:53-75 |
 | Claude đọc hàng đợi, đọc bài (kèm `answer_notice`), ghi feedback từng ý; ghi đè bản đã chấm cần `replace=true` | `review_queue`, `review_detail`, `submit_feedback` | backend/app/sd/attempts.py:194-309 |
@@ -451,7 +452,7 @@ class Evaluator(Protocol):
 ```
 (backend/app/sd/evaluator.py:23-24)
 
-Phía Flutter, tab Design là tab thứ 5, thêm cuối ở ba nơi phải khớp index (branch của router, destination của `NavigationBar`, mục drawer); danh sách node trong lộ trình do `DuoPath` vẽ từ `done`/`unlocked` mà server trả, không tự tính; mọi task Phase 2 mở cùng lúc khi Phase 1 xong (backend/app/sd/learner.py:77). Màn đọc vuốt snap theo card bằng `SdCardSnapPhysics` (mobile/lib/features/system_design/card_snap_physics.dart:23) và có menu mục lục (mobile/lib/features/system_design/reader_menu.dart:66) (mục chi tiết: docs/modules/sd-study.md:1).
+Phía Flutter, tab Design là tab thứ 5, thêm cuối ở ba nơi phải khớp index (branch của router, destination của `NavigationBar`, mục drawer); danh sách node trong lộ trình do `DuoPath` vẽ từ `done`/`unlocked` mà server trả, không tự tính; mọi section mở sẵn (backend/app/sd/learner.py:71) và mọi task Phase 2 mở cùng lúc khi Phase 1 xong (backend/app/sd/learner.py:77). Màn đọc vuốt snap theo card bằng `SdCardSnapPhysics` (mobile/lib/features/system_design/card_snap_physics.dart:23) và có menu mục lục (mobile/lib/features/system_design/reader_menu.dart:66) (mục chi tiết: docs/modules/sd-study.md:1).
 
 ### Ranh giới
 

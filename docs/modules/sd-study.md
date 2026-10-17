@@ -4,7 +4,7 @@
 
 ## Là gì
 
-Chế độ code của app dạy bằng bài tập có test; System Design không có đáp án máy chấm được, nên cần một đường học riêng. Admin viết một tài liệu markdown theo quy ước cố định, nhập qua API; backend cắt tài liệu thành các "card" (một đoạn, một bảng, một khối code, một trích dẫn). Học viên lướt đọc từng section theo thứ tự (Phase 1), xong hết thì mở phần Bối cảnh và toàn bộ task thực chiến cùng lúc (Phase 2, làm task nào trước cũng được): tự viết lời giải, nộp, thấy ngay điểm theo từ khoá, rồi nhờ Claude chấm sâu hơn. Toàn bộ dữ liệu đi đường riêng — bảng `sd_*`, API `/api/sd` và `/api/admin/sd` — không dùng `load_content` hay hàng chờ duyệt của chế độ code, và việc "ai được mở gì" do server tính, app chỉ vẽ lại. SRS (lặp lại ngắt quãng) cho card System Design chưa làm; issue #31 vẫn mở vì phần đó.
+Chế độ code của app dạy bằng bài tập có test; System Design không có đáp án máy chấm được, nên cần một đường học riêng. Admin viết một tài liệu markdown theo quy ước cố định, nhập qua API; backend cắt tài liệu thành các "card" (một đoạn, một bảng, một khối code, một trích dẫn). Học viên lướt đọc các section (Phase 1; học section nào trước cũng được), xong hết thì mở phần Bối cảnh và toàn bộ task thực chiến cùng lúc (Phase 2, làm task nào trước cũng được): tự viết lời giải, nộp, thấy ngay điểm theo từ khoá, rồi nhờ Claude chấm sâu hơn. Toàn bộ dữ liệu đi đường riêng — bảng `sd_*`, API `/api/sd` và `/api/admin/sd` — không dùng `load_content` hay hàng chờ duyệt của chế độ code, và việc "ai được mở gì" do server tính, app chỉ vẽ lại. SRS (lặp lại ngắt quãng) cho card System Design chưa làm; issue #31 vẫn mở vì phần đó.
 
 ## Dùng khi nào
 
@@ -68,29 +68,31 @@ Học viên (`current_user`; mọi truy vấn tiến độ/lần thử lọc the
 |---|---|
 | `GET /api/sd/docs` | tài liệu đã publish + tiến độ của tôi, kèm `course_id` mỗi item và mảng `courses` (xem mục 9) — backend/app/sd/learner.py:120-162 |
 | `GET /api/sd/docs/{id}` | section (kèm `read`, `done`, `unlocked`), `context` chỉ khi Phase 2 mở, task (kèm `unlocked`, `done`, `attempts`) — backend/app/sd/learner.py:143-156 |
-| `PUT .../sections/{sid}/progress` | chỉ THÊM card đã đọc (hợp, không bớt); id lạ bị bỏ qua; section khoá → 409 `section_locked` — backend/app/sd/learner.py:159-205 |
+| `PUT .../sections/{sid}/progress` | chỉ THÊM card đã đọc (hợp, không bớt); id lạ bị bỏ qua; section không tồn tại → 404 `section_not_found`; không còn 409 `section_locked` (đã bỏ ở issue #66) — backend/app/sd/learner.py:185-227 |
+| `DELETE /api/sd/docs/{id}/progress` | đặt lại tiến độ ĐỌC của tôi cho tài liệu: 204, hoặc 404 nếu doc chưa publish; xoá mọi dòng `sd_progress` của (user, doc), KHÔNG chạm `sd_attempts`; trước khi xoá lấy advisory lock của MỌI section của doc (sắp theo id, cùng khoá với PUT) nên PUT chen vào không để sót dòng — backend/app/sd/learner.py:230-243 |
 | `POST .../tasks/{tid}/attempts` | nộp bài: 201, hoặc 409 `task_locked`, 429 `attempt_limit` — backend/app/sd/attempts.py:85-140 |
 | `GET .../tasks/{tid}/attempts` | lịch sử của tôi, mới nhất trước, `limit` ≤50 — backend/app/sd/attempts.py:143-160 |
 
 ### 4. Luật khoá/mở do server tính
 
 ```python
-# backend/app/sd/learner.py:48-70 (rút gọn)
-out, prev_done = [], True
+# backend/app/sd/learner.py:53-75 (rút gọn)
+out = []
 for s in sections:
     ...
     done = bool(ids) and len(read) == len(ids)
-    out.append({..., "done": done, "unlocked": prev_done})
-    prev_done = done
+    out.append({..., "done": done, "unlocked": True})
 ```
+
+Từ issue #66 không còn khoá tuần tự section: server luôn trả `unlocked: true` cho mọi section (giữ field để app cũ không vỡ) và PUT progress không còn trả 409 `section_locked`.
 
 | Đối tượng | Mở khi | Xong khi |
 |---|---|---|
-| section | là section đầu, hoặc section liền trước `done` | mọi card HIỆN HÀNH đều đã đọc (card đã bị sửa/xoá khi nhập lại không còn tính) |
+| section | luôn mở (học section nào trước cũng được) | mọi card HIỆN HÀNH đều đã đọc (card đã bị sửa/xoá khi nhập lại không còn tính) |
 | Phase 2 (bối cảnh + task) | mọi section `done` | — |
 | task | Phase 2 mở (mọi task mở cùng lúc, không khoá tuần tự: làm task nào trước cũng được) — backend/app/sd/learner.py:77 | có ≥1 lần thử (`attempts >= 1`) — backend/app/sd/learner.py:84 |
 
-Đề, gợi ý và `ref_section_id` của task chỉ lộ khi task đã mở, tức khi Phase 2 mở (backend/app/sd/learner.py:86-89). `POST` lần thử dùng lại `_tasks_state` nên task nào cũng nộp được (201) khi Phase 2 mở và 409 `task_locked` khi chưa (backend/app/sd/attempts.py:102-104). Rubric và từ khoá không bao giờ có mặt trong response học viên. Client chỉ được mở khoá cục bộ qua `next_section_id` mà PUT progress trả về.
+Đề, gợi ý và `ref_section_id` của task chỉ lộ khi task đã mở, tức khi Phase 2 mở (backend/app/sd/learner.py:86-89). `POST` lần thử dùng lại `_tasks_state` nên task nào cũng nộp được (201) khi Phase 2 mở và 409 `task_locked` khi chưa (backend/app/sd/attempts.py:102-104). Rubric và từ khoá không bao giờ có mặt trong response học viên. `next_section_id` mà PUT progress trả về vẫn còn trong response, client dùng nó để đánh dấu mở khoá cục bộ (với backend mới thì mọi section đã mở sẵn).
 
 ### 5. Lần thử và hai lớp chấm
 
@@ -112,7 +114,7 @@ Ba tool MCP (xem `docs/modules/mcp.md`): `sd_list_attempts` (hàng đợi, cũ n
 | Route | `/design` (danh sách), `/design/:docId` (lộ trình), `.../read?section=`, `.../context`, `.../tasks/:taskId`; id được mã hoá bằng `Uri.encodeComponent` | mobile/lib/app/router.dart |
 | Model + repository | parse JSON; id rỗng, `.`, `..` bị chặn ngay bằng `ArgumentError`; lỗi HTTP của server (`SdApiException`) hiện ngay, không bị Riverpod thử lại ngầm | mobile/lib/domain/sd_models.dart, mobile/lib/data/sd_repository.dart:17-60, 185-203 |
 | `DuoPath` | lộ trình kiểu Duolingo: banner xanh lá "CHAPTER i · k/n SECTION", đĩa tròn 3D zigzag, node hiện tại xanh dương có quầng + bóng "BẮT ĐẦU", khoá xám, xong xanh lá + tick; chỉ nhận trạng thái, không tự tính khoá | mobile/lib/features/system_design/duo_path.dart:1-30, mobile/lib/features/system_design/sd_path_screen.dart:31-35 |
-| Màn đọc | thanh trên navy (nút quay lại `sd-reader-back` và nút mục lục `sd-reader-menu`) + thanh tiến độ, tờ giấy trắng chữ serif (Source Serif 4, bundle trong `pubspec.yaml`), luôn trắng cả dark mode; thẻ nào có mép dưới đi qua mép dưới vùng nhìn thấy thì tính là đã đọc; gom bằng debounce 800ms thành một PUT mỗi section; lỗi 5xx/mạng thì backoff 2s, 4s… tối đa 30s, quá 5 lần liên tiếp thì dừng tới khi mở lại màn; 409/4xx thì dừng, không báo lỗi; mở lại nhảy tới card chưa đọc. Vuốt snap theo card và menu mục lục: xem phần 7 | mobile/lib/features/system_design/reader_screen.dart:26-33, 270-395, 569-582, 691-719 |
+| Màn đọc | thanh trên navy (nút quay lại `sd-reader-back` và nút mục lục `sd-reader-menu`) + thanh tiến độ, tờ giấy trắng chữ serif (Source Serif 4, bundle trong `pubspec.yaml`), luôn trắng cả dark mode; thẻ nào có mép dưới đi qua mép dưới vùng nhìn thấy thì tính là đã đọc; gom bằng debounce 800ms thành một PUT mỗi section; lỗi 5xx/mạng thì backoff 2s, 4s… tối đa 30s, quá 5 lần liên tiếp thì dừng tới khi mở lại màn; 4xx thì dừng, không báo lỗi; mở lại nhảy tới card chưa đọc. Chế độ xem trước (`?preview=1`, mục 10): không đánh dấu, không PUT. Vuốt snap theo card và menu mục lục: xem phần 7 | mobile/lib/features/system_design/reader_screen.dart:26-33, 270-395, 569-582, 691-719 |
 | Bối cảnh / Task | node "Bối cảnh" rồi các task; màn task có đề, gợi ý, ô viết với bộ đếm byte, lịch sử lần thử, ✓/✗ từng ý, "Xem đáp án mẫu", nút "Làm mới" để lấy bản chấm sâu | mobile/lib/features/system_design/context_screen.dart, mobile/lib/features/system_design/task_screen.dart:612-640 |
 | Bản nháp | lưu cục bộ bằng `SharedPreferences`, khoá `sd-draft:<email>:<docId>:<taskId>` (đổi tài khoản trên cùng máy không thấy nháp người trước); ghi sau debounce 400ms, xoá sau khi nộp thành công | mobile/lib/features/system_design/task_screen.dart:30-38, 218-287 |
 
@@ -126,8 +128,8 @@ Trước hotfix #35 một cú vuốt trôi theo quán tính nhiều card, và v�
 | Fling | vận tốc ≥ 300 px/s thì đích là mốc kế tiếp theo chiều vuốt (hết mốc thì tới biên nội dung), nhưng không xa hơn 0,9 chiều cao viewport so với vị trí hiện tại; card cao hơn màn hình được đọc bằng nhiều lần vuốt. Mô phỏng ease-out 0,2-0,4 giây tới đúng đích | mobile/lib/features/system_design/card_snap_physics.dart:14-18, 59-90, 94-121 |
 | Kéo chậm | vận tốc dưới ngưỡng, hoặc đang kéo quá biên: nhường cho physics mặc định (cuộn tự do) | mobile/lib/features/system_design/card_snap_physics.dart:41-44 |
 | Đánh dấu đã đọc | luật cũ giữ nguyên (mép dưới đi qua mép dưới viewport); physics chặn việc bỏ qua nên card chưa hiện không bị đánh dấu | mobile/lib/features/system_design/reader_screen.dart:329-350 |
-| Menu | nút `sd-reader-menu` mở bottom sheet trắng nhóm theo chapter. Trạng thái xong lấy từ server (`done` ban đầu và kết quả PUT, tập `_doneNotified`), khoá lấy từ `_unlocked` (`unlocked` ban đầu và `next_section_id`); không tự đếm card ở client | mobile/lib/features/system_design/reader_screen.dart:380-420, mobile/lib/features/system_design/reader_menu.dart:25-103 |
-| Nhảy | chạm section mở: đóng sheet rồi `animateTo` mốc `sectionStart` của section đó; chạm section khoá: SnackBar "Hoàn thành section trước để mở khoá", không nhảy. `_menuJumps` > 0 trong lúc cuộn thì `_evaluate` không đánh dấu card nào; xong thì `_startIndex` đặt về card đầu section đích rồi đánh giá lại | mobile/lib/features/system_design/reader_screen.dart:149-151, 338, 424-450 |
+| Menu | nút `sd-reader-menu` mở bottom sheet trắng nhóm theo chapter. Trạng thái xong lấy từ server (`done` ban đầu và kết quả PUT, tập `_doneNotified`), khoá lấy từ `_unlocked` (`unlocked` ban đầu và `next_section_id`; backend mới trả `true` cho mọi section nên menu không còn mục khoá); không tự đếm card ở client | mobile/lib/features/system_design/reader_screen.dart:380-420, mobile/lib/features/system_design/reader_menu.dart:25-103 |
+| Nhảy | chạm section mở: đóng sheet rồi `animateTo` mốc `sectionStart` của section đó; chạm section khoá (chỉ còn xảy ra khi app mới gọi backend cũ vẫn trả `unlocked=false`): SnackBar "Hoàn thành section trước để mở khoá", không nhảy. `_menuJumps` > 0 trong lúc cuộn thì `_evaluate` không đánh dấu card nào; xong thì `_startIndex` đặt về card đầu section đích rồi đánh giá lại | mobile/lib/features/system_design/reader_screen.dart:149-151, 338, 424-450 |
 
 ```dart
 // mobile/lib/features/system_design/reader_screen.dart:325
@@ -201,12 +203,36 @@ Phía Flutter: `SdCourse.tryFromJson` parse lỏng. Course chỉ là thông tin 
 
 Chưa có API admin hay màn quản lý course trong app: course tạo/sửa/gán chỉ qua 5 tool MCP (`docs/modules/mcp.md`).
 
+### 10. Xem trước và đặt lại tiến độ đọc (issue #66)
+
+| | Cách hoạt động | Toạ độ |
+|---|---|---|
+| Nút trên lộ trình | hai nút ở header `SdPathScreen`: `sd-preview` (mắt) đẩy `/design/<docId>/read?preview=1`, `sd-reset` (restart) hỏi xác nhận rồi gọi `resetProgress` | mobile/lib/features/system_design/sd_path_screen.dart:185-203 |
+| Route | `preview` bật khi query là `1` hoặc `true` | mobile/lib/app/router.dart:98-100 |
+| Preview ở màn đọc | banner `sd-preview-banner` "Xem trước — không tính tiến độ"; `_evaluate` không đánh dấu card, `_schedule`/`_send` thoát sớm, `dispose` không gửi nốt phần chờ | mobile/lib/features/system_design/reader_screen.dart:212, 356, 472, 485, 590-602 |
+| Reset | `DELETE /api/sd/docs/{id}/progress`; xong thì invalidate `sdDocProvider(docId)` và `sdDocsProvider` bằng `ProviderScope.containerOf` lấy TRƯỚC `await`, nên danh sách vẫn được làm mới kể cả khi người dùng đã rời màn; lỗi thì SnackBar "Không đặt lại được (mã N)" | mobile/lib/features/system_design/sd_path_screen.dart:130-172, mobile/lib/data/sd_repository.dart:131-139 |
+
+```dart
+// mobile/lib/data/sd_repository.dart:131-139
+Future<void> resetProgress(String docId) async {
+  final doc = _e('docId', docId);
+  final response = await _http.delete(_uri('/api/sd/docs/$doc/progress')).timeout(timeout);
+  if (response.statusCode != 204 && response.statusCode != 200) {
+    throw SdApiException(response.statusCode, _detailOf(response));
+  }
+}
+```
+
+Reset chỉ xoá tiến độ ĐỌC (`sd_progress`), bài đã nộp (`sd_attempts`) giữ nguyên; vì vậy sau reset Phase 2 khoá lại nhưng lịch sử lần thử vẫn có ở server (cùng loại với BK-2 ở mục Giới hạn).
+
 ## Ranh giới & đánh đổi
 
 | Chọn | Thay vì | Vì sao |
 |---|---|---|
 | Bảng `sd_*` riêng, ngoài `load_content` và hàng chờ duyệt | nhét vào cây nội dung code | nội dung SD là tài liệu đọc, không phải bài chấm bằng test; nhập lại không được phá tiến độ (xem `docs/DECISIONS.md`) |
-| Server tính `done`/`unlocked` | client tự suy từ số card đã đọc | một nguồn sự thật; tránh app mở khoá mà PUT bị 409 hoặc ngược lại |
+| Server tính `done`/`unlocked` | client tự suy từ số card đã đọc | một nguồn sự thật; tránh app và server lệch nhau về khoá/mở |
+| Bỏ khoá tuần tự section, giữ field `unlocked` (luôn `true`) | xoá hẳn field | app cũ trên TestFlight còn đọc `unlocked`; backend deploy trước app qua CI (xem `docs/DECISIONS.md`) |
+| Xem trước là cờ ở client (`?preview=1`), không có endpoint | endpoint "đọc không ghi" ở server | preview chỉ cần không gọi PUT; server không phải phân biệt hai kiểu đọc |
 | Chấm từ khoá ngay + chấm sâu qua MCP | gọi LLM trực tiếp từ backend | không giữ API key LLM, không tốn tiền mỗi lần nộp; Claude chat đã sẵn có qua MCP |
 | Nhóm id theo nội dung (card) và theo tên (section/task) | id tự tăng / UUID | card sửa nhẹ vẫn giữ tiến độ các card khác; đổi tên là hành vi hiếm, hậu quả đã ghi rõ |
 | Vuốt snap bằng `ScrollPhysics` tuỳ biến trên `SingleChildScrollView` | `PageView` (mỗi card một trang) | card cao hơn màn hình sẽ không đọc trọn được trong một trang; physics chặn mỗi cú vuốt ≤0,9 viewport nên card dài vẫn đọc bằng nhiều lần vuốt (xem `docs/DECISIONS.md`) |
@@ -242,7 +268,7 @@ Reviewer mối nối trả lời đủ 6 mã "còn đúng" với `file:dòng` (`
 - Quản lý tài liệu (run 2026-10-17-sd-docs-mcp, STATUS.md Backlog): `apply_edits` so khớp `old_text` theo chuỗi thô, không chuẩn hoá NFC (khác NFC thì báo "không tìm thấy", an toàn nhưng khó hiểu); `base_revision` truyền cho doc chưa có thì bị bỏ qua; chưa có test downgrade với dòng `archived` và chưa có test 2 connection thật (DB test dùng chung dễ đỏ lẻ); không có test máy cho `populate_existing=True` (đã thử, test không ổn định nên bỏ, DEVIATIONS.md); `SdSection`/`SdTask` đọc không `populate_existing` (hợp đồng session riêng mỗi lần gọi che lỗ này); chưa có test 411 cho `/mcp` chunked, test bài nộp mồ côi, test `--status` sai của CLI.
 - Mối nối chưa khẳng định chủ ý (reviews/SEAM.md): `POST /api/admin/sd/docs` với `status` rõ lên doc `archived` lặng lẽ khôi phục nó (upsert; backend/app/sd/docs.py:138-140), còn MCP `replace`/`edit` và CLI mặc định thì giữ `archived`; `include_archived` mặc định khác nhau (API admin `true`, MCP `false`) — nhớ khi làm màn admin Flutter. Màn admin SD trong app Flutter vẫn chưa có.
 - Course (run 2026-10-17-sd-courses, STATUS.md Backlog): dedupe skill phân biệt hoa/thường (`Cache` và `cache` là hai skill); không có test đồng thời cho khoá course; xoá cứng course ở DB để lại `course_position` (doc về nhóm "Khác" nhưng vị trí cũ còn); `list_courses` không phân trang hay trần số course; thiếu test `course_position` NULL và trùng position ở API học viên, test khoá số truy vấn của `GET /api/sd/docs`, và hai chỗ sort lặp key trong `learner.py`; app xếp nhóm theo lần xuất hiện của doc (không đọc thứ tự `courses[]`), header nhóm chưa có Semantics, `withCourse` liệt kê tay từng field nên thêm field mới vào `SdDocSummary` phải nhớ sửa; chưa có course cho `themes` (không thể gắn chế độ code vào course).
-- Section vẫn khoá tuần tự (section sau chỉ mở khi section trước `done`); chỉ task Phase 2 là không khoá tuần tự. Menu nhảy được tới mọi section đã mở khoá, kể cả section đã xong.
+- Preview/reset (run 2026-10-17-sd-preview-reset, STATUS.md Backlog): chưa có test đồng thời DELETE và PUT; section mới thêm khi admin nhập lại đúng lúc reset vẫn có thể chen PUT; guard preview rải ở 4 chỗ của `reader_screen.dart` (`_evaluate`, `_schedule`, `_send`, `dispose`), thêm đường gửi tiến độ mới phải nhớ guard; preview chạy với backend cũ (còn `unlocked=false`) không nhảy được section khoá; nút reset chưa chặn bấm đôi (idempotent) và chưa test header 360px; toast "Hoàn thành section trước để mở khoá" gần như code chết; Phase 2 vẫn chờ đọc hết section; INV-01 (preview không ghi tiến độ) mới có widget test, chưa chạy trên thiết bị.
 - Test đua nhau thật giữa nhập lại và PUT progress chưa có (hạ tầng test dùng một connection); nhập đồng thời và chấm đồng thời có test nhiều luồng (`tests/test_sd_concurrency.py`). Chưa chạy trên thiết bị thật; app đã chạy trên web Chrome 390px.
 
 ### Cách chạy test và e2e
@@ -258,4 +284,4 @@ Kết quả lúc chưng cất: backend 805 passed, 2 skipped; Flutter 741 passed
 
 ## Nguồn
 
-backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-205; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/migrations/versions/0008_sd_source_archive.py:1-33; backend/migrations/versions/0009_courses.py:1-49; backend/app/sd/courses.py:1-200; planning/crew/2026-10-17-sd-courses/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md; backend/app/sd/docs.py:1-294; backend/app/sd/import_file.py:1-62; backend/README.md:102-117; backend/app/mcp_server.py:319-395; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; run 2026-10-17-sd-docs-mcp: planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, commit d5b3a28, eb24e55, 0a594dc, 3d8737b; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.
+backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-243; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/migrations/versions/0008_sd_source_archive.py:1-33; backend/migrations/versions/0009_courses.py:1-49; backend/app/sd/courses.py:1-200; planning/crew/2026-10-17-sd-courses/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md; backend/app/sd/docs.py:1-294; backend/app/sd/import_file.py:1-62; backend/README.md:102-117; backend/app/mcp_server.py:319-395; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; run 2026-10-17-sd-docs-mcp: planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, commit d5b3a28, eb24e55, 0a594dc, 3d8737b; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.

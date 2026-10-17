@@ -1,0 +1,5 @@
+| plan | thực tế | quyết định | ai duyệt |
+| T-02 Major (review): preview phải nhảy được cả section `_unlocked=false` | Backend T-01 trả `unlocked=true` cho MỌI section (INV-02, e2e PASS) → với backend mới không còn section khoá; chỉ xảy ra khi app mới gọi backend cũ (backend deploy trước app qua CI) | Bác bỏ: client giữ nguyên tắc "khoá do server quyết", không thêm nhánh riêng cho preview | orchestrator |
+| T-03 Minor 1+2 (review): pop màn khi reset đang chạy → không invalidate `sdDocsProvider`; test không assert danh sách được tải lại | Cả hai chạm INV-06 (không có test giữ bất biến) | Sửa ngay bằng correction task hẹp T-03b (crew-impl-light) thay vì để Backlog | orchestrator |
+| T-01 Major (external/Codex): DELETE chỉ khoá section đã có dòng → PUT đầu tiên của section mới chen vào | Đúng; hệ quả tương đương "PUT ngay sau reset" nhưng sửa rẻ | Sửa: khoá mọi `SdSection.id` của doc, sorted | orchestrator |
+| verify-review T-02 reject định dạng MNT-01 (số dòng thiếu tên file) | orchestrator thêm tên file vào đúng toạ độ reviewer đã ghi, không đổi nội dung | sửa định dạng | orchestrator |

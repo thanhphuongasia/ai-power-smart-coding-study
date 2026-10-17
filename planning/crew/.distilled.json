@@ -98,5 +98,9 @@
   "7679441": {
     "date": "2026-10-17",
     "run": "2026-10-17-mcp-publish-tool"
+  },
+  "ab9aef9": {
+    "date": "2026-10-17",
+    "run": "2026-10-17-sd-preview-reset"
   }
 }

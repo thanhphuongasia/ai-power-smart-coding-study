@@ -138,6 +138,7 @@ Widget _app(
   String? sectionId,
   Brightness brightness = Brightness.light,
   Widget? home,
+  bool preview = false,
 }) {
   final repo = SdRepository(
     MockClient(server.handle),
@@ -147,7 +148,13 @@ Widget _app(
     overrides: [sdRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp(
       theme: buildAppTheme(brightness: brightness),
-      home: home ?? SdReaderScreen(docId: 'doc1', sectionId: sectionId),
+      home:
+          home ??
+          SdReaderScreen(
+            docId: 'doc1',
+            sectionId: sectionId,
+            preview: preview,
+          ),
     ),
   );
 }
@@ -552,6 +559,56 @@ void main() {
     // Timer debounce đã huỷ: không gửi thêm.
     await tester.pump(const Duration(seconds: 2));
     expect(server.puts.length, 1);
+  });
+
+  testWidgets('(P) preview: cuộn hết + rời màn → 0 PUT, có banner', (
+    tester,
+  ) async {
+    await _size(tester, 400);
+    final server = _Server(_twoSections());
+    await tester.pumpWidget(
+      _app(
+        server,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      const SdReaderScreen(docId: 'doc1', preview: true),
+                ),
+              ),
+              child: const Text('vào đọc'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('vào đọc'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sd-preview-banner')), findsOneWidget);
+    expect(find.text('Xem trước — không tính tiến độ'), findsOneWidget);
+    final before = _progress(tester);
+    await _reveal(tester, 's1-a3');
+    await _debounce(tester);
+    expect(server.puts, isEmpty);
+    expect(_progress(tester), before); // không đánh dấu đã đọc
+    final p = _pos(tester);
+    p.jumpTo(p.maxScrollExtent);
+    await tester.pump();
+    await _debounce(tester);
+    expect(server.puts, isEmpty);
+    await tester.tap(find.byKey(const Key('sd-reader-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sd-reader')), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+    expect(server.puts, isEmpty);
+  });
+
+  testWidgets('(P) không preview: không có banner', (tester) async {
+    await _size(tester, 400);
+    await _open(tester, _Server(_twoSections()));
+    expect(find.byKey(const Key('sd-preview-banner')), findsNothing);
   });
 
   testWidgets('(i) SnackBar "Xong: ..." chỉ hiện một lần', (tester) async {

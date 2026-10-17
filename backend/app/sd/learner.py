@@ -5,10 +5,13 @@
 - GET /api/sd/docs/{id}                              → tài liệu: section (kèm card, đã đọc, done, unlocked),
   bối cảnh (chỉ khi Phase 2 mở) và task (kèm unlocked, done, số lần thử).
 - PUT /api/sd/docs/{id}/sections/{sid}/progress      {read_cards} → {read, done, next_section_id, phase2_unlocked}
-  | 404 | 409 section_locked. Chỉ THÊM card đã đọc (không bao giờ bỏ); id lạ (card đã bị sửa/xoá khi nhập lại) bỏ qua.
+  | 404. Chỉ THÊM card đã đọc (không bao giờ bỏ); id lạ (card đã bị sửa/xoá khi nhập lại) bỏ qua.
+- DELETE /api/sd/docs/{id}/progress                   → 204 | 404. Đặt lại tiến độ ĐỌC của tôi cho tài liệu này;
+  bài đã nộp (`sd_attempts`) giữ nguyên.
 
 Trạng thái khoá/xong chỉ tính ở đây (server), client chỉ vẽ:
-- section mở khi là section đầu hoặc section liền trước đã `done`; `done` = mọi card HIỆN HÀNH đã đọc.
+- mọi section luôn mở (issue #66: học section nào trước cũng được); `unlocked` vẫn trả về (luôn true) để app cũ
+  không vỡ. `done` = mọi card HIỆN HÀNH đã đọc.
 - Phase 2 mở khi mọi section `done`; khi đó MỌI task mở cùng lúc (không khoá tuần tự), làm task nào trước cũng được.
   Task `done` khi có ≥1 lần thử.
 
@@ -19,9 +22,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, current_user
@@ -48,8 +51,8 @@ def _published(session: Session, doc_id: str) -> SdDoc:
 
 
 def _sections_state(sections: list[SdSection], read_by_section: dict[str, set[str]]) -> list[dict]:
-    """Section theo thứ tự + trạng thái. Mở khoá tuần tự: chỉ section liền trước `done` mới mở section sau."""
-    out, prev_done = [], True
+    """Section theo thứ tự + trạng thái. Mọi section đều mở (không khoá tuần tự)."""
+    out = []
     for s in sections:
         ids = [c["id"] for c in s.cards]
         have = read_by_section.get(s.id, set())
@@ -65,10 +68,9 @@ def _sections_state(sections: list[SdSection], read_by_section: dict[str, set[st
                 "cards": s.cards,
                 "read": read,
                 "done": done,
-                "unlocked": prev_done,
+                "unlocked": True,
             }
         )
-        prev_done = done
     return out
 
 
@@ -176,6 +178,10 @@ def get_doc(doc_id: str, user: CurrentUser = Depends(current_user), session: Ses
     }
 
 
+def _lock_progress(session: Session, user_id: int, doc_id: str, section_id: str) -> None:
+    session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"sd_prog:{user_id}:{doc_id}:{section_id}"})
+
+
 @router.put("/docs/{doc_id}/sections/{section_id}/progress")
 def put_progress(
     doc_id: str,
@@ -186,16 +192,12 @@ def put_progress(
 ) -> dict:
     _published(session, doc_id)
     # Hai PUT đồng thời của cùng user/section: tuần tự hoá để hợp (union) không làm mất card của nhau.
-    session.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"sd_prog:{user.id}:{doc_id}:{section_id}"}
-    )
+    _lock_progress(session, user.id, doc_id, section_id)
     sections, _, read, _ = _load(session, user.id, [doc_id])
     state = _sections_state(sections[doc_id], read[doc_id])
     target = next((s for s in state if s["id"] == section_id), None)
     if target is None:
         raise HTTPException(status_code=404, detail="section_not_found")
-    if not target["unlocked"]:
-        raise HTTPException(status_code=409, detail="section_locked")
 
     valid = {c["id"] for c in target["cards"]}
     row = session.get(SdProgress, (user.id, doc_id, section_id))
@@ -223,3 +225,16 @@ def put_progress(
         "next_section_id": nxt,
         "phase2_unlocked": all(s["done"] for s in state),
     }
+
+
+@router.delete("/docs/{doc_id}/progress", status_code=204)
+def reset_progress(doc_id: str, user: CurrentUser = Depends(current_user), session: Session = Depends(get_session)) -> Response:
+    _published(session, doc_id)
+    # Khoá MỌI section của doc (cùng khoá với PUT), thứ tự cố định nên không deadlock: PUT nào cũng xong hẳn trước
+    # hoặc chạy hẳn sau lần xoá, kể cả PUT đầu tiên của một section chưa có dòng tiến độ.
+    section_ids = sorted(session.scalars(select(SdSection.id).where(SdSection.doc_id == doc_id)))
+    for sid in section_ids:
+        _lock_progress(session, user.id, doc_id, sid)
+    session.execute(delete(SdProgress).where(SdProgress.user_id == user.id, SdProgress.doc_id == doc_id))
+    session.commit()
+    return Response(status_code=204)
