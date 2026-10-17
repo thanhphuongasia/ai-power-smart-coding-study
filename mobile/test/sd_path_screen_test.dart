@@ -1,5 +1,6 @@
 // Test màn danh sách tài liệu System Design + lộ trình Duolingo (T-08).
 // Phần (a)-(f) dùng GoRouter nhỏ với Placeholder; (g) dùng router THẬT của app.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -107,6 +108,8 @@ class _FakeRepo extends SdRepository {
   Future<void> resetProgress(String docId) async {
     server.resetCalls++;
     server.resetIds.add(docId);
+    final gate = server.resetGate;
+    if (gate != null) await gate.future;
     final err = server.resetError;
     if (err != null) throw err;
     server.onReset?.call();
@@ -123,6 +126,7 @@ class _Server {
   final resetIds = <String>[];
   Object? resetError;
   void Function()? onReset;
+  Completer<void>? resetGate;
 
   List<Override> get overrides => [
     sdRepositoryProvider.overrideWithValue(_FakeRepo(this)),
@@ -760,9 +764,12 @@ void main() {
           _section('s2', pos: 2, chapter: 'Nền tảng', chapterPos: 1),
         ],
       );
-      await _pump(tester, s, initial: '/design/sd1');
+      await _pump(tester, s);
+      await tester.tap(find.byKey(const Key('sd-doc-sd1')));
+      await tester.pumpAndSettle();
       expect(find.text('CHAPTER 1 · 1/2 SECTION'), findsOneWidget);
       final docCalls = s.docCalls;
+      final docsBefore = s.docsCalls;
       await tester.tap(find.byKey(const Key('sd-reset')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sd-reset-confirm')));
@@ -772,6 +779,32 @@ void main() {
       expect(s.docCalls, greaterThan(docCalls));
       expect(find.text('CHAPTER 1 · 0/2 SECTION'), findsOneWidget);
       expect(find.text('Đã đặt lại tiến độ'), findsOneWidget);
+      await tester.tap(find.byTooltip('Quay lại'));
+      await tester.pumpAndSettle();
+      expect(_loc(), '/design');
+      expect(s.docsCalls, greaterThan(docsBefore)); // danh sách tải lại
+    });
+
+    testWidgets('reset đang treo → rời màn → xong request vẫn tải lại '
+        'danh sách, không exception', (tester) async {
+      final s = _Server()..doc = _doc();
+      s.resetGate = Completer<void>();
+      await _pump(tester, s);
+      await tester.tap(find.byKey(const Key('sd-doc-sd1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('sd-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('sd-reset-confirm')));
+      await tester.pump();
+      expect(s.resetCalls, 1);
+      await tester.tap(find.byTooltip('Quay lại'));
+      await tester.pumpAndSettle();
+      expect(_loc(), '/design');
+      final docsBefore = s.docsCalls;
+      s.resetGate!.complete();
+      await tester.pumpAndSettle();
+      expect(s.docsCalls, greaterThan(docsBefore));
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('sd-reset thất bại → SnackBar lỗi, không crash, dữ liệu giữ '

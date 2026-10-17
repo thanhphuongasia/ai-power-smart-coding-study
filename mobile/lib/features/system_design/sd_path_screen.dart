@@ -152,12 +152,14 @@ class SdPathScreen extends ConsumerWidget {
     );
     if (ok != true || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    // Lấy container trước await: server đã xoá tiến độ thì phải invalidate
+    // dù người dùng đã rời màn (context không còn mounted).
+    final container = ProviderScope.containerOf(context, listen: false);
     String message;
     try {
       await ref.read(sdRepositoryProvider).resetProgress(docId);
-      if (!context.mounted) return;
-      ref.invalidate(sdDocProvider(docId));
-      ref.invalidate(sdDocsProvider);
+      container.invalidate(sdDocProvider(docId));
+      container.invalidate(sdDocsProvider);
       message = 'Đã đặt lại tiến độ';
     } on SdApiException catch (e) {
       message = 'Không đặt lại được (mã ${e.statusCode})';

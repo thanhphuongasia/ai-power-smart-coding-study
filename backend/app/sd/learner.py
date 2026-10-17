@@ -230,10 +230,9 @@ def put_progress(
 @router.delete("/docs/{doc_id}/progress", status_code=204)
 def reset_progress(doc_id: str, user: CurrentUser = Depends(current_user), session: Session = Depends(get_session)) -> Response:
     _published(session, doc_id)
-    # Cùng khoá với PUT, theo thứ tự cố định (không deadlock): PUT đang ghi dở không cập nhật đè lên dòng vừa xoá.
-    section_ids = sorted(
-        session.scalars(select(SdProgress.section_id).where(SdProgress.user_id == user.id, SdProgress.doc_id == doc_id))
-    )
+    # Khoá MỌI section của doc (cùng khoá với PUT), thứ tự cố định nên không deadlock: PUT nào cũng xong hẳn trước
+    # hoặc chạy hẳn sau lần xoá, kể cả PUT đầu tiên của một section chưa có dòng tiến độ.
+    section_ids = sorted(session.scalars(select(SdSection.id).where(SdSection.doc_id == doc_id)))
     for sid in section_ids:
         _lock_progress(session, user.id, doc_id, sid)
     session.execute(delete(SdProgress).where(SdProgress.user_id == user.id, SdProgress.doc_id == doc_id))
