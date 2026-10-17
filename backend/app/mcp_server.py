@@ -25,6 +25,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import ConfigDict, with_config
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
@@ -38,6 +39,7 @@ from app.content_ops import ContentOpError
 from app.db import SessionLocal
 from app.export_content import admin_version
 from app.load_content import validation_errors
+from app.tables import ContentChange
 from app.mcp_auth import (
     InvalidToken,
     JwksUnavailable,
@@ -58,7 +60,7 @@ _claims: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_claim
 
 INSTRUCTIONS = (
     "Công cụ soạn nội dung cho app học lập trình Smart Coding Study. Cây nội dung: project → module "
-    "(lồng được) → file → lesson. Mọi thay đổi chỉ vào HÀNG CHỜ DUYỆT: admin phải duyệt trong app thì học viên mới thấy — hãy nói rõ điều này với người dùng sau khi ghi. Các lần đọc thấy cả mục đang chờ duyệt. Trước khi tạo/sửa bài, gọi "
+    "(lồng được) → file → lesson. Mọi thay đổi chỉ vào HÀNG CHỜ DUYỆT: học viên chưa thấy cho tới khi được duyệt — hãy nói rõ điều này với người dùng sau khi ghi. Duyệt bằng list_pending_changes → publish_changes (hoặc reject_changes), CHỈ khi người dùng bảo publish; admin cũng duyệt được trong app. Các lần đọc thấy cả mục đang chờ duyệt. Trước khi tạo/sửa bài, gọi "
     "get_authoring_guide để biết luật; thử với dry_run=true trước, sửa hết lỗi rồi mới ghi thật. "
     "Ngoài ra có 3 tool chấm bài thực chiến System Design (sd_list_attempts, sd_get_attempt, sd_submit_feedback): "
     "feedback ghi bằng sd_submit_feedback hiện cho học viên NGAY trong app, không qua hàng chờ duyệt. "
@@ -141,7 +143,7 @@ def _write(tool: str, op: Callable[[dict], dict], dry_run: bool) -> dict:
         "ok": True,
         "version": result["version"],
         "pending": result["pending"],
-        "message": "Đã gửi vào hàng chờ duyệt — admin cần duyệt trong app thì học viên mới thấy.",
+        "message": "Đã gửi vào hàng chờ duyệt — học viên chưa thấy. Publish bằng publish_changes (id lấy từ list_pending_changes) khi người dùng đồng ý, hoặc admin duyệt trong app.",
     }
 
 
@@ -461,6 +463,115 @@ async def sd_assign_doc(doc_id: str, course_id: str | None, position: int | None
         _sd_doc,
         "sd_assign_doc",
         lambda s, actor: sd_courses.assign_doc(s, doc_id, course_id, position=position, actor=actor),
+    )
+
+
+# --- Hàng chờ duyệt bài code: xem + publish/bỏ. Cùng hàm với API admin (/api/admin/changes, admin_api._decide) --------
+# Lớp chặn: "Needs approval" của claude.ai cho tool ghi. Mỗi id chạy trong savepoint riêng: id lỗi không kéo id khác.
+
+MAX_DECIDE_IDS = 50
+
+
+def _change_summary(c: dict) -> dict:
+    # Tên lấy giống app (review_screen.dart changeTitle): fields.name/title của after, rồi before.
+    name = c["item_id"]
+    for side in (c["after"], c["before"]):
+        fields = (side or {}).get("fields") or {}
+        if fields.get("name") or fields.get("title"):
+            name = fields.get("name") or fields.get("title")
+            break
+    keep = ("id", "kind", "item_id", "action", "author", "created_at", "updated_at")
+    return {**{k: c[k] for k in keep}, "name": name}
+
+
+def _queue_read(fn: Callable[[Session], Any]) -> Any:
+    with open_session() as session:
+        _authorized(session)
+        return fn(session)
+
+
+def _ids(change_ids: Any) -> list[int]:
+    if not isinstance(change_ids, list) or not change_ids or len(change_ids) > MAX_DECIDE_IDS:
+        raise ToolError(f"change_ids là danh sách 1..{MAX_DECIDE_IDS} id (lấy từ list_pending_changes)")
+    if any(isinstance(i, bool) or not isinstance(i, int) or i <= 0 for i in change_ids):
+        raise ToolError("mỗi id là số nguyên dương")
+    return list(dict.fromkeys(change_ids))
+
+
+def _decide_many(tool: str, action: Callable[[Session, int, str], dict], change_ids: Any) -> dict:
+    ids = _ids(change_ids)
+    with open_session() as session:
+        user, sub = _authorized(session)
+        reviewer = f"mcp:{sub}"
+        results: list[dict] = []
+        for cid in ids:
+            savepoint = session.begin_nested()
+            try:
+                r = action(session, cid, reviewer)
+                savepoint.commit()
+                results.append({"id": cid, "status": r["status"], "also": r.get("also", [])})
+            except review.NotPending as exc:
+                savepoint.rollback()
+                results.append({"id": cid, "status": "skipped", "error": exc.message})
+            except review.ReviewError as exc:
+                savepoint.rollback()
+                results.append({"id": cid, "status": "error", "error": exc.message, "details": exc.errors[:MAX_ERRORS]})
+            except DataError as exc:
+                savepoint.rollback()
+                results.append({"id": cid, "status": "error", "error": f"DB từ chối nội dung ({type(exc.orig).__name__})"})
+        version = review.draft_version(session)  # base cho lần ghi kế tiếp (như admin_api._decide)
+        pending = len(review.pending_rows(session))
+        session.commit()
+    logger.info("mcp %s by %s (sub=%s): %s", tool, user.email, sub, [(r["id"], r["status"]) for r in results])
+    return {"results": results, "pending": pending, "version": version}
+
+
+@mcp.tool(annotations=_READ)
+async def list_pending_changes() -> list[dict]:
+    """Hàng chờ duyệt bài code (project/module/file/lesson): id, kind, item_id, action (create/update/delete), tên, ai gửi, lúc nào. Dùng id cho get_pending_change / publish_changes / reject_changes."""
+    return await run_in_threadpool(
+        _queue_read, lambda s: [_change_summary(review.change_json(r)) for r in review.pending_rows(s)]
+    )
+
+
+@mcp.tool(annotations=_READ)
+async def get_pending_change(change_id: int) -> dict:
+    """Một mục trong hàng chờ: đủ before/after để xem khác gì so với nội dung học viên đang thấy."""
+
+    def read(s: Session) -> dict:
+        row = s.get(ContentChange, change_id)
+        if row is None:
+            raise ToolError(f"không có mục chờ duyệt id {change_id}")
+        return review.change_json(row)
+
+    return await run_in_threadpool(_queue_read, read)
+
+
+@mcp.tool(annotations=_UPDATE)
+async def publish_changes(change_ids: list[int]) -> dict:
+    """PUBLISH (duyệt) các mục trong hàng chờ — học viên thấy NGAY. Chỉ gọi khi người dùng đã đồng ý. Duyệt theo thứ tự truyền vào (cha trước con: project → module → file → lesson); mục lỗi (vd "cần duyệt X trước") không chặn mục khác. Duyệt project kéo theo module đầu tiên của nó (xem "also")."""
+    return await run_in_threadpool(_decide_many, "publish_changes", review.approve, change_ids)
+
+
+@mcp.tool(annotations=_UPDATE)
+async def reject_changes(change_ids: list[int]) -> dict:
+    """Bỏ các mục khỏi hàng chờ (không lên cho học viên). Mục chờ phụ thuộc vào mục bị bỏ cũng bị bỏ kèm (xem "also")."""
+    return await run_in_threadpool(_decide_many, "reject_changes", review.reject, change_ids)
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_publish_doc(doc_id: str) -> dict:
+    """PUBLISH tài liệu System Design (status=published): học viên thấy ngay trong tab Design. Chỉ gọi khi người dùng đã đồng ý."""
+    return await run_in_threadpool(
+        _sd_doc, "sd_publish_doc", lambda s, actor: sd_docs.set_status(s, doc_id, "published", actor=actor)
+    )
+
+
+@mcp.tool(annotations=_UPDATE)
+async def sd_unpublish_doc(doc_id: str) -> dict:
+    """Gỡ tài liệu System Design khỏi học viên (status=draft), không xoá: tiến độ và bài nộp còn nguyên, publish lại được."""
+    return await run_in_threadpool(
+        _sd_doc, "sd_unpublish_doc", lambda s, actor: sd_docs.set_status(s, doc_id, "draft", actor=actor)
     )
 
 

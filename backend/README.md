@@ -99,6 +99,11 @@ Tool (12): `list_projects`, `get_project`, `get_lesson`, `get_authoring_guide` (
 - Mọi thay đổi có hiệu lực ngay với học viên. Luôn thử `dry_run=true` trước, rồi mới ghi thật.
 - Thu hồi quyền: `python -m app.mcp_access revoke <sub>`, chạy theo cùng cách như trên.
 
+Publish (chỉ gọi khi người dùng đồng ý): bài code Claude gửi nằm trong hàng chờ duyệt — xem bằng `list_pending_changes` /
+`get_pending_change`, duyệt bằng `publish_changes([id…])` (cha trước con), bỏ bằng `reject_changes`; mỗi mục ghi
+`decided_by = mcp:<sub>`. Tài liệu SD: `sd_publish_doc` / `sd_unpublish_doc`. Trong app: Admin → "Chờ duyệt" (bài code),
+Admin → "Tài liệu SD" (publish/ẩn/khôi phục). Thêm tool mới thì phải Disconnect → Connect connector trên claude.ai.
+
 Tool tài liệu System Design: `sd_list_docs`, `sd_get_doc`, `sd_create_doc`, `sd_replace_doc`, `sd_edit_doc`,
 `sd_set_status`, `sd_delete_doc`. Xoá là xoá mềm (`status=archived`) — học viên không thấy nữa, bài nộp và tiến
 độ còn nguyên; khôi phục bằng `sd_set_status`.
