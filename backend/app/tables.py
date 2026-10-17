@@ -240,7 +240,8 @@ class ContentChange(Base):
 
 class SdDoc(Base):
     __tablename__ = "sd_docs"
-    __table_args__ = (CheckConstraint("status IN ('draft','published')", name="ck_sd_docs_status"),)
+    # archived = xoá mềm: học viên không thấy, bài nộp/tiến độ còn nguyên, khôi phục bằng đổi status.
+    __table_args__ = (CheckConstraint("status IN ('draft','published','archived')", name="ck_sd_docs_status"),)
 
     # Slug của tài liệu, ổn định giữa các lần nhập lại.
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -248,6 +249,8 @@ class SdDoc(Base):
     status: Mapped[str] = mapped_column(String(10), default="draft", server_default="draft")
     # Các card của phần "Bối cảnh" (Phase 2): [{id, kind, title, body}].
     context: Mapped[list] = mapped_column(JSONB, default=list)
+    # Markdown gốc của lần nhập gần nhất (để sửa lại được); None = nhập trước migration 0008.
+    source_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
