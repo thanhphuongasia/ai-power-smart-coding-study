@@ -865,3 +865,33 @@ planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
 **Đánh đổi đã chấp nhận**: doc cũ chưa backfill thì `sd_edit_doc` báo lỗi (dùng `sd_replace_doc`); `apply_edits` so khớp chuỗi thô, không chuẩn hoá NFC (Backlog M-4); mỗi doc lưu thêm tới 1MB trong DB.
 
 **Nguồn**: backend/app/sd/docs.py:53-57, 139-148, 171-219; backend/app/sd/import_file.py:1-58; backend/migrations/versions/0008_sd_source_archive.py:21-26; planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md.
+
+### System Design: course chỉ để nhóm tài liệu, không quyết quyền xem
+
+**Quyết định** (run 2026-10-17-sd-courses, issue #56 phase 1): bảng `courses` + `sd_docs.course_id`/`course_position` chỉ dùng để gom doc khi hiển thị. Học viên có thấy doc hay không vẫn do `sd_docs.status` quyết, độc lập với course. Course chưa `published` thì doc của nó hiện ở nhóm "Khác"; course `archived` là xoá mềm, doc giữ `course_id`, khôi phục course thì doc về đúng nhóm. Nhập lại doc không đổi `course_id`/`course_position`.
+
+**Vì sao**: bất biến INV-01 của run: học viên thấy đúng tập doc `published` như trước khi có course; chuyển course về draft/archived mà doc biến khỏi app là lỗi. Giữ `sd_docs.status` là nguồn duy nhất cho quyền xem thì thêm course không đổi tập doc được xem. Xoá course là xoá mềm (INV-05) để khôi phục được; FK `ON DELETE SET NULL` chỉ là lưới phòng xa. Sổ bất biến được kiểm bằng e2e 10/10 (INV-01..07) và mutation (bỏ chặn gán vào course archived, bỏ `course_position` khỏi `DOC_ORDER` đều làm test đỏ).
+
+**Đánh đổi đã chấp nhận**: course nháp không "giấu" được doc đã published (chỉ đẩy xuống nhóm "Khác"); muốn giấu thì gỡ doc.
+
+**Nguồn**: backend/app/sd/courses.py:1-8, 158-171; backend/app/sd/learner.py:121-160; backend/app/tables.py:241-277; planning/crew/2026-10-17-sd-courses/PLAN.md.
+
+### System Design: phase 1 không gắn course cho `themes` của chế độ code
+
+**Quyết định** (run 2026-10-17-sd-courses): course chỉ nhóm tài liệu System Design (`sd_docs`); chưa gắn course cho `themes`. Cần thì làm ở phase sau bằng bảng nối không FK.
+
+**Vì sao**: `themes` bị xoá rồi ghi lại mỗi lần duyệt nội dung (`load_content` chạy `delete(model)` cho `Theme` rồi nạp lại), nên một cột FK trên `themes` trỏ tới course sẽ mất hoặc vỡ sau mỗi lần duyệt; cùng kiểu lý do `sd_progress`/`sd_attempts` không FK tới nội dung SD.
+
+**Đánh đổi đã chấp nhận**: chế độ code chưa có khái niệm khoá học. Backlog của run ghi hướng làm sau là bảng nối không FK (chưa thiết kế).
+
+**Nguồn**: backend/app/load_content.py:307-320; planning/crew/2026-10-17-sd-courses/PLAN.md (mục phạm vi), STATUS.md (Backlog).
+
+### API học viên `GET /api/sd/docs`: chỉ THÊM key để app cũ vẫn chạy
+
+**Quyết định** (run 2026-10-17-sd-courses): hợp đồng chỉ thêm `course_id` ở mỗi item và `courses` ở gốc response; không đổi hay bỏ key nào, không đổi kiểu trả về. Item có `course_id` chỉ khi course `published`. App cũ bỏ qua key lạ nên vẫn hiện list phẳng; app mới đọc server cũ (không có hai key) cũng hiện list phẳng. Phía Flutter parse course lỏng (dữ liệu course lệch không làm lỗi cả tab) và giữ `listDocs` trả `List<SdDocSummary>` (gắn course vào từng doc) thay vì đổi sang kiểu bọc mới.
+
+**Vì sao**: PLAN ghi rõ "app cũ trên TestFlight bỏ qua key mới và vẫn hiện list phẳng", nên backend chỉ được thêm key. Course chỉ là thông tin nhóm nên không đáng để dữ liệu course lệch làm hỏng cả tab Design (review T-04 bắt parse quá chặt, correction T-04b nới ra). Giữ kiểu `listDocs` vì đổi sang `SdDocsIndex` làm vỡ `test/sd_path_screen_test.dart` ngoài ownership (DEVIATIONS.md).
+
+**Đánh đổi đã chấp nhận**: `courses` chỉ chứa course published có ≥1 doc, nên app không liệt kê được course rỗng; một assert cũ `{"items": []}` của `test_sd_learner.py` phải đổi thành `{"items": [], "courses": []}`.
+
+**Nguồn**: backend/app/sd/learner.py:120-162; mobile/lib/data/sd_repository.dart:77-97; mobile/lib/domain/sd_models.dart:20-56; planning/crew/2026-10-17-sd-courses/DEVIATIONS.md.

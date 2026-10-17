@@ -8,7 +8,7 @@ Chế độ code của app dạy bằng bài tập có test; System Design khôn
 
 ## Dùng khi nào
 
-Admin nhập hoặc nhập lại tài liệu bằng `POST /api/admin/sd/docs`, bằng 7 tool MCP `sd_*` doc (qua Claude, xem mục 8) hoặc bằng CLI `python -m app.sd.import_file` (hiện chưa có màn admin trong app, STATUS.md). Học viên vào từ tab thứ 5 "Design" của app, chọn tài liệu, đi theo lộ trình. Claude (qua claude.ai, đã được cấp quyền `mcp_access`) gọi 3 tool `sd_*` để chấm và 7 tool để quản lý tài liệu. Đụng vào module này khi đổi quy ước markdown (sửa `parser.py` và mọi tài liệu đã nhập, vì id card/section/task sinh từ nội dung/tên), thêm kiểu chấm mới (cắm một `Evaluator`), hoặc thêm tab điều hướng (3 nơi phải khớp index, xem phần Flutter).
+Admin nhập hoặc nhập lại tài liệu bằng `POST /api/admin/sd/docs`, bằng 7 tool MCP `sd_*` doc (qua Claude, xem mục 8) hoặc bằng CLI `python -m app.sd.import_file` (hiện chưa có màn admin trong app, STATUS.md). Học viên vào từ tab thứ 5 "Design" của app, chọn tài liệu, đi theo lộ trình. Claude (qua claude.ai, đã được cấp quyền `mcp_access`) gọi 3 tool `sd_*` để chấm, 7 tool để quản lý tài liệu và 5 tool để quản lý khoá học (course). Đụng vào module này khi đổi quy ước markdown (sửa `parser.py` và mọi tài liệu đã nhập, vì id card/section/task sinh từ nội dung/tên), thêm kiểu chấm mới (cắm một `Evaluator`), hoặc thêm tab điều hướng (3 nơi phải khớp index, xem phần Flutter).
 
 ## Cách hoạt động
 
@@ -32,7 +32,7 @@ Nguồn của bảng: backend/app/sd/parser.py:3-17, 47-56, 207-253, 422-455. G�
 
 | Bảng | Khoá | Chứa | Ràng buộc đáng nhớ |
 |---|---|---|---|
-| `sd_docs` | `id` (slug) | tên, `status` (`draft`/`published`/`archived`), `context` (card bối cảnh, JSONB), `source_md` (markdown gốc lần nhập gần nhất, NULL = nhập trước migration 0008) | CHECK status — backend/app/tables.py:241-255 |
+| `sd_docs` | `id` (slug) | tên, `status` (`draft`/`published`/`archived`), `context` (card bối cảnh, JSONB), `source_md` (markdown gốc lần nhập gần nhất, NULL = nhập trước migration 0008), `course_id` (FK `courses`, `ON DELETE SET NULL`, NULL = không thuộc course) và `course_position` (migration 0009) | CHECK status — backend/app/tables.py:241-255 |
 | `sd_sections` | `(doc_id, id)` | `position`, `chapter`, `title`, `cards` JSONB `[{id, kind, title, body}]` | FK `doc_id` → `sd_docs` CASCADE — backend/app/tables.py:258-270 |
 | `sd_tasks` | `(doc_id, id)` | `prompt`, `hints`, `rubric` JSONB `[{text, keywords}]`, `ref_section_id` | rubric chỉ server đọc — backend/app/tables.py:273-287 |
 | `sd_progress` | `(user_id, doc_id, section_id)` | `read_cards` (list id card đã đọc) | chỉ FK `users`; KHÔNG FK tới nội dung — backend/app/tables.py:290-301 |
@@ -40,7 +40,7 @@ Nguồn của bảng: backend/app/sd/parser.py:3-17, 47-56, 207-253, 422-455. G�
 
 Migration `0007` (sau `0006`), downgrade xoá cả 5 bảng: backend/migrations/versions/0007_system_design.py:22-97. Migration `0008` thêm cột `source_md` và nới CHECK status cho `archived`; downgrade đưa doc `archived` về `draft` và MẤT markdown gốc đã lưu: backend/migrations/versions/0008_sd_source_archive.py:21-33. Lý do không FK: nhập lại tài liệu xoá rồi ghi lại section/task; FK cascade sẽ xoá sạch tiến độ và lần thử (backend/app/tables.py:236-238).
 
-Id ổn định giữa các lần nhập lại, vì tiến độ bám theo chúng:
+Bảng thứ sáu `courses` (không mang tiền tố `sd_`) thêm ở mục 9. Id ổn định giữa các lần nhập lại, vì tiến độ bám theo chúng:
 
 | Id | Sinh từ | Hệ quả khi đổi |
 |---|---|---|
@@ -66,7 +66,7 @@ Học viên (`current_user`; mọi truy vấn tiến độ/lần thử lọc the
 
 | Route | Việc |
 |---|---|
-| `GET /api/sd/docs` | tài liệu đã publish + tiến độ của tôi — backend/app/sd/learner.py:117-140 |
+| `GET /api/sd/docs` | tài liệu đã publish + tiến độ của tôi, kèm `course_id` mỗi item và mảng `courses` (xem mục 9) — backend/app/sd/learner.py:120-162 |
 | `GET /api/sd/docs/{id}` | section (kèm `read`, `done`, `unlocked`), `context` chỉ khi Phase 2 mở, task (kèm `unlocked`, `done`, `attempts`) — backend/app/sd/learner.py:143-156 |
 | `PUT .../sections/{sid}/progress` | chỉ THÊM card đã đọc (hợp, không bớt); id lạ bị bỏ qua; section khoá → 409 `section_locked` — backend/app/sd/learner.py:159-205 |
 | `POST .../tasks/{tid}/attempts` | nộp bài: 201, hoặc 409 `task_locked`, 429 `attempt_limit` — backend/app/sd/attempts.py:85-140 |
@@ -173,6 +173,34 @@ CLI và backfill: tài liệu nhập trước 0008 có `source_md = NULL`, `sd_e
 ```
 (backend/app/sd/import_file.py:1-5, 16-58; backend/README.md:102-117). CLI đọc file bằng `utf-8-sig` và `newline=""` để không đổi dấu xuống dòng hay dính BOM (backend/app/sd/import_file.py:31).
 
+### 9. Khoá học (course): nhóm tài liệu, không quyết quyền xem
+
+Khi có nhiều tài liệu, tab Design cần gom chúng lại theo chủ đề. Run `2026-10-17-sd-courses` (issue #56, phase 1) thêm bảng `courses` và hai cột trên `sd_docs`. Course chỉ để NHÓM khi hiển thị: học viên có thấy một doc hay không vẫn chỉ do `sd_docs.status` quyết (mục 4). Doc thuộc course chưa `published` (hoặc đã `archived`) vẫn hiện, ở nhóm "Khác".
+
+| Phần | Nội dung | file:dòng |
+|---|---|---|
+| Bảng `courses` | `id` slug (String 100), `title`, `skills` (mảng text), `domain`, `status` (`draft`/`published`/`archived`, có CHECK), `position` (nhỏ hiện trước) | backend/app/tables.py:241-258 |
+| Cột trên `sd_docs` | `course_id` (FK `courses`, `ON DELETE SET NULL`, có index) và `course_position`; nhập lại doc KHÔNG đụng hai cột này | backend/app/tables.py:273-277 |
+| Migration `0009` | bảng mới + hai cột nullable nên doc cũ hiện y như trước; downgrade chỉ mất cách nhóm, không mất nội dung/tiến độ/bài nộp | backend/migrations/versions/0009_courses.py:22-49 |
+| Service | `list_courses`, `create_course`, `update_course`, `set_course_status`, `assign_doc`; hàm ghi tự commit, khoá `pg_advisory_xact_lock` theo `course:<id>` (cùng hợp đồng session riêng như `sd/docs.py`) | backend/app/sd/courses.py:105-200 |
+| `DOC_ORDER` | thứ tự doc trong một course: `course_position` (NULL cuối), rồi `created_at`, rồi `id`; API học viên và `sd_list_courses` dùng chung đúng hằng này | backend/app/sd/courses.py:33, backend/app/sd/learner.py:121 |
+
+Xoá mềm: `set_course_status(..., "archived")` giữ nguyên `course_id` của doc; khôi phục course thì doc về đúng nhóm. `assign_doc` từ chối gán vào course `archived` (khoá course trước, rồi khoá doc, nên không gán vào course đang bị archive cùng lúc) và đặt `course_position=NULL` khi gỡ (backend/app/sd/courses.py:158-200). Các giới hạn nhập: title ≤200 ký tự, tối đa 20 skill mỗi skill ≤40 ký tự, `position` 0..10000 (backend/app/sd/courses.py:26-30).
+
+Hợp đồng `GET /api/sd/docs` chỉ THÊM key nên app cũ vẫn chạy: mỗi item có thêm `course_id` (chỉ khi course đó `published`, ngược lại `null`), và gốc response có thêm `courses` (course `published` có ít nhất một doc trong `items`: `id`, `title`, `skills`, `domain`). Doc thuộc course đứng trước, theo `(position, id)` của course rồi `DOC_ORDER`; doc còn lại đứng sau theo `(created_at, id)` (backend/app/sd/learner.py:121-160). `courses: []` và `course_id: null` khi chưa có course nào (production đã trả như vậy sau deploy PR #58).
+
+```python
+grouped = sorted((d for d in docs if d.course_id in courses), key=lambda d: (courses[d.course_id].position, d.course_id))
+rest = sorted((d for d in docs if d.course_id not in courses), key=lambda d: (d.created_at, d.id))
+```
+(backend/app/sd/learner.py:129-130)
+
+Cùng `position` thì course xếp theo `id` so theo mã ký tự. Python so chuỗi theo mã ký tự, còn Postgres theo collation của DB, nên `list_courses` sắp `Course.id.collate("C")` để hai bên không lệch (reviewer mối nối bắt ngoài sổ bất biến; backend/app/sd/courses.py:105-108).
+
+Phía Flutter: `SdCourse.tryFromJson` parse lỏng. Course chỉ là thông tin nhóm nên dữ liệu lệch không được làm hỏng cả tab: thiếu/sai kiểu `id` hay `title` thì bỏ course, `skills` sai kiểu thì `[]`, `domain` sai kiểu thì null; `course_id` sai kiểu coi như null (mobile/lib/domain/sd_models.dart:20-56, 86-90). `listDocs` giữ kiểu `List<SdDocSummary>` và gắn `SdCourse` vào từng doc qua `withCourse` (mobile/lib/data/sd_repository.dart:77-97). `_DocList` chia nhóm theo thứ tự xuất hiện (khớp thứ tự server), nhóm "Khác" cuối; không có course nào thì list phẳng như trước (mobile/lib/features/system_design/sd_docs_screen.dart:103-140).
+
+Chưa có API admin hay màn quản lý course trong app: course tạo/sửa/gán chỉ qua 5 tool MCP (`docs/modules/mcp.md`).
+
 ## Ranh giới & đánh đổi
 
 | Chọn | Thay vì | Vì sao |
@@ -184,9 +212,10 @@ CLI và backfill: tài liệu nhập trước 0008 có `source_md = NULL`, `sd_e
 | Vuốt snap bằng `ScrollPhysics` tuỳ biến trên `SingleChildScrollView` | `PageView` (mỗi card một trang) | card cao hơn màn hình sẽ không đọc trọn được trong một trang; physics chặn mỗi cú vuốt ≤0,9 viewport nên card dài vẫn đọc bằng nhiều lần vuốt (xem `docs/DECISIONS.md`) |
 | Xoá = xoá mềm `archived`, không chặn xoá, không xoá cứng | chặn xoá doc đã có bài nộp; `DELETE` cứng kèm bài nộp/tiến độ | user chọn: hoàn tác được, bài nộp và tiến độ không mất, không cần luật "doc nào được xoá" (xem `docs/DECISIONS.md`) |
 | Lưu markdown gốc `source_md` | dựng lại markdown từ section/card | dựng lại không ra đúng bản gốc (khoảng trắng, thứ tự, nhãn) nên sửa theo đoạn sẽ làm lệch tài liệu (xem `docs/DECISIONS.md`) |
+| Course chỉ nhóm, không quyết quyền xem; course có bảng riêng, doc giữ `course_id` khi course bị xoá mềm | course quyết quyền xem doc; xoá cứng course kéo doc theo | một nguồn sự thật cho quyền xem (`sd_docs.status`); khôi phục course là doc về đúng nhóm (xem `docs/DECISIONS.md`) |
 | Mọi task Phase 2 mở cùng lúc | khoá tuần tự task sau chỉ mở khi task trước có lần thử | người học muốn làm task nào trước cũng được; Phase 2 vẫn chỉ mở khi Phase 1 xong; đổi một dòng ở server, client chỉ theo (xem `docs/DECISIONS.md`) |
 
-Không làm: màn admin trong app; SRS cho card; LLM chấm trực tiếp; tự duyệt trong MCP (tài liệu SD không qua hàng chờ duyệt, nhưng cũng không có tool xoá bài nộp; xoá doc là xoá mềm); xoá cứng (purge) doc archived; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
+Không làm: màn admin trong app (kể cả quản lý course); course cho `themes` của chế độ code; SRS cho card; LLM chấm trực tiếp; tự duyệt trong MCP (tài liệu SD không qua hàng chờ duyệt, nhưng cũng không có tool xoá bài nộp; xoá doc là xoá mềm); xoá cứng (purge) doc archived; học viên đọc bài của học viên khác (học viên chỉ có route `/api/sd`, luôn lọc theo `user.id`; MCP là đường của admin đã được cấp quyền, đích phải còn là admin — backend/app/mcp_auth.py:205-218, backend/app/mcp_server.py:74-83).
 
 ### Các bất biến của run và cách đã được kiểm
 
@@ -212,6 +241,7 @@ Reviewer mối nối trả lời đủ 6 mã "còn đúng" với `file:dòng` (`
 - Vuốt snap chỉ được kiểm bằng widget test (`tester.fling`, `mobile/test/sd_reader_test.dart`); chưa thử trên thiết bị thật, và Chrome desktop không mô phỏng được fling. Cuộn bằng con lăn/trackpad trên web không có code riêng nên giữ hành vi mặc định của Flutter; chưa xác minh bằng test hay chạy thật.
 - Quản lý tài liệu (run 2026-10-17-sd-docs-mcp, STATUS.md Backlog): `apply_edits` so khớp `old_text` theo chuỗi thô, không chuẩn hoá NFC (khác NFC thì báo "không tìm thấy", an toàn nhưng khó hiểu); `base_revision` truyền cho doc chưa có thì bị bỏ qua; chưa có test downgrade với dòng `archived` và chưa có test 2 connection thật (DB test dùng chung dễ đỏ lẻ); không có test máy cho `populate_existing=True` (đã thử, test không ổn định nên bỏ, DEVIATIONS.md); `SdSection`/`SdTask` đọc không `populate_existing` (hợp đồng session riêng mỗi lần gọi che lỗ này); chưa có test 411 cho `/mcp` chunked, test bài nộp mồ côi, test `--status` sai của CLI.
 - Mối nối chưa khẳng định chủ ý (reviews/SEAM.md): `POST /api/admin/sd/docs` với `status` rõ lên doc `archived` lặng lẽ khôi phục nó (upsert; backend/app/sd/docs.py:138-140), còn MCP `replace`/`edit` và CLI mặc định thì giữ `archived`; `include_archived` mặc định khác nhau (API admin `true`, MCP `false`) — nhớ khi làm màn admin Flutter. Màn admin SD trong app Flutter vẫn chưa có.
+- Course (run 2026-10-17-sd-courses, STATUS.md Backlog): dedupe skill phân biệt hoa/thường (`Cache` và `cache` là hai skill); không có test đồng thời cho khoá course; xoá cứng course ở DB để lại `course_position` (doc về nhóm "Khác" nhưng vị trí cũ còn); `list_courses` không phân trang hay trần số course; thiếu test `course_position` NULL và trùng position ở API học viên, test khoá số truy vấn của `GET /api/sd/docs`, và hai chỗ sort lặp key trong `learner.py`; app xếp nhóm theo lần xuất hiện của doc (không đọc thứ tự `courses[]`), header nhóm chưa có Semantics, `withCourse` liệt kê tay từng field nên thêm field mới vào `SdDocSummary` phải nhớ sửa; chưa có course cho `themes` (không thể gắn chế độ code vào course).
 - Section vẫn khoá tuần tự (section sau chỉ mở khi section trước `done`); chỉ task Phase 2 là không khoá tuần tự. Menu nhảy được tới mọi section đã mở khoá, kể cả section đã xong.
 - Test đua nhau thật giữa nhập lại và PUT progress chưa có (hạ tầng test dùng một connection); nhập đồng thời và chấm đồng thời có test nhiều luồng (`tests/test_sd_concurrency.py`). Chưa chạy trên thiết bị thật; app đã chạy trên web Chrome 390px.
 
@@ -228,4 +258,4 @@ Kết quả lúc chưng cất: backend 805 passed, 2 skipped; Flutter 741 passed
 
 ## Nguồn
 
-backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-205; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/migrations/versions/0008_sd_source_archive.py:1-33; backend/app/sd/docs.py:1-294; backend/app/sd/import_file.py:1-62; backend/README.md:102-117; backend/app/mcp_server.py:319-395; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; run 2026-10-17-sd-docs-mcp: planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, commit d5b3a28, eb24e55, 0a594dc, 3d8737b; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.
+backend/app/sd/parser.py:1-520; backend/app/sd/admin.py:1-172; backend/app/sd/learner.py:1-205; backend/app/sd/attempts.py:1-309; backend/app/sd/evaluator.py:1-39; backend/app/tables.py:235-336; backend/migrations/versions/0007_system_design.py:1-97; backend/migrations/versions/0008_sd_source_archive.py:1-33; backend/migrations/versions/0009_courses.py:1-49; backend/app/sd/courses.py:1-200; planning/crew/2026-10-17-sd-courses/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md; backend/app/sd/docs.py:1-294; backend/app/sd/import_file.py:1-62; backend/README.md:102-117; backend/app/mcp_server.py:319-395; backend/app/mcp_server.py:54-83, 251-296; backend/app/mcp_auth.py:205-218; backend/app/main.py:37-39, 68-70; backend/content/sd/airline-reservation.md; mobile/lib/domain/sd_models.dart; mobile/lib/data/sd_repository.dart; mobile/lib/app/router.dart; mobile/lib/features/shell/app_shell.dart; mobile/lib/features/shell/app_drawer.dart; mobile/lib/features/system_design/*.dart; .claude/rules/engineering/hostile-input-budget.md:1-30; planning/crew/2026-10-12-system-design-mode/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, e2e/web_e2e.md; run 2026-10-17-sd-docs-mcp: planning/crew/2026-10-17-sd-docs-mcp/PLAN.md, STATUS.md, DEVIATIONS.md, reviews/SEAM.md, commit d5b3a28, eb24e55, 0a594dc, 3d8737b; hotfix #35: planning/crew/2026-10-12-sd-reader-hotfix/PLAN.md, DEVIATIONS.md, commit d11fb5f, b88ef84, f3561a8, 7de557b.
