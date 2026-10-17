@@ -25,7 +25,7 @@ from app.db import get_session
 from app.progress import _bad_text
 from app.sd.evaluator import Evaluator, get_evaluator
 from app.sd.learner import _load, _published, _sections_state, _tasks_state
-from app.tables import SdAttempt, SdSection, SdTask
+from app.tables import SdAttempt, SdDoc, SdSection, SdTask
 
 router = APIRouter(prefix="/api/sd")
 
@@ -192,12 +192,22 @@ class SdError(Exception):
 
 
 def review_queue(
-    session: Session, *, doc_id: str | None, task_id: str | None, status: str | None, limit: int
+    session: Session,
+    *,
+    doc_id: str | None,
+    task_id: str | None,
+    status: str | None,
+    limit: int,
+    include_archived: bool = False,
 ) -> list[dict]:
-    """Lần thử cần chấm, CŨ NHẤT TRƯỚC (hàng đợi): mặc định chỉ bản `auto` chưa ai chấm sâu."""
+    """Lần thử cần chấm, CŨ NHẤT TRƯỚC (hàng đợi): mặc định chỉ bản `auto` chưa ai chấm sâu, và bỏ qua bài
+    của tài liệu đã `archived` (xoá mềm). Tài liệu không còn trong sd_docs vẫn được giữ như trước."""
     if status not in (None, "auto", "reviewed"):
         raise SdError("status chỉ nhận 'auto' (chưa chấm sâu), 'reviewed' hoặc bỏ trống (tất cả)")
     q = select(SdAttempt).order_by(SdAttempt.created_at, SdAttempt.id).limit(max(1, min(limit, MAX_QUEUE)))
+    if not include_archived:
+        archived = select(SdDoc.id).where(SdDoc.status == "archived")
+        q = q.where(SdAttempt.doc_id.not_in(archived))
     if doc_id:
         q = q.where(SdAttempt.doc_id == doc_id)
     if task_id:

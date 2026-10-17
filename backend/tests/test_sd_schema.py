@@ -13,7 +13,7 @@ SD_CONTENT = {"sd_docs", "sd_sections", "sd_tasks"}
 
 def test_single_alembic_head():
     heads = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL)).get_heads()
-    assert heads == ["0007"]
+    assert heads == ["0008"]
 
 
 def test_upgrade_creates_sd_tables(db_engine):
