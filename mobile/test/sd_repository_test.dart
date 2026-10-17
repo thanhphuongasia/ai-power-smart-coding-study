@@ -354,6 +354,40 @@ void main() {
     );
   });
 
+  group('resetProgress', () {
+    test('DELETE đúng path (encode id), 204 không body là OK', () async {
+      final (repo, seen) = _repo((_) => http.Response('', 204));
+      await repo.resetProgress('a b/c');
+      expect(seen.single.method, 'DELETE');
+      expect(seen.single.url.path, '/api/sd/docs/a%20b%2Fc/progress');
+    });
+
+    test('200 cũng được chấp nhận', () async {
+      final (repo, _) = _repo((_) => http.Response('', 200));
+      await repo.resetProgress('d1');
+    });
+
+    for (final code in [401, 404, 500]) {
+      test('$code → SdApiException($code)', () async {
+        final (repo, _) = _repo((_) => _json({'detail': 'x'}, code));
+        await expectLater(
+          repo.resetProgress('d1'),
+          throwsA(
+            isA<SdApiException>()
+                .having((e) => e.statusCode, 'statusCode', code)
+                .having((e) => e.detail, 'detail', 'x'),
+          ),
+        );
+      });
+    }
+
+    test("id '..' bị từ chối, không gửi request", () async {
+      final (repo, seen) = _repo((_) => http.Response('', 204));
+      await expectLater(repo.resetProgress('..'), throwsArgumentError);
+      expect(seen, isEmpty);
+    });
+  });
+
   test('submitAttempt gửi {"answer":...}, đọc root["attempt"]', () async {
     final (repo, seen) = _repo((_) => _json({'attempt': _attemptJson()}, 201));
     final a = await repo.submitAttempt('d1', 't1', 'dùng base62');

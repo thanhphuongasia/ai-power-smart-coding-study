@@ -95,6 +95,9 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => SdReaderScreen(
         docId: state.pathParameters['docId']!,
         sectionId: state.uri.queryParameters['section'],
+        preview: const {'1', 'true'}.contains(
+          state.uri.queryParameters['preview'],
+        ),
       ),
     ),
     GoRoute(

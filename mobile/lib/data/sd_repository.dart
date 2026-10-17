@@ -126,6 +126,18 @@ class SdRepository {
     return SdProgressResult.fromJson(root);
   }
 
+  /// Xoá tiến độ đọc của user cho [docId] (bài đã nộp giữ nguyên). Server trả
+  /// 204 không body; 200 cũng chấp nhận. Không đọc body nên không FormatException.
+  Future<void> resetProgress(String docId) async {
+    final doc = _e('docId', docId);
+    final response = await _http
+        .delete(_uri('/api/sd/docs/$doc/progress'))
+        .timeout(timeout);
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw SdApiException(response.statusCode, _detailOf(response));
+    }
+  }
+
   Future<SdAttempt> submitAttempt(
     String docId,
     String taskId,

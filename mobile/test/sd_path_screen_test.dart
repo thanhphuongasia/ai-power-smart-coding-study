@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_coding_study/app/router.dart';
 import 'package:smart_coding_study/app/theme.dart';
@@ -96,14 +98,34 @@ const _summary = SdDocSummary(
   tasksDone: 0,
 );
 
+/// Repository giả: chỉ resetProgress được dùng ở màn lộ trình.
+class _FakeRepo extends SdRepository {
+  _FakeRepo(this.server)
+    : super(MockClient((_) async => http.Response('', 500)));
+  final _Server server;
+  @override
+  Future<void> resetProgress(String docId) async {
+    server.resetCalls++;
+    server.resetIds.add(docId);
+    final err = server.resetError;
+    if (err != null) throw err;
+    server.onReset?.call();
+  }
+}
+
 /// Dữ liệu "server" giả: test đổi biến rồi invalidate để mô phỏng tải lại.
 class _Server {
   Object? docs = const [_summary];
   Object? doc;
   int docsCalls = 0;
   int docCalls = 0;
+  int resetCalls = 0;
+  final resetIds = <String>[];
+  Object? resetError;
+  void Function()? onReset;
 
   List<Override> get overrides => [
+    sdRepositoryProvider.overrideWithValue(_FakeRepo(this)),
     sdDocsProvider.overrideWith((ref) async {
       docsCalls++;
       final d = docs;
@@ -130,7 +152,11 @@ GoRouter _testRouter({String initial = '/design'}) => GoRouter(
     GoRoute(
       path: '/design/:docId/read',
       builder: (_, s) => Placeholder(
-        key: Key('page-read-${s.uri.queryParameters['section']}'),
+        key: Key(
+          s.uri.queryParameters['preview'] == '1'
+              ? 'page-preview'
+              : 'page-read-${s.uri.queryParameters['section']}',
+        ),
       ),
     ),
     GoRoute(
@@ -689,6 +715,79 @@ void main() {
       await tester.tap(find.byKey(const Key('sd-retry')));
       await tester.pumpAndSettle();
       expect(find.text('CHAPTER 1 · 1/2 SECTION'), findsOneWidget);
+    });
+  });
+
+  group('SdPathScreen preview + reset (issue #66)', () {
+    testWidgets('từ tab Design → chạm doc → chạm sd-preview → route preview=1 '
+        '(2 chạm tới tính năng)', (tester) async {
+      final s = _Server()..doc = _doc();
+      await _pump(tester, s);
+      await tester.tap(find.byKey(const Key('sd-doc-sd1')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Xem trước (không tính tiến độ)'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('sd-preview')));
+      await tester.pumpAndSettle();
+      expect(
+        _router.routerDelegate.currentConfiguration.last.matchedLocation,
+        '/design/sd1/read',
+      );
+      expect(
+        _router.routerDelegate.currentConfiguration.last.matchedLocation,
+        '/design/sd1/read',
+      );
+      expect(find.byKey(const Key('page-preview')), findsOneWidget);
+    });
+
+    testWidgets('sd-reset → Huỷ: không gọi API', (tester) async {
+      final s = _Server()..doc = _doc();
+      await _pump(tester, s, initial: '/design/sd1');
+      await tester.tap(find.byKey(const Key('sd-reset')));
+      await tester.pumpAndSettle();
+      expect(find.text('Đặt lại tiến độ?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('sd-reset-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.text('Đặt lại tiến độ?'), findsNothing);
+      expect(s.resetCalls, 0);
+    });
+
+    testWidgets('sd-reset → Đặt lại: gọi đúng 1 lần, tải lại doc + danh sách, '
+        'màn hiện 0 đã đọc', (tester) async {
+      final s = _Server()..doc = _doc();
+      s.onReset = () => s.doc = _doc(
+        sections: [
+          _section('s1', pos: 1, chapter: 'Nền tảng', chapterPos: 1),
+          _section('s2', pos: 2, chapter: 'Nền tảng', chapterPos: 1),
+        ],
+      );
+      await _pump(tester, s, initial: '/design/sd1');
+      expect(find.text('CHAPTER 1 · 1/2 SECTION'), findsOneWidget);
+      final docCalls = s.docCalls;
+      await tester.tap(find.byKey(const Key('sd-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('sd-reset-confirm')));
+      await tester.pumpAndSettle();
+      expect(s.resetCalls, 1);
+      expect(s.resetIds, ['sd1']);
+      expect(s.docCalls, greaterThan(docCalls));
+      expect(find.text('CHAPTER 1 · 0/2 SECTION'), findsOneWidget);
+      expect(find.text('Đã đặt lại tiến độ'), findsOneWidget);
+    });
+
+    testWidgets('sd-reset thất bại → SnackBar lỗi, không crash, dữ liệu giữ '
+        'nguyên', (tester) async {
+      final s = _Server()
+        ..doc = _doc()
+        ..resetError = const SdApiException(500, null);
+      await _pump(tester, s, initial: '/design/sd1');
+      await tester.tap(find.byKey(const Key('sd-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('sd-reset-confirm')));
+      await tester.pumpAndSettle();
+      expect(s.resetCalls, 1);
+      expect(find.text('Không đặt lại được (mã 500)'), findsOneWidget);
+      expect(find.text('CHAPTER 1 · 1/2 SECTION'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 
