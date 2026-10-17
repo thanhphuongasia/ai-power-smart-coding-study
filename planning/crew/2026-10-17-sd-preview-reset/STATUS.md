@@ -2,7 +2,8 @@ Worktree: /Users/phuongmacbook/Developer/Personal/Projects/ai-power-coding-study
 Branch:   crew/2026-10-17-sd-preview-reset
 Issue:    #66 — https://github.com/thanhphuongasia/ai-power-smart-coding-study/issues/66
 
-Trạng thái: P4 — PR vào dev, chờ user merge (KHÔNG tự merge)
+PR:       https://github.com/thanhphuongasia/ai-power-smart-coding-study/pull/67
+Trạng thái: P4 — PR #67 vào dev, chờ user merge (KHÔNG tự merge)
 Next action: user review + merge PR; distill đã dispatch
 
 ## Task
