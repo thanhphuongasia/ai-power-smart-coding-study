@@ -919,3 +919,15 @@ planning/crew/2026-10-13-todo-comment-fill-button/PLAN.md, reviews/T-01.md.
 **Đánh đổi đã chấp nhận**: một lần sửa sai trên doc đang published lên học viên ngay; cách tự làm nháp là `sd_unpublish_doc`, sửa, rồi `sd_publish_doc`.
 
 **Nguồn**: backend/app/mcp_server.py:566-579; backend/app/sd/admin.py:48-92; mobile/lib/features/admin/admin_sd_docs_screen.dart:31-215; planning/crew/2026-10-17-mcp-publish-tool/PLAN.md, PLAN-v2.md, DEVIATIONS.md.
+
+### System Design: bỏ khoá tuần tự section, thêm xem trước và đặt lại tiến độ (thay thế phần "section" của quyết định "server tính khoá/mở")
+
+**Quyết định** (run 2026-10-17-sd-preview-reset, issue #66, PR #67 vào nhánh `dev`, chưa merge): **thay thế** luật "section mở khi section liền trước `done`" ở mục "System Design: server tính khoá/mở, client chỉ vẽ". Server luôn trả `unlocked: true` cho mọi section và PUT progress không còn trả 409 `section_locked`. Thêm `DELETE /api/sd/docs/{id}/progress` (204) xoá tiến độ đọc của user cho doc đó, giữ `sd_attempts`, và chế độ xem trước ở app (`?preview=1`) không đánh dấu và không gửi tiến độ. Phase 2 vẫn mở khi mọi section `done`.
+
+**Vì sao**: người học muốn xem lướt tài liệu và làm lại từ đầu mà không bị buộc đọc tuần tự. Luật khoá nằm ở server nên đổi một chỗ (`_sections_state`), client đi theo.
+
+**Phương án đã bỏ**: nới khoá chỉ ở UI (lệch với 409 của server); xoá field `unlocked` (app cũ trên TestFlight còn đọc, và backend deploy trước app qua CI, nên field giữ lại luôn `true`); thêm nhánh riêng cho preview để nhảy section khoá (bác ở DEVIATIONS: backend mới không còn section khoá, client giữ nguyên tắc "khoá do server quyết").
+
+**Đánh đổi đã chấp nhận**: reset khoá advisory của MỌI section của doc theo thứ tự id (sửa sau review ngoài: ban đầu chỉ khoá section đã có dòng tiến độ nên PUT đầu tiên của section mới chen vào được); section thêm do admin nhập lại đúng lúc reset vẫn có thể chen. Sau reset Phase 2 khoá lại nhưng bài đã nộp còn nguyên. Dòng cũ ở mục quyết định gốc không sửa (append-only); mục này là bản hiệu lực cho phần section.
+
+**Nguồn**: backend/app/sd/learner.py:53-75, 181-243; mobile/lib/features/system_design/reader_screen.dart:212, 356, 472, 485; mobile/lib/features/system_design/sd_path_screen.dart:130-203; planning/crew/2026-10-17-sd-preview-reset/PLAN.md, DEVIATIONS.md, STATUS.md.
